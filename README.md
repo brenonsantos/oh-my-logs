@@ -1,6 +1,7 @@
 # oh-my-logs (`oml`)
 
-A cross-platform terminal UI for monitoring, filtering, searching, and recording serial output from embedded systems.
+> **Release v1.0.0 — Joseense**
+> A cross-platform terminal UI for monitoring, filtering, searching, and recording serial output from embedded systems.
 
 ```
 ┌ Oh My Logs ──────────────────────────────────────────────────────────────────┐
@@ -38,7 +39,7 @@ A cross-platform terminal UI for monitoring, filtering, searching, and recording
 - **Ring buffer** — configurable capacity (default 50,000 records); no unbounded memory growth.
 - **Log replay** — replay saved `.log` files with `--file`.
 - **Save log** — saves all raw lines to a timestamped file (`s`).
-- **Mouse & Clipboard interactions** — click tabs to switch, click `^T`/`^W` to create/close, click rows to select & auto-pause, double-click to copy, click-and-drag multi-row selection with auto-copy on release, and smooth auto-scrolling.
+- **Mouse & Clipboard interactions** — click tabs to switch, click `^T`/`^W` to create/close, click rows to select & auto-pause, double-click to copy, click-and-drag multi-row selection (press `y` to copy), and smooth auto-scrolling.
 - **Cross-platform clipboard** — dual ANSI OSC 52 sequence support (works over SSH and tmux) + native OS clipboard integration (`pbcopy`, `wl-copy`, `xclip`, `clip.exe`). Paste with `Ctrl+V` into search and filter prompts.
 - **Race-free** — all tests pass under `go test -race`.
 
@@ -180,6 +181,11 @@ oml --version
 | `r` | Reconnect current serial port |
 | `?` | Toggle Help modal popup |
 | `q` / `Ctrl+C` | Clean exit |
+
+**Modal Navigation:**
+- **Serial Port & Baud (`p`)**: `↑` / `↓` (or mouse wheel) select port · `←` / `→` cycle baud rate · `Enter` connect · `Esc` cancel.
+- **Profile Switcher (`P`)**: `↑` / `↓` (or mouse wheel) select profile · `Enter` activate & re-parse · `Esc` cancel.
+- **Help Modal (`?`)**: `?`, `Esc`, or `q` dismiss.
 
 **While in Search or Filter input:**
 
@@ -326,7 +332,7 @@ Profiles stored here are automatically discovered by `oml` system-wide, but rema
 
 #### 3. In-App Profile Switcher (`P`)
 
-Press `P` at any time while running `oml` to open the profile switcher modal. Global profiles are marked with `[global]`. Selecting a profile instantly re-parses the in-memory buffer without dropping incoming serial logs.
+Press `P` at any time while running `oml` to open the profile switcher modal. Local workspace profiles are marked with `[local]` (system profiles and built-in Raw appear without tags). Selecting a profile instantly re-parses the in-memory buffer without dropping incoming serial logs.
 
 ---
 
