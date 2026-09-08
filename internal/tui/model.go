@@ -18,6 +18,7 @@ const (
 	modeFilter
 	modePortPicker
 	modeProfilePicker
+	modeHelp
 )
 
 // ProfileItem represents an entry in the profile switcher list.

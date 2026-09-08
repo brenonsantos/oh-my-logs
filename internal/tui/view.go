@@ -29,6 +29,8 @@ func (m Model) View() string {
 		sb.WriteString(m.viewPortPickerModal())
 	} else if m.mode == modeProfilePicker {
 		sb.WriteString(m.viewProfilePickerModal())
+	} else if m.mode == modeHelp {
+		sb.WriteString(m.viewHelpModal())
 	} else {
 		// Table Header
 		sb.WriteString(m.viewTableHeader())
@@ -230,17 +232,19 @@ func (m Model) viewKeyBar() string {
 		help := theme.Muted.Render("  [Enter: apply · Esc: cancel]")
 		return "  " + prompt + text + help
 
+	case modeHelp:
+		return "  " + theme.Muted.Render("Press ") + theme.KeyName.Render("?") + theme.Muted.Render(", ") + theme.KeyName.Render("Esc") + theme.Muted.Render(", or ") + theme.KeyName.Render("q") + theme.Muted.Render(" to close help")
+
 	default:
 		hints := []string{
 			theme.KeyName.Render("Ctrl+F") + " " + theme.Muted.Render("search"),
 			theme.KeyName.Render("f") + " " + theme.Muted.Render("filter"),
-			theme.KeyName.Render("c") + " " + theme.Muted.Render("clear"),
 			theme.KeyName.Render("Space") + " " + theme.Muted.Render("pause"),
+			theme.KeyName.Render("c") + " " + theme.Muted.Render("clear"),
 			theme.KeyName.Render("t") + " " + theme.Muted.Render("⏱ ts"),
 			theme.KeyName.Render("p") + " " + theme.Muted.Render("port"),
 			theme.KeyName.Render("P") + " " + theme.Muted.Render("profile"),
-			theme.KeyName.Render("s") + " " + theme.Muted.Render("save"),
-			theme.KeyName.Render("r") + " " + theme.Muted.Render("reconnect"),
+			theme.KeyName.Render("?") + " " + theme.Muted.Render("help"),
 			theme.KeyName.Render("q") + " " + theme.Muted.Render("quit"),
 		}
 		return "  " + strings.Join(hints, "   ")
@@ -358,6 +362,121 @@ func (m Model) viewProfilePickerModal() string {
 	sb.WriteString(theme.ModalFooter.Render("Enter select · Esc cancel"))
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
+	return centerBox(m.width, m.tableHeight+2, modalBox)
+}
+
+// viewHelpModal renders a clean floating modal with categorized keyboard shortcuts.
+func (m Model) viewHelpModal() string {
+	modalWidth := 74
+	if m.width > 90 {
+		modalWidth = 76
+	}
+	if modalWidth > m.width-4 {
+		modalWidth = m.width - 4
+	}
+	if modalWidth < 40 {
+		modalWidth = 40
+	}
+
+	colWidth := (modalWidth - 9) / 2
+	if colWidth < 16 {
+		colWidth = 16
+	}
+
+	renderItem := func(k, desc string, maxW int) string {
+		keyWidth := 11
+		if keyWidth > maxW-6 {
+			keyWidth = maxW - 6
+		}
+		if keyWidth < 4 {
+			keyWidth = 4
+		}
+		kStyled := theme.KeyName.Render(padOrTrunc(k, keyWidth))
+		descMax := maxW - keyWidth - 1
+		if descMax < 1 {
+			descMax = 1
+		}
+		descStyled := theme.Content.Render(padOrTrunc(desc, descMax))
+		return kStyled + " " + descStyled
+	}
+
+	renderHeader := func(title string, maxW int) string {
+		h := theme.ModalSection.Render(title)
+		w := lipgloss.Width(title)
+		if w < maxW {
+			return h + strings.Repeat(" ", maxW-w)
+		}
+		return h
+	}
+
+	left := []string{
+		renderHeader("NAVIGATION", colWidth),
+		renderItem("↑, k", "Scroll up 1 line", colWidth),
+		renderItem("↓, j", "Scroll down 1 line", colWidth),
+		renderItem("PgUp, ^U", "Page up", colWidth),
+		renderItem("PgDn, ^D", "Page down", colWidth),
+		renderItem("g, Home", "Jump to top", colWidth),
+		renderItem("G, End", "Jump to bottom", colWidth),
+		renderItem("Wheel", "Smooth scroll", colWidth),
+		renderHeader("SEARCH & FILTER", colWidth),
+		renderItem("Ctrl+F", "Search logs", colWidth),
+		renderItem("Enter, ↓", "Next match", colWidth),
+		renderItem("n / N", "Next / prev match", colWidth),
+		renderItem("f", "Filter logs", colWidth),
+		renderItem("Esc", "Cancel / clear", colWidth),
+	}
+
+	right := []string{
+		renderHeader("ACTIONS & CONTROLS", colWidth),
+		renderItem("Space", "Pause / resume", colWidth),
+		renderItem("c", "Clear buffer", colWidth),
+		renderItem("t", "Toggle timestamp", colWidth),
+		renderItem("s", "Save log to file", colWidth),
+		renderItem("p", "Serial port & baud", colWidth),
+		renderItem("P", "Switch profile", colWidth),
+		renderItem("r", "Reconnect port", colWidth),
+		renderItem("?", "Toggle this help", colWidth),
+		renderItem("q, ^C", "Quit application", colWidth),
+		renderHeader("FILTER SYNTAX", colWidth),
+		renderItem("term", "Include substring", colWidth),
+		renderItem("-term", "Exclude substring", colWidth),
+		renderItem("col:v1,v2", "Match field (OR)", colWidth),
+	}
+
+	sep := theme.Divider.Render(" │ ")
+	var sb strings.Builder
+
+	sb.WriteString(theme.ModalTitle.Render("Help — Keyboard Shortcuts"))
+	sb.WriteString("\n\n")
+
+	maxRows := len(left)
+	if len(right) > maxRows {
+		maxRows = len(right)
+	}
+
+	for i := 0; i < maxRows; i++ {
+		lLine := ""
+		if i < len(left) {
+			lLine = left[i]
+		}
+		rLine := ""
+		if i < len(right) {
+			rLine = right[i]
+		}
+		lWidth := lipgloss.Width(lLine)
+		if lWidth < colWidth {
+			lLine += strings.Repeat(" ", colWidth-lWidth)
+		}
+		sb.WriteString(lLine)
+		sb.WriteString(sep)
+		sb.WriteString(rLine)
+		sb.WriteByte('\n')
+	}
+
+	sb.WriteByte('\n')
+	sb.WriteString(theme.ModalFooter.Render("Press ? or Esc or q to close"))
+
+	modalBox := theme.ModalBox.Padding(0, 2).Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+2, modalBox)
 }
 

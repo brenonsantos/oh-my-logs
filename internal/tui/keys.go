@@ -23,6 +23,7 @@ type keyMap struct {
 	Cancel          key.Binding
 	ToggleTimestamp key.Binding
 	ProfileSwitch   key.Binding
+	Help            key.Binding
 	Quit            key.Binding
 }
 
@@ -106,6 +107,10 @@ func defaultKeyMap() keyMap {
 		ProfileSwitch: key.NewBinding(
 			key.WithKeys("P"),
 			key.WithHelp("P", "profile"),
+		),
+		Help: key.NewBinding(
+			key.WithKeys("?"),
+			key.WithHelp("?", "help"),
 		),
 		Quit: key.NewBinding(
 			key.WithKeys("q", "ctrl+c"),
