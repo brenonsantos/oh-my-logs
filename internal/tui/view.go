@@ -35,8 +35,8 @@ func (m Model) View() string {
 		sb.WriteByte('\n')
 
 		// Header Divider
-		sb.WriteString(m.viewDivider())
-		sb.WriteByte('\n')
+		// sb.WriteString(m.viewDivider())
+		// sb.WriteByte('\n')
 
 		// Table Rows
 		sb.WriteString(m.viewTable())
@@ -44,11 +44,15 @@ func (m Model) View() string {
 
 	sb.WriteByte('\n')
 
-	// 4. Status bar
+	// 4. Divider before status bar
+	sb.WriteString(m.viewDivider())
+	sb.WriteByte('\n')
+
+	// 5. Status bar
 	sb.WriteString(m.viewStatusBar())
 	sb.WriteByte('\n')
 
-	// 5. Key hints / input bar
+	// 6. Key hints / input bar
 	sb.WriteString(m.viewKeyBar())
 
 	return sb.String()
@@ -63,46 +67,56 @@ func (m Model) viewDivider() string {
 	return theme.Divider.Render(strings.Repeat("─", w))
 }
 
-// viewTitleBar renders the top bar with visual hierarchy.
+// viewTitleBar renders the top bar with a solid background accent and no holes or clipping.
 func (m Model) viewTitleBar() string {
-	appName := theme.Primary.Render("Oh My Logs")
+	badge := theme.TitleAppBadge.Render("OH MY LOGS")
 
 	portVal := m.serialCfg.Port
 	if portVal == "" {
 		portVal = "(no port)"
 	}
-	port := theme.Muted.Render("Port: ") + theme.Secondary.Render(portVal)
-	baud := theme.Muted.Render("Baud: ") + theme.Secondary.Render(fmt.Sprintf("%d", m.serialCfg.Baud))
+	port := theme.TitleLabel.Render("Port: ") + theme.TitleValue.Render(portVal)
+	baud := theme.TitleLabel.Render("Baud: ") + theme.TitleValue.Render(fmt.Sprintf("%d", m.serialCfg.Baud))
 
 	var connStr string
 	switch m.connState {
 	case ConnConnected:
-		connStr = theme.Success.Render("● Connected")
+		connStr = theme.TitleConnOn.Render("● Connected")
 	case ConnError:
-		connStr = theme.Error.Render("⚠ " + m.connDetail)
+		connStr = theme.TitleConnErr.Render("⚠ " + m.connDetail)
 	default:
-		connStr = theme.Muted.Render("○ Disconnected")
+		connStr = theme.TitleConnOff.Render("○ Disconnected")
 	}
 
 	profileVal := "(no profile)"
 	if m.profile != nil {
 		profileVal = m.profile.Name
 	}
-	prof := theme.Muted.Render("Profile: ") + theme.Secondary.Render(profileVal)
+	prof := theme.TitleLabel.Render("Profile: ") + theme.TitleValue.Render(profileVal)
 
-	sep := theme.Muted.Render("  │  ")
-	line := fmt.Sprintf("%s%s%s  %s  %s%s%s", appName, sep, port, baud, connStr, sep, prof)
+	sep := theme.TitleSep.Render("  │  ")
+	gap := lipgloss.NewStyle().Background(theme.TitleBg).Render("    ")
+	padLeft := lipgloss.NewStyle().Background(theme.TitleBg).Render(" ")
 
-	return theme.TitleBar.Width(m.width).Render(line)
+	content := padLeft + badge + " " + port + gap + baud + gap + connStr + sep + prof
+
+	// Fill the exact remainder of the terminal width with the background accent:
+	contentWidth := lipgloss.Width(content)
+	rem := m.width - contentWidth
+	if rem > 0 {
+		content += lipgloss.NewStyle().Background(theme.TitleBg).Render(strings.Repeat(" ", rem))
+	}
+
+	return content
 }
+
 
 // viewTableHeader renders the column header row.
 func (m Model) viewTableHeader() string {
-	tableWidth := m.tableWidth()
 	renderedHeaders := m.renderRow(func(col record.Column, w int) string {
 		return theme.Header.Render(padOrTrunc(col.Title, w))
 	})
-	return theme.HeaderBar.Width(tableWidth).Render(renderedHeaders)
+	return "  " + renderedHeaders
 }
 
 // viewTable renders the scrollable table body with search match and focus highlights.
@@ -165,9 +179,9 @@ func (m Model) viewStatusBar() string {
 		followStr = theme.FollowOff.Render("PAUSED")
 	}
 
-	tsStr := theme.Muted.Render("TS OFF")
+	tsStr := theme.Muted.Render("⏱ OFF")
 	if m.injectTimestamp {
-		tsStr = theme.Success.Render("TS ON")
+		tsStr = theme.Success.Render("⏱ ON")
 	}
 
 	var parts []string
@@ -199,7 +213,7 @@ func (m Model) viewStatusBar() string {
 	}
 
 	sep := theme.Muted.Render("  │  ")
-	return theme.StatusBar.Width(m.width).Render(strings.Join(parts, sep))
+	return "  " + strings.Join(parts, sep)
 }
 
 // viewKeyBar renders context-sensitive key hints or input prompt.
@@ -209,30 +223,31 @@ func (m Model) viewKeyBar() string {
 		prompt := theme.Primary.Render("Search: ")
 		text := theme.Content.Render(m.searchInput + "█")
 		help := theme.Muted.Render("  [Enter: next · ↑/↓: navigate · Esc: cancel]")
-		return theme.KeyBar.Width(m.width).Render(prompt + text + help)
+		return "  " + prompt + text + help
 
 	case modeFilter:
 		prompt := theme.Primary.Render("Filter: ")
 		text := theme.Content.Render(m.filterInput + "█")
 		help := theme.Muted.Render("  [Enter: apply · Esc: cancel]")
-		return theme.KeyBar.Width(m.width).Render(prompt + text + help)
+		return "  " + prompt + text + help
 
 	default:
 		hints := []string{
-			theme.KeyName.Render("Ctrl+F") + " search",
-			theme.KeyName.Render("f") + " filter",
-			theme.KeyName.Render("c") + " clear",
-			theme.KeyName.Render("Space") + " pause",
-			theme.KeyName.Render("t") + " timestamp",
-			theme.KeyName.Render("p") + " port",
-			theme.KeyName.Render("P") + " profile",
-			theme.KeyName.Render("s") + " save",
-			theme.KeyName.Render("r") + " reconnect",
-			theme.KeyName.Render("q") + " quit",
+			theme.KeyName.Render("Ctrl+F") + " " + theme.Muted.Render("search"),
+			theme.KeyName.Render("f") + " " + theme.Muted.Render("filter"),
+			theme.KeyName.Render("c") + " " + theme.Muted.Render("clear"),
+			theme.KeyName.Render("Space") + " " + theme.Muted.Render("pause"),
+			theme.KeyName.Render("t") + " " + theme.Muted.Render("⏱ ts"),
+			theme.KeyName.Render("p") + " " + theme.Muted.Render("port"),
+			theme.KeyName.Render("P") + " " + theme.Muted.Render("profile"),
+			theme.KeyName.Render("s") + " " + theme.Muted.Render("save"),
+			theme.KeyName.Render("r") + " " + theme.Muted.Render("reconnect"),
+			theme.KeyName.Render("q") + " " + theme.Muted.Render("quit"),
 		}
-		return theme.KeyBar.Width(m.width).Render(strings.Join(hints, "   "))
+		return "  " + strings.Join(hints, "   ")
 	}
 }
+
 
 // viewPortPickerModal renders the centered rounded modal for Port & Baud Rate.
 func (m Model) viewPortPickerModal() string {
@@ -379,7 +394,6 @@ func centerBox(screenWidth, screenHeight int, box string) string {
 	}
 	return strings.TrimRight(res.String(), "\n")
 }
-
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 

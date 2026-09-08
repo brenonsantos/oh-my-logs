@@ -261,11 +261,12 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.ToggleTimestamp):
 		m.injectTimestamp = !m.injectTimestamp
 		if m.injectTimestamp {
-			m.message = fmt.Sprintf("Timestamp ON  (%s)", m.tsField)
+			m.message = fmt.Sprintf("⏱ Timestamp ON (%s)", m.tsField)
 		} else {
-			m.message = "Timestamp OFF"
+			m.message = "⏱ Timestamp OFF"
 		}
 		return m, nil
+
 
 	case keyMatches(msg, m.keys.NextMatch):
 		m.nextSearchMatch()
@@ -626,12 +627,13 @@ func (m *Model) clampScroll() {
 }
 
 func (m *Model) recalcLayout() {
-	// Reserve: 1 title + 1 divider + 1 header + 1 divider + 1 status + 1 keys = 6 fixed rows.
-	m.tableHeight = m.height - 6
+	// Reserve: 1 title + 1 divider + 1 header + 1 divider + 1 divider + 1 status + 1 keys = 7 fixed rows.
+	m.tableHeight = m.height - 7
 	if m.tableHeight < 1 {
 		m.tableHeight = 1
 	}
 }
+
 
 
 // cmdSaveLog saves all raw lines in the buffer to a timestamped file.

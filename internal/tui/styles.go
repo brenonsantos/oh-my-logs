@@ -7,40 +7,41 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Palette defines the core color values used across the theme.
+// Palette defines the refined color values across the theme.
 var (
-	colorBg       = lipgloss.Color("#1a1b26") // background / dark slate
-	colorHeaderBg = lipgloss.Color("#1f2335") // slightly lighter dark slate
-	colorSelected = lipgloss.Color("#283457") // focused selection / row highlight
-	colorSearchBg = lipgloss.Color("#252c48") // non-focused search match row
+	colorBg       = lipgloss.Color("#12131a") // dark slate for modals
+	colorSelected = lipgloss.Color("#1e293b") // focused selection / row highlight
+	colorSearchBg = lipgloss.Color("#1e2238") // non-focused search match row
 
-	colorFg     = lipgloss.Color("#c0caf5") // normal foreground / content
-	colorMuted  = lipgloss.Color("#565f89") // muted / gray
-	colorAccent = lipgloss.Color("#7aa2f7") // blue (Primary / Accent)
-	colorCyan   = lipgloss.Color("#7dcfff") // bright cyan
-	colorPurple = lipgloss.Color("#bb9af7") // purple / identifier
-	colorGreen  = lipgloss.Color("#9ece6a") // success / connected
-	colorYellow = lipgloss.Color("#e0af68") // warning / search focus
-	colorRed    = lipgloss.Color("#f7768e") // error / alert
+	colorFg      = lipgloss.Color("#e2e8f0") // crisp white/slate (clean log text)
+	colorHeader  = lipgloss.Color("#f8fafc") // bright white for column headers
+	colorMuted   = lipgloss.Color("#64748b") // slate gray for secondary/separators
+	colorDivider = lipgloss.Color("#334155") // subtle divider lines
+
+	colorAccent = lipgloss.Color("#60a5fa") // clean royal blue / accent
+	colorCyan   = lipgloss.Color("#38bdf8") // sky blue / info
+	colorPurple = lipgloss.Color("#c084fc") // light purple / identifier / module
+	colorGreen  = lipgloss.Color("#4ade80") // success / connected
+	colorYellow = lipgloss.Color("#facc15") // warning / search highlight
+	colorRed    = lipgloss.Color("#f87171") // coral red / error
 )
 
 // Theme encapsulates all semantic visual styles.
 type Theme struct {
 	// Hierarchy
-	Primary   lipgloss.Style // application / important state (bold accent)
-	Secondary lipgloss.Style // headers / metadata (subtle accent / soft blue)
+	Primary   lipgloss.Style // application name / active state (bold accent)
+	Secondary lipgloss.Style // metadata values (clean soft white)
 	Content   lipgloss.Style // actual log text
 	Muted     lipgloss.Style // shortcuts / statistics / separators (gray)
 
 	// Feedback / Status
-	Accent  lipgloss.Style // cyan/blue
+	Accent  lipgloss.Style // blue/cyan
 	Success lipgloss.Style // green
 	Warning lipgloss.Style // yellow
 	Error   lipgloss.Style // red
 
 	// Table & Selection
-	Header      lipgloss.Style // table header text
-	HeaderBar   lipgloss.Style // table header background
+	Header      lipgloss.Style // table header column text
 	Divider     lipgloss.Style // horizontal divider lines
 	Selected    lipgloss.Style // cursor / active selection
 	SearchMatch lipgloss.Style // search match row
@@ -57,7 +58,17 @@ type Theme struct {
 	ModalFooter   lipgloss.Style // help text at bottom of modal
 
 	// Status & Footer
-	TitleBar  lipgloss.Style
+	TitleBar      lipgloss.Style
+	TitleBg       lipgloss.Color
+	TitleAppBadge lipgloss.Style // vibrant inverted pill " OH MY LOGS "
+	TitleApp      lipgloss.Style // bold accent "Oh My Logs"
+	TitleLabel    lipgloss.Style // muted gray "Port: "
+	TitleValue    lipgloss.Style // soft white "/dev/..."
+	TitleSep      lipgloss.Style // subtle separator "│"
+	TitleConnOn   lipgloss.Style // green "● Connected"
+	TitleConnOff  lipgloss.Style // muted "○ Disconnected"
+	TitleConnErr  lipgloss.Style // red "⚠ ..."
+
 	StatusBar lipgloss.Style
 	KeyBar    lipgloss.Style
 	KeyName   lipgloss.Style
@@ -67,11 +78,15 @@ type Theme struct {
 	MsgErr    lipgloss.Style
 }
 
-// DefaultTheme returns the default technical developer theme.
+// DefaultTheme returns the refined technical developer theme.
 func DefaultTheme() Theme {
+	colorTitleBg := lipgloss.Color("#181f2f") // deep slate navy background
+	colorPillBg := lipgloss.Color("#3b82f6")  // vibrant royal blue badge
+	colorPillFg := lipgloss.Color("#ffffff")  // bright white text
+
 	return Theme{
 		Primary:   lipgloss.NewStyle().Foreground(colorAccent).Bold(true),
-		Secondary: lipgloss.NewStyle().Foreground(colorCyan),
+		Secondary: lipgloss.NewStyle().Foreground(colorFg),
 		Content:   lipgloss.NewStyle().Foreground(colorFg),
 		Muted:     lipgloss.NewStyle().Foreground(colorMuted),
 
@@ -80,27 +95,25 @@ func DefaultTheme() Theme {
 		Warning: lipgloss.NewStyle().Foreground(colorYellow).Bold(true),
 		Error:   lipgloss.NewStyle().Foreground(colorRed).Bold(true),
 
-		Header:    lipgloss.NewStyle().Foreground(colorCyan).Bold(true),
-		HeaderBar: lipgloss.NewStyle().Background(colorHeaderBg).Padding(0, 1),
-		Divider:   lipgloss.NewStyle().Foreground(colorMuted),
+		Header:  lipgloss.NewStyle().Foreground(colorHeader).Bold(true),
+		Divider: lipgloss.NewStyle().Foreground(colorDivider),
 
-		Selected:    lipgloss.NewStyle().Background(colorSelected).Foreground(colorFg).Padding(0, 1),
-		SearchMatch: lipgloss.NewStyle().Background(colorSearchBg).Foreground(colorFg).Padding(0, 1),
-		SearchFocus: lipgloss.NewStyle().Background(colorSelected).Foreground(colorYellow).Bold(true).Padding(0, 1),
-		Highlight:   lipgloss.NewStyle().Background(colorYellow).Foreground(colorBg).Bold(true),
-		RowNormal:   lipgloss.NewStyle().Foreground(colorFg).Padding(0, 1),
+		Selected:    lipgloss.NewStyle().Background(colorSelected).Foreground(colorFg),
+		SearchMatch: lipgloss.NewStyle().Background(colorSearchBg).Foreground(colorFg),
+		SearchFocus: lipgloss.NewStyle().Background(colorSelected).Foreground(colorYellow).Bold(true),
+		Highlight:   lipgloss.NewStyle().Background(colorYellow).Foreground(lipgloss.Color("#000000")).Bold(true),
+		RowNormal:   lipgloss.NewStyle().Foreground(colorFg),
 
 		ModalBox: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(colorAccent).
-			Background(colorHeaderBg).
+			Background(colorBg).
 			Padding(1, 2),
 		ModalTitle: lipgloss.NewStyle().
-			Foreground(colorAccent).
-			Bold(true).
-			MarginBottom(1),
+			Foreground(colorHeader).
+			Bold(true),
 		ModalSection: lipgloss.NewStyle().
-			Foreground(colorCyan).
+			Foreground(colorAccent).
 			Bold(true),
 		ModalItem: lipgloss.NewStyle().
 			Foreground(colorFg),
@@ -108,29 +121,54 @@ func DefaultTheme() Theme {
 			Foreground(colorAccent).
 			Bold(true),
 		ModalFooter: lipgloss.NewStyle().
-			Foreground(colorMuted).
-			MarginTop(1),
+			Foreground(colorMuted),
 
 		TitleBar: lipgloss.NewStyle().
-			Background(colorHeaderBg).
-			Foreground(colorFg).
+			Background(colorTitleBg).
+			Foreground(colorFg),
+		TitleBg: colorTitleBg,
+		TitleAppBadge: lipgloss.NewStyle().
+			Background(colorPillBg).
+			Foreground(colorPillFg).
+			Bold(true).
 			Padding(0, 1),
-		StatusBar: lipgloss.NewStyle().
-			Background(colorHeaderBg).
-			Foreground(colorMuted).
-			Padding(0, 1),
-		KeyBar: lipgloss.NewStyle().
-			Background(colorHeaderBg).
-			Foreground(colorMuted).
-			Padding(0, 1),
-		KeyName: lipgloss.NewStyle().
+		TitleApp: lipgloss.NewStyle().
+			Background(colorTitleBg).
 			Foreground(colorAccent).
+			Bold(true),
+		TitleLabel: lipgloss.NewStyle().
+			Background(colorTitleBg).
+			Foreground(colorMuted),
+		TitleValue: lipgloss.NewStyle().
+			Background(colorTitleBg).
+			Foreground(colorFg),
+		TitleSep: lipgloss.NewStyle().
+			Background(colorTitleBg).
+			Foreground(colorDivider),
+		TitleConnOn: lipgloss.NewStyle().
+			Background(colorTitleBg).
+			Foreground(colorGreen).
+			Bold(true),
+		TitleConnOff: lipgloss.NewStyle().
+			Background(colorTitleBg).
+			Foreground(colorMuted),
+		TitleConnErr: lipgloss.NewStyle().
+			Background(colorTitleBg).
+			Foreground(colorRed).
+			Bold(true),
+
+		StatusBar: lipgloss.NewStyle().
+			Foreground(colorMuted),
+		KeyBar: lipgloss.NewStyle().
+			Foreground(colorMuted),
+		KeyName: lipgloss.NewStyle().
+			Foreground(colorCyan).
 			Bold(true),
 
 		FollowOn:  lipgloss.NewStyle().Foreground(colorGreen).Bold(true),
 		FollowOff: lipgloss.NewStyle().Foreground(colorYellow).Bold(true),
 
-		MsgInfo: lipgloss.NewStyle().Foreground(colorCyan),
+		MsgInfo: lipgloss.NewStyle().Foreground(colorMuted).size,
 		MsgErr:  lipgloss.NewStyle().Foreground(colorRed).Bold(true),
 	}
 }
@@ -159,7 +197,7 @@ func (t Theme) ResolveCellStyle(col record.Column, val string) lipgloss.Style {
 		return t.Muted
 	case "level":
 		return t.LevelStyle(val)
-	case "identifier", "module", "task", "cpu":
+	case "identifier", "module", "task", "cpu", "code":
 		return lipgloss.NewStyle().Foreground(colorPurple)
 	case "primary", "message", "text":
 		return t.Content
@@ -179,7 +217,7 @@ func (t Theme) ResolveCellStyle(col record.Column, val string) lipgloss.Style {
 		if strings.EqualFold(col.Field, "time") || strings.EqualFold(col.Field, "timestamp") || strings.EqualFold(col.Field, "_ts") {
 			return t.Muted
 		}
-		if strings.EqualFold(col.Field, "module") || strings.EqualFold(col.Field, "task") || strings.EqualFold(col.Field, "cpu") {
+		if strings.EqualFold(col.Field, "module") || strings.EqualFold(col.Field, "task") || strings.EqualFold(col.Field, "cpu") || strings.EqualFold(col.Field, "code") {
 			return lipgloss.NewStyle().Foreground(colorPurple)
 		}
 		return t.Content
@@ -195,7 +233,7 @@ func (t Theme) LevelStyle(val string) lipgloss.Style {
 	case strings.Contains(u, "WARN"):
 		return t.Warning
 	case strings.Contains(u, "INFO"):
-		return t.Accent
+		return lipgloss.NewStyle().Foreground(colorCyan)
 	case strings.Contains(u, "DEBUG") || strings.Contains(u, "TRACE"):
 		return t.Muted
 	default:
@@ -212,7 +250,7 @@ func (t Theme) colorByName(name string) lipgloss.Style {
 	case "green", "success":
 		return t.Success
 	case "blue", "cyan", "accent":
-		return t.Accent
+		return lipgloss.NewStyle().Foreground(colorCyan)
 	case "purple", "magenta", "identifier":
 		return lipgloss.NewStyle().Foreground(colorPurple)
 	case "gray", "grey", "muted":
