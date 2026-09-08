@@ -35,17 +35,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	// ── App config & profile discovery ───────────────────────────────────────
+	// ── App config & persistent settings ─────────────────────────────────────
 	appCfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: config: %v\n", err)
 	}
 
-	// ── Load profile ─────────────────────────────────────────────────────────
+	savedSettings, _ := appCfg.LoadSettings()
+
+	// ── Resolve profile ───────────────────────────────────────────────────────
+	targetProfile := *flagProfile
+	if targetProfile == "" && savedSettings != nil && savedSettings.Profile != "" {
+		targetProfile = savedSettings.Profile
+	}
+
 	var profile *parser.Profile
 	var p parser.Parser
 
-	profilePath := resolveProfilePath(appCfg, *flagProfile)
+	profilePath := config.ResolveProfilePath(appCfg, targetProfile)
 	if profilePath != "" {
 		profile, err = parser.LoadProfile(profilePath)
 		if err != nil {
@@ -64,7 +71,21 @@ func main() {
 	// ── Serial / file source ─────────────────────────────────────────────────
 	var src serial.Source
 	serialCfg := serial.DefaultConfig()
-	serialCfg.Baud = *flagBaud
+
+	// Determine if -baud was explicitly provided on CLI
+	baudProvided := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "baud" {
+			baudProvided = true
+		}
+	})
+	if baudProvided {
+		serialCfg.Baud = *flagBaud
+	} else if savedSettings != nil && savedSettings.Baud > 0 {
+		serialCfg.Baud = savedSettings.Baud
+	} else {
+		serialCfg.Baud = *flagBaud
+	}
 
 	if *flagFile != "" {
 		src, err = serial.NewFileSource(*flagFile)
@@ -79,8 +100,12 @@ func main() {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
+	} else if savedSettings != nil && savedSettings.Port != "" {
+		serialCfg.Port = savedSettings.Port
+		// Auto-connect to last used port if device is plugged in.
+		// If disconnected, src remains nil and TUI displays disconnected empty state.
+		src, _ = serial.NewSerialSource(serialCfg)
 	}
-	// If neither port nor file was given, we start with no source connected.
 
 	// ── Ring buffer ───────────────────────────────────────────────────────────
 	buf := record.NewBuffer(record.DefaultCapacity)
@@ -100,29 +125,3 @@ func main() {
 	}
 }
 
-// resolveProfilePath looks up a profile by name in the config profiles dir,
-// or treats the flag value as a direct path if it ends in .yaml/.yml.
-func resolveProfilePath(appCfg *config.AppConfig, nameOrPath string) string {
-	if nameOrPath == "" {
-		return ""
-	}
-	// Direct path.
-	if _, err := os.Stat(nameOrPath); err == nil {
-		return nameOrPath
-	}
-	if appCfg == nil {
-		return ""
-	}
-	// Search config profiles dir.
-	files, _ := appCfg.ListProfileFiles()
-	for _, f := range files {
-		prof, err := parser.LoadProfile(f)
-		if err != nil {
-			continue
-		}
-		if prof.Name == nameOrPath {
-			return f
-		}
-	}
-	return ""
-}

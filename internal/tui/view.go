@@ -247,7 +247,7 @@ func (m Model) viewStatusBar() string {
 	}
 
 	tsStr := theme.Muted.Render("⏱ OFF")
-	if m.injectTimestamp {
+	if m.showTimestamp {
 		tsStr = theme.Success.Render("⏱ ON")
 	}
 
@@ -638,16 +638,31 @@ func (m Model) computeColWidths(cols []record.Column) []int {
 	return widths
 }
 
-// effectiveColumns returns the columns to render, prepending timestamp if enabled.
+func isTimestampCol(col record.Column, tsField string) bool {
+	return col.Field == tsField || col.Field == "_ts" || col.Style == "timestamp"
+}
+
+// effectiveColumns returns the columns to render, respecting timestamp visibility.
 func (m Model) effectiveColumns() []record.Column {
-	if !m.injectTimestamp {
-		return m.columns
+	if !m.showTimestamp {
+		// Filter out any timestamp columns so they are hidden
+		var cols []record.Column
+		for _, col := range m.columns {
+			if !isTimestampCol(col, m.tsField) {
+				cols = append(cols, col)
+			}
+		}
+		return cols
 	}
+
+	// When timestamp is enabled: if already present in columns, return m.columns
 	for _, col := range m.columns {
-		if col.Field == m.tsField {
+		if isTimestampCol(col, m.tsField) {
 			return m.columns
 		}
 	}
+
+	// Otherwise, prepend the arrival timestamp column
 	tsCol := record.Column{
 		Field: m.tsField,
 		Title: "Time",

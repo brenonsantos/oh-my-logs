@@ -96,11 +96,12 @@ type Model struct {
 	profileList   []ProfileItem
 	profileCursor int
 	appConfig     *config.AppConfig
+	settings      *config.Settings
 
-	// Timestamp injection (toggleable at runtime with 't')
-	injectTimestamp bool   // whether to stamp incoming records with receive time
-	tsField         string // field name for the injected timestamp
-	tsFormat        string // Go time layout for the injected timestamp
+	// Timestamp display & settings (toggle visibility at runtime with 't')
+	showTimestamp bool   // whether the timestamp column is displayed in the UI
+	tsField       string // field name for the arrival timestamp (e.g. "_ts" or "time")
+	tsFormat      string // Go time layout for the timestamp
 
 	// Viewport dimensions (computed on resize)
 	tableHeight  int
@@ -121,15 +122,32 @@ func New(
 		cols = profile.ToColumns()
 	}
 
-	// Resolve timestamp injection settings. The profile sets the initial state;
-	// the user can toggle at runtime with 't'.
+	var savedSettings *config.Settings
+	if appCfg != nil {
+		savedSettings, _ = appCfg.LoadSettings()
+	}
+
+	// Resolve timestamp settings.
 	tsField := "_ts"
 	tsFormat := "15:04:05.000"
 	initTS := false
-	if profile != nil && profile.Ingest.Timestamp.Enabled {
+
+	if profile != nil {
+		if profile.Ingest.Timestamp.Enabled {
+			initTS = true
+			tsField = profile.Ingest.Timestamp.TimestampField()
+			tsFormat = profile.Ingest.Timestamp.TimestampFormat()
+		} else {
+			for _, col := range profile.Columns {
+				if col.Style == "timestamp" || col.Field == "time" || col.Field == "timestamp" {
+					initTS = true
+					tsField = col.Field
+					break
+				}
+			}
+		}
+	} else if savedSettings != nil && savedSettings.ShowTimestamp {
 		initTS = true
-		tsField = profile.Ingest.Timestamp.TimestampField()
-		tsFormat = profile.Ingest.Timestamp.TimestampFormat()
 	}
 
 	bauds := serial.CommonBaudRates()
@@ -142,21 +160,22 @@ func New(
 	}
 
 	m := Model{
-		keys:            defaultKeyMap(),
-		serialCfg:       cfg,
-		source:          src,
-		profile:         profile,
-		parser:          p,
-		columns:         cols,
-		buffer:          buf,
-		follow:          true,
-		sidebarWidth:    20,
-		injectTimestamp: initTS,
-		tsField:         tsField,
-		tsFormat:        tsFormat,
-		appConfig:       appCfg,
-		baudList:        bauds,
-		baudCursor:      baudIdx,
+		keys:          defaultKeyMap(),
+		serialCfg:     cfg,
+		source:        src,
+		profile:       profile,
+		parser:        p,
+		columns:       cols,
+		buffer:        buf,
+		follow:        true,
+		sidebarWidth:  20,
+		showTimestamp: initTS,
+		tsField:       tsField,
+		tsFormat:      tsFormat,
+		appConfig:     appCfg,
+		settings:      savedSettings,
+		baudList:      bauds,
+		baudCursor:    baudIdx,
 	}
 
 
@@ -164,6 +183,27 @@ func New(
 	m.activeFilter, _ = filter.New("")
 	return m
 }
+
+// saveSettings persists current port, baud, profile, and timestamp display state to disk.
+func (m Model) saveSettings() {
+	if m.appConfig == nil {
+		return
+	}
+	s := m.settings
+	if s == nil {
+		s = &config.Settings{}
+	}
+	s.Port = m.serialCfg.Port
+	s.Baud = m.serialCfg.Baud
+	if m.profile != nil {
+		s.Profile = m.profile.Name
+	} else {
+		s.Profile = ""
+	}
+	s.ShowTimestamp = m.showTimestamp
+	_ = m.appConfig.SaveSettings(s)
+}
+
 
 
 // Init starts the source reader goroutine (via a command) and returns the
