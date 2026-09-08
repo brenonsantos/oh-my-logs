@@ -30,3 +30,7 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local / proprietary profiles and logs
+*.local.yaml
+profiles/local/

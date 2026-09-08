@@ -1,5 +1,6 @@
-name: STM32-PDM
+name: Example1
 
+# Structured log format: [time][level][module] message
 parser:
   type: regex
   pattern: '^\[(?P<time>[^\]]+)\]\[(?P<level>[^\]]+)\]\[(?P<module>[^\]]+)\]\s+(?P<message>.*)$'
@@ -8,15 +9,23 @@ columns:
   - field: time
     title: Time
     width: 14
+    style: timestamp
 
   - field: level
     title: Level
     width: 8
+    style: level
+    colors:
+      ERROR: red
+      WARN: yellow
+      INFO: blue
 
   - field: module
     title: Module
     width: 10
+    style: identifier
 
   - field: message
     title: Message
     width: 0
+    style: primary

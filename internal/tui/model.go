@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
@@ -59,6 +60,7 @@ type Tab struct {
 	SearchInput   string
 	SearchMatches []int
 	SearchCursor  int
+	SelectedRow   int // selected row index into Visible (-1 if none)
 }
 
 // DisplayName returns a user-friendly label for the tab.
@@ -139,6 +141,13 @@ type Model struct {
 	// Virtual tabs
 	tabs      []Tab
 	activeTab int
+
+	// Row selection & multi-row drag selection for copying
+	selectedRow    int // index into visible (-1 if none)
+	selectionStart int // multi-row drag start (-1 if none)
+	selectionEnd   int // multi-row drag end (-1 if none)
+	lastClickTime  time.Time
+	lastClickRow   int
 }
 
 // New creates a new Model with sensible defaults.
@@ -233,13 +242,18 @@ func New(
 	m.activeFilter = initFilter
 
 	initTab := Tab{
-		Name:      "All",
-		FilterRaw: "",
-		Filter:    initFilter,
-		Follow:    true,
+		Name:        "All",
+		FilterRaw:   "",
+		Filter:      initFilter,
+		Follow:      true,
+		SelectedRow: -1,
 	}
 	m.tabs = []Tab{initTab}
 	m.activeTab = 0
+	m.selectedRow = -1
+	m.selectionStart = -1
+	m.selectionEnd = -1
+	m.lastClickRow = -1
 	return m
 }
 
@@ -248,10 +262,11 @@ func (m *Model) currentTab() *Tab {
 	if len(m.tabs) == 0 {
 		initFilter, _ := filter.New("")
 		m.tabs = []Tab{{
-			Name:      "All",
-			FilterRaw: "",
-			Filter:    initFilter,
-			Follow:    true,
+			Name:        "All",
+			FilterRaw:   "",
+			Filter:      initFilter,
+			Follow:      true,
+			SelectedRow: -1,
 		}}
 		m.activeTab = 0
 	}
@@ -275,6 +290,7 @@ func (m *Model) syncActiveTabToModel() {
 	cur.SearchInput = m.searchInput
 	cur.SearchMatches = m.searchMatches
 	cur.SearchCursor = m.searchCursor
+	cur.SelectedRow = m.selectedRow
 }
 
 // syncModelToActiveTab updates the model's active view state from the current tab.
@@ -288,6 +304,9 @@ func (m *Model) syncModelToActiveTab() {
 	m.searchInput = cur.SearchInput
 	m.searchMatches = cur.SearchMatches
 	m.searchCursor = cur.SearchCursor
+	m.selectedRow = cur.SelectedRow
+	m.selectionStart = -1
+	m.selectionEnd = -1
 }
 
 // switchTab changes the active tab and synchronizes state.

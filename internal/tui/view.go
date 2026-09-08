@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/brenoniehues/oh-my-logs/internal/record"
@@ -177,35 +178,100 @@ func (m Model) viewTable() string {
 		focusedAbsIdx = m.searchMatches[m.searchCursor]
 	}
 
+	cols := m.effectiveColumns()
+	colWidths := m.computeColWidths(cols)
+
 	var lines []string
 	for i, r := range rows {
 		absIdx := m.scrollOffset + i
 		isMatch := matchSet[absIdx]
 		isFocused := absIdx == focusedAbsIdx
 
-		rendered := m.renderRow(func(col record.Column, w int) string {
-			val := r.Fields[col.Field]
-			cell := padOrTrunc(val, w)
-
-			// If search active and matches, highlight the matching substring
-			if isMatch && m.searchInput != "" {
-				cell = highlightSubstring(cell, m.searchInput)
-			} else {
-				// Apply dynamic semantic or custom column style
-				cellStyle := theme.ResolveCellStyle(col, val)
-				cell = cellStyle.Render(cell)
+		isMultiSelected := false
+		if m.selectionStart >= 0 && m.selectionEnd >= 0 && m.selectionStart != m.selectionEnd {
+			minSel, maxSel := m.selectionStart, m.selectionEnd
+			if minSel > maxSel {
+				minSel, maxSel = maxSel, minSel
 			}
-			return cell
-		})
+			if absIdx >= minSel && absIdx <= maxSel {
+				isMultiSelected = true
+			}
+		}
+		isSelectedRow := absIdx == m.selectedRow
+
+		var rowBg lipgloss.TerminalColor
+		hasBg := false
+		prefix := "  "
+		var prefixStyle lipgloss.Style
 
 		switch {
 		case isFocused:
-			lines = append(lines, theme.SearchFocus.Width(tableWidth).Render("▶ "+rendered))
+			hasBg = true
+			rowBg = colorSelected
+			prefix = "▶ "
+			prefixStyle = lipgloss.NewStyle().Background(rowBg).Foreground(colorYellow).Bold(true)
+		case isMultiSelected:
+			hasBg = true
+			rowBg = colorSelected
+			prefix = "▌ "
+			prefixStyle = lipgloss.NewStyle().Background(rowBg).Foreground(colorAccent).Bold(true)
+		case isSelectedRow:
+			hasBg = true
+			rowBg = colorSelected
+			prefix = "▶ "
+			prefixStyle = lipgloss.NewStyle().Background(rowBg).Foreground(colorAccent).Bold(true)
 		case isMatch:
-			lines = append(lines, theme.SearchMatch.Width(tableWidth).Render("  "+rendered))
+			hasBg = true
+			rowBg = colorSearchBg
+			prefix = "  "
+			prefixStyle = lipgloss.NewStyle().Background(rowBg)
 		default:
-			lines = append(lines, theme.RowNormal.Width(tableWidth).Render("  "+rendered))
+			prefix = "  "
+			prefixStyle = lipgloss.NewStyle()
 		}
+
+		var cellParts []string
+		for colIdx, col := range cols {
+			val := r.Fields[col.Field]
+			w := 0
+			if colIdx < len(colWidths) {
+				w = colWidths[colIdx]
+			}
+			cellText := padOrTrunc(val, w)
+
+			cellStyle := theme.ResolveCellStyle(col, val)
+			if hasBg {
+				cellStyle = cellStyle.Background(rowBg)
+			}
+
+			var renderedCell string
+			if isMatch && m.searchInput != "" {
+				renderedCell = highlightSubstring(cellText, m.searchInput, cellStyle)
+			} else {
+				renderedCell = cellStyle.Render(cellText)
+			}
+			cellParts = append(cellParts, renderedCell)
+		}
+
+		sep := "  "
+		if hasBg {
+			sep = lipgloss.NewStyle().Background(rowBg).Render("  ")
+		}
+
+		rowBody := strings.Join(cellParts, sep)
+		fullRow := prefixStyle.Render(prefix) + rowBody
+
+		curW := lipgloss.Width(fullRow)
+		if curW < tableWidth {
+			rem := tableWidth - curW
+			if hasBg {
+				fullRow += lipgloss.NewStyle().Background(rowBg).Render(strings.Repeat(" ", rem))
+			} else {
+				fullRow += strings.Repeat(" ", rem)
+			}
+		}
+
+		lines = append(lines, fullRow)
 	}
 
 	// Pad remaining vertical space to keep layout stable
@@ -343,13 +409,13 @@ func (m Model) viewKeyBar() string {
 	case modeSearch:
 		prompt := theme.Primary.Render("Search: ")
 		text := theme.Content.Render(m.searchInput + "█")
-		help := theme.Muted.Render("  [Enter: next · ↑/↓: navigate · Esc: cancel]")
+		help := theme.Muted.Render("  [Enter: next · ↑/↓: navigate · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
 
 	case modeFilter:
 		prompt := theme.Primary.Render("Filter: ")
 		text := theme.Content.Render(m.filterInput + "█")
-		help := theme.Muted.Render("  [Enter: apply · Esc: cancel · e.g. level:ERROR,WARN -heartbeat]")
+		help := theme.Muted.Render("  [Enter: apply · ^V: paste · Esc: cancel · e.g. level:ERROR,WARN -heartbeat]")
 		return "  " + prompt + text + help
 
 	case modeHelp:
@@ -357,8 +423,9 @@ func (m Model) viewKeyBar() string {
 
 	default:
 		hints := []string{
-			theme.KeyName.Render("Ctrl+F") + " " + theme.Muted.Render("search"),
+			theme.KeyName.Render("^F") + " " + theme.Muted.Render("search"),
 			theme.KeyName.Render("f") + " " + theme.Muted.Render("filter"),
+			theme.KeyName.Render("y") + " " + theme.Muted.Render("copy"),
 		}
 		if len(m.tabs) > 1 {
 			hints = append(hints, theme.KeyName.Render("Tab")+" "+theme.Muted.Render("tab"))
@@ -457,10 +524,11 @@ func (m Model) viewPortPickerModal() string {
 
 // viewProfilePickerModal renders the centered rounded modal for Profile switching.
 func (m Model) viewProfilePickerModal() string {
-	modalWidth := 48
+	modalWidth := 52
 	for _, p := range m.profileList {
-		if len(p.Name)+10 > modalWidth {
-			modalWidth = len(p.Name) + 10
+		labelLen := len(p.Name) + 14
+		if labelLen > modalWidth {
+			modalWidth = labelLen
 		}
 	}
 	if modalWidth > m.width-6 {
@@ -477,10 +545,18 @@ func (m Model) viewProfilePickerModal() string {
 		sb.WriteString("\n")
 	} else {
 		for i, prof := range m.profileList {
+			tag := ""
+			if m.appConfig != nil && m.appConfig.ProfilesDir != "" {
+				absP, _ := filepath.Abs(prof.Path)
+				absGlobal, _ := filepath.Abs(m.appConfig.ProfilesDir)
+				if strings.HasPrefix(absP, absGlobal) {
+					tag = " [global]"
+				}
+			}
 			if i == m.profileCursor {
-				sb.WriteString(theme.ModalSelected.Render(fmt.Sprintf("  › %s", prof.Name)))
+				sb.WriteString(theme.ModalSelected.Render(fmt.Sprintf("  › %s%s", prof.Name, tag)))
 			} else {
-				sb.WriteString(theme.ModalItem.Render(fmt.Sprintf("    %s", prof.Name)))
+				sb.WriteString(theme.ModalItem.Render(fmt.Sprintf("    %s", prof.Name)) + theme.Muted.Render(tag))
 			}
 			sb.WriteString("\n")
 		}
@@ -539,14 +615,15 @@ func (m Model) viewHelpModal() string {
 
 	left := []string{
 		renderHeader("NAVIGATION", colWidth),
-		renderItem("↑, k", "Scroll up 1 line", colWidth),
-		renderItem("↓, j", "Scroll down 1 line", colWidth),
+		renderItem("↑, k", "Scroll / select row", colWidth),
+		renderItem("↓, j", "Scroll / select row", colWidth),
 		renderItem("PgUp, ^U", "Page up", colWidth),
 		renderItem("PgDn, ^D", "Page down", colWidth),
 		renderItem("g, Home", "Jump to top", colWidth),
 		renderItem("G, End", "Jump to bottom", colWidth),
 		renderItem("Wheel", "Smooth scroll", colWidth),
 		renderHeader("VIRTUAL TABS", colWidth),
+		renderItem("Click tab", "Switch to tab", colWidth),
 		renderItem("Tab, ]", "Next tab", colWidth),
 		renderItem("S-Tab, [", "Previous tab", colWidth),
 		renderItem("1 .. 9", "Jump to tab N", colWidth),
@@ -555,28 +632,29 @@ func (m Model) viewHelpModal() string {
 	}
 
 	right := []string{
-		renderHeader("SEARCH & FILTER", colWidth),
+		renderHeader("SEARCH, FILTER & COPY", colWidth),
 		renderItem("Ctrl+F", "Search logs", colWidth),
-		renderItem("Enter, ↓", "Next match", colWidth),
-		renderItem("n / N", "Next / prev match", colWidth),
 		renderItem("f", "Filter active tab", colWidth),
-		renderItem("Esc", "Cancel / clear", colWidth),
+		renderItem("Ctrl+V", "Paste in search/filter", colWidth),
+		renderItem("y / Y", "Copy row / raw text", colWidth),
+		renderItem("Click row", "Select row & pause", colWidth),
+		renderItem("Shift+↑/↓", "Extend line selection", colWidth),
+		renderItem("Drag mouse", "Select multiple rows", colWidth),
+		renderItem("2x Click", "Copy row to clipboard", colWidth),
+		renderItem("Opt/Shift", "Terminal native select", colWidth),
 		renderHeader("ACTIONS & CONTROLS", colWidth),
-		renderItem("Space", "Pause / resume", colWidth),
+		renderItem("Space", "Pause / resume follow", colWidth),
 		renderItem("c", "Clear buffer", colWidth),
 		renderItem("t", "Toggle timestamp", colWidth),
 		renderItem("s", "Save log to file", colWidth),
-		renderItem("p", "Serial port & baud", colWidth),
-		renderItem("P", "Switch profile", colWidth),
-		renderItem("r", "Reconnect port", colWidth),
-		renderItem("?", "Toggle this help", colWidth),
-		renderItem("q, ^C", "Quit application", colWidth),
+		renderItem("p, P, r", "Port / Profile / Reconn", colWidth),
+		renderItem("?, q", "Toggle help / Quit", colWidth),
 	}
 
 	sep := theme.Divider.Render(" │ ")
 	var sb strings.Builder
 
-	sb.WriteString(theme.ModalTitle.Render("Help — Keyboard Shortcuts"))
+	sb.WriteString(theme.ModalTitle.Render("Help — Keyboard & Mouse Shortcuts"))
 	sb.WriteString("\n\n")
 
 	maxRows := len(left)
@@ -604,7 +682,7 @@ func (m Model) viewHelpModal() string {
 	}
 
 	sb.WriteByte('\n')
-	sb.WriteString(theme.ModalFooter.Render("Press ? or Esc or q to close"))
+	sb.WriteString(theme.ModalFooter.Render("Press ? or Esc to close · Hold Opt (Mac) / Shift (Linux) for native select"))
 
 	modalBox := theme.ModalBox.Padding(0, 2).Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+2, modalBox)
@@ -677,22 +755,30 @@ func (m Model) renderRow(cellFn func(col record.Column, width int) string) strin
 
 // computeColWidths distributes available width across columns.
 func (m Model) computeColWidths(cols []record.Column) []int {
-	total := m.tableWidth() - 4 // reserve prefix spaces
+	if len(cols) == 0 {
+		return nil
+	}
+	tableW := m.tableWidth()
 	widths := make([]int, len(cols))
 	flexIdx := -1
-	used := 0
+	used := 2 // prefix "  ", "▶ ", or "▌ " takes 2 chars
+
+	// Each gap between columns takes 2 spaces: "  "
+	if len(cols) > 1 {
+		used += (len(cols) - 1) * 2
+	}
 
 	for i, col := range cols {
 		if col.Width == 0 {
 			flexIdx = i
 		} else {
 			widths[i] = col.Width
-			used += col.Width + 2 // +2 for column spacing
+			used += col.Width
 		}
 	}
 
 	if flexIdx >= 0 {
-		flex := total - used - 2
+		flex := tableW - used
 		if flex < 0 {
 			flex = 0
 		}
@@ -770,16 +856,28 @@ func padOrTrunc(s string, width int) string {
 	return s + strings.Repeat(" ", width-len(runes))
 }
 
-// highlightSubstring wraps occurrences of q with theme.Highlight.
-func highlightSubstring(cell, q string) string {
+// highlightSubstring wraps occurrences of q with theme.Highlight, using baseStyle for non-matching portions.
+func highlightSubstring(cell, q string, baseStyle lipgloss.Style) string {
 	lower := strings.ToLower(cell)
 	lowerQ := strings.ToLower(q)
-	idx := strings.Index(lower, lowerQ)
-	if idx < 0 {
-		return cell
+	if lowerQ == "" {
+		return baseStyle.Render(cell)
 	}
-	before := cell[:idx]
-	match := cell[idx : idx+len(q)]
-	after := cell[idx+len(q):]
-	return before + theme.Highlight.Render(match) + after
+	var sb strings.Builder
+	start := 0
+	for {
+		idx := strings.Index(lower[start:], lowerQ)
+		if idx < 0 {
+			sb.WriteString(baseStyle.Render(cell[start:]))
+			break
+		}
+		matchStart := start + idx
+		matchEnd := matchStart + len(q)
+		if matchStart > start {
+			sb.WriteString(baseStyle.Render(cell[start:matchStart]))
+		}
+		sb.WriteString(theme.Highlight.Render(cell[matchStart:matchEnd]))
+		start = matchEnd
+	}
+	return sb.String()
 }

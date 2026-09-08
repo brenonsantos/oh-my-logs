@@ -1,5 +1,6 @@
-name: Legacy-ECU
+name: Example2
 
+# Delimited format without level: timestamp;cpu;task;code;message
 parser:
   type: regex
   pattern: '^(?P<timestamp>\d+);(?P<cpu>\d+);(?P<task>[^;]+);(?P<code>[^;]+);(?P<message>.*)$'
@@ -8,19 +9,24 @@ columns:
   - field: timestamp
     title: Timestamp
     width: 12
+    style: timestamp
 
   - field: cpu
     title: CPU
     width: 5
+    style: identifier
 
   - field: task
     title: Task
     width: 18
+    style: identifier
 
   - field: code
     title: Code
     width: 10
+    style: identifier
 
   - field: message
     title: Message
     width: 0
+    style: primary
