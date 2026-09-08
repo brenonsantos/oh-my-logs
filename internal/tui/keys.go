@@ -55,21 +55,22 @@ func defaultKeyMap() keyMap {
 			key.WithHelp("↓/j", "scroll down"),
 		),
 		PageUp: key.NewBinding(
-			key.WithKeys("pgup"),
-			key.WithHelp("PgUp", "page up"),
+			key.WithKeys("pgup", "ctrl+u", "b"),
+			key.WithHelp("PgUp/Ctrl+U", "page up"),
 		),
 		PageDown: key.NewBinding(
-			key.WithKeys("pgdown"),
-			key.WithHelp("PgDn", "page down"),
-		),
-		GoToBottom: key.NewBinding(
-			key.WithKeys("g", "end"),
-			key.WithHelp("g/End", "go to newest"),
+			key.WithKeys("pgdown", "ctrl+d"),
+			key.WithHelp("PgDn/Ctrl+D", "page down"),
 		),
 		GoToTop: key.NewBinding(
-			key.WithKeys("G", "home"),
-			key.WithHelp("G/Home", "go to oldest"),
+			key.WithKeys("g", "home"),
+			key.WithHelp("g/Home", "go to top"),
 		),
+		GoToBottom: key.NewBinding(
+			key.WithKeys("G", "end"),
+			key.WithHelp("G/End", "go to bottom (follow)"),
+		),
+
 		Port: key.NewBinding(
 			key.WithKeys("p"),
 			key.WithHelp("p", "serial port"),

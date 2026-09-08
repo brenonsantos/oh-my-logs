@@ -99,6 +99,58 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("Connected to %s", msg.port)
 		return m, tea.Batch(listenToSource(m.source), listenToSourceErrors(m.source))
 
+	// ── Mouse events ─────────────────────────────────────────────────────────
+	case tea.MouseMsg:
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			switch m.mode {
+			case modePortPicker:
+				if m.portPickerSection == 0 {
+					if m.portCursor > 0 {
+						m.portCursor--
+					}
+				} else {
+					if m.baudCursor > 0 {
+						m.baudCursor--
+					}
+				}
+			case modeProfilePicker:
+				if m.profileCursor > 0 {
+					m.profileCursor--
+				}
+			default:
+				m.follow = false
+				m.scrollOffset -= 3
+				m.clampScroll()
+			}
+			return m, nil
+
+		case tea.MouseButtonWheelDown:
+			switch m.mode {
+			case modePortPicker:
+				if m.portPickerSection == 0 {
+					if m.portCursor < len(m.portList)-1 {
+						m.portCursor++
+					}
+				} else {
+					if m.baudCursor < len(m.baudList)-1 {
+						m.baudCursor++
+					}
+				}
+			case modeProfilePicker:
+				if m.profileCursor < len(m.profileList)-1 {
+					m.profileCursor++
+				}
+			default:
+				m.scrollOffset += 3
+				if m.scrollOffset >= len(m.visible)-m.tableHeight {
+					m.follow = true
+				}
+				m.clampScroll()
+			}
+			return m, nil
+		}
+
 	// ── Key events ───────────────────────────────────────────────────────────
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -106,6 +158,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
+
 
 // handleKey dispatches key events based on the current input mode.
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

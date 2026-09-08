@@ -168,10 +168,11 @@ func DefaultTheme() Theme {
 		FollowOn:  lipgloss.NewStyle().Foreground(colorGreen).Bold(true),
 		FollowOff: lipgloss.NewStyle().Foreground(colorYellow).Bold(true),
 
-		MsgInfo: lipgloss.NewStyle().Foreground(colorMuted).size,
+		MsgInfo: lipgloss.NewStyle().Foreground(colorMuted),
 		MsgErr:  lipgloss.NewStyle().Foreground(colorRed).Bold(true),
 	}
 }
+
 
 var theme = DefaultTheme()
 
