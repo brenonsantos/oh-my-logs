@@ -1,0 +1,36 @@
+name: Zephyr
+
+# Zephyr RTOS log profile
+# Supports:
+#   [00:00:03.165,977] <err> ext_log_system: critical level log
+#   [      5.182] <inf> fs_nvs: 16 Sectors of 4096 bytes
+#   [   1.234] <dbg> Message without module
+parser:
+  type: regex
+  pattern: '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?:(?P<module>[a-zA-Z0-9_.-]+):\s+)?(?P<message>.*)$'
+
+columns:
+  - field: uptime
+    title: Uptime
+    width: 19
+    style: uptime
+
+  - field: level
+    title: Level
+    width: 7
+    style: level
+    colors:
+      err: red
+      wrn: yellow
+      inf: cyan
+      dbg: gray
+
+  - field: module
+    title: Module
+    width: 16
+    style: identifier
+
+  - field: message
+    title: Message
+    width: 0
+    style: primary

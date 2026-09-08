@@ -27,6 +27,10 @@ type keyMap struct {
 	PrevTab         key.Binding
 	NewTab          key.Binding
 	CloseTab        key.Binding
+	CopyRow         key.Binding
+	CopyRaw         key.Binding
+	SelectUp        key.Binding
+	SelectDown      key.Binding
 	Help            key.Binding
 	Quit            key.Binding
 }
@@ -35,6 +39,22 @@ type keyMap struct {
 // defaultKeyMap returns the standard key bindings.
 func defaultKeyMap() keyMap {
 	return keyMap{
+		CopyRow: key.NewBinding(
+			key.WithKeys("y"),
+			key.WithHelp("y", "copy row"),
+		),
+		CopyRaw: key.NewBinding(
+			key.WithKeys("Y"),
+			key.WithHelp("Y", "copy raw"),
+		),
+		SelectUp: key.NewBinding(
+			key.WithKeys("shift+up", "K"),
+			key.WithHelp("Shift+↑/K", "expand selection up"),
+		),
+		SelectDown: key.NewBinding(
+			key.WithKeys("shift+down", "J"),
+			key.WithHelp("Shift+↓/J", "expand selection down"),
+		),
 		Search: key.NewBinding(
 			key.WithKeys("ctrl+f"),
 			key.WithHelp("Ctrl+F", "search"),

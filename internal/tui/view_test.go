@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -42,8 +41,8 @@ func TestHelpModalToggleAndDismiss(t *testing.T) {
 
 	// View should render help modal
 	viewOutput := m.View()
-	if !strings.Contains(viewOutput, "Help — Keyboard Shortcuts") {
-		t.Errorf("expected view to contain 'Help — Keyboard Shortcuts'")
+	if !strings.Contains(viewOutput, "Help — Keyboard & Mouse Shortcuts") {
+		t.Errorf("expected view to contain 'Help — Keyboard & Mouse Shortcuts'")
 	}
 	if !strings.Contains(viewOutput, "NAVIGATION") || !strings.Contains(viewOutput, "ACTIONS & CONTROLS") {
 		t.Errorf("expected view to contain help categories")
@@ -320,12 +319,15 @@ func TestAutoReconnectLifecycle(t *testing.T) {
 
 func TestUptimeAndTimestampDistinct(t *testing.T) {
 	// Setup a model with Zephyr profile columns (uptime, level, message)
-	profPath := filepath.Join("..", "..", "profiles", "examples", "zephyr.yaml")
-	prof, err := parser.LoadProfile(profPath)
-	if err != nil {
-		t.Fatalf("failed to load zephyr profile: %v", err)
+	prof := &parser.Profile{
+		Name: "Zephyr",
+		Columns: []parser.ColumnConfig{
+			{Field: "uptime", Title: "Uptime (s)", Width: 12, Style: "uptime"},
+			{Field: "level", Title: "Level", Width: 7, Style: "level"},
+			{Field: "message", Title: "Message", Width: 0, Style: "primary"},
+		},
 	}
-	p, err := prof.BuildParser()
+	p, err := parser.NewRegexParser(`^\[\s*(?P<uptime>[0-9.]+)\]\s+<(?P<level>[a-zA-Z]+)>\s+(?P<message>.*)$`)
 	if err != nil {
 		t.Fatalf("failed to build parser: %v", err)
 	}

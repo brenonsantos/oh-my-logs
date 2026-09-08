@@ -1,0 +1,5 @@
+[00:00:03.165,977] <err> ext_log_system: critical level log
+[00:00:03.165,991] <err> ext_log_system: error level log, 1 arguments: 1
+[00:00:03.166,006] <wrn> ext_log_system: warning level log, 2 arguments: 12
+[00:00:03.166,025] <inf> ext_log_system: notice level log, 3 arguments: 105
+[00:00:03.166,044] <inf> ext_log_system: info level log, 4 arguments : 1 24
