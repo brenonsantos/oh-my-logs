@@ -1,0 +1,22 @@
+name: STM32-PDM
+
+parser:
+  type: regex
+  pattern: '^\[(?P<time>[^\]]+)\]\[(?P<level>[^\]]+)\]\[(?P<module>[^\]]+)\]\s+(?P<message>.*)$'
+
+columns:
+  - field: time
+    title: Time
+    width: 14
+
+  - field: level
+    title: Level
+    width: 8
+
+  - field: module
+    title: Module
+    width: 10
+
+  - field: message
+    title: Message
+    width: 0

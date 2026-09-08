@@ -1,0 +1,9 @@
+name: Raw
+
+parser:
+  type: raw
+
+columns:
+  - field: message
+    title: Message
+    width: 0
