@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -219,4 +220,101 @@ func TestTUISettingsPersistence(t *testing.T) {
 		t.Errorf("expected saved.Baud to be 115200, got %d", saved.Baud)
 	}
 }
+
+type dummySource struct {
+	lines  chan string
+	errors chan error
+}
+
+func (d *dummySource) Lines() <-chan string { return d.lines }
+func (d *dummySource) Errors() <-chan error { return d.errors }
+func (d *dummySource) Stop()                 {}
+
+func TestAutoReconnectLifecycle(t *testing.T) {
+	m := newTestModel()
+	m.serialCfg.Port = "/dev/ttyUSB0"
+	m.connState = ConnDisconnected
+	m.reconnecting = true
+
+	// 1. Check title bar shows Reconnecting
+	v := m.viewTitleBar()
+	if !strings.Contains(v, "Reconnecting") {
+		t.Errorf("expected title bar to show 'Reconnecting', got: %s", v)
+	}
+
+	// 2. Check empty state displays auto-reconnecting target
+	empty := m.viewEmptyState()
+	if !strings.Contains(empty, "Auto-reconnecting to") || !strings.Contains(empty, "/dev/ttyUSB0") {
+		t.Errorf("expected empty state to mention auto-reconnecting target, got:\n%s", empty)
+	}
+
+	// 3. Simulating reconnectFailedMsg returns another tick if still disconnected
+	updated, cmd := m.Update(reconnectFailedMsg{})
+	m = updated.(Model)
+	if !m.reconnecting {
+		t.Errorf("expected reconnecting to remain true after reconnectFailedMsg")
+	}
+	if cmd == nil {
+		t.Errorf("expected scheduleReconnectTick cmd to be returned")
+	}
+
+	// 4. Simulating sourceReadyMsg connects and resets reconnecting
+	lines := make(chan string)
+	errs := make(chan error)
+	dummySrc := &dummySource{lines: lines, errors: errs}
+	updated, cmd = m.Update(sourceReadyMsg{source: dummySrc, port: "/dev/ttyUSB0"})
+	m = updated.(Model)
+	if m.connState != ConnConnected {
+		t.Errorf("expected ConnConnected, got %v", m.connState)
+	}
+	if m.reconnecting {
+		t.Errorf("expected reconnecting to be false after sourceReadyMsg")
+	}
+	if cmd == nil {
+		t.Errorf("expected listen cmds after sourceReadyMsg")
+	}
+
+	// 5. Simulating cable unplug via ConnStateMsg(ConnDisconnected)
+	updated, cmd = m.Update(ConnStateMsg{State: ConnDisconnected, Detail: "source closed"})
+	m = updated.(Model)
+	if m.connState != ConnDisconnected {
+		t.Errorf("expected ConnDisconnected, got %v", m.connState)
+	}
+	if !m.reconnecting {
+		t.Errorf("expected reconnecting to be true after cable unplug")
+	}
+	if cmd == nil {
+		t.Errorf("expected scheduleReconnectTick cmd on disconnect")
+	}
+
+	// 6. Check reconnectFailedMsg with diagnostic reason updates status message
+	updated, _ = m.Update(reconnectFailedMsg{reason: "Scanning ports… (target /dev/ttyUSB0 not found)"})
+	m = updated.(Model)
+	if m.message != "Scanning ports… (target /dev/ttyUSB0 not found)" {
+		t.Errorf("expected updated message, got %q", m.message)
+	}
+
+	// 7. Simulating ErrorMsg while connected (e.g. fatal USB read error) triggers auto-reconnect
+	m.connState = ConnConnected
+	m.source = dummySrc
+	m.reconnecting = false
+	updated, cmd = m.Update(ErrorMsg{Err: fmt.Errorf("read: device not configured")})
+	m = updated.(Model)
+	if m.connState != ConnDisconnected {
+		t.Errorf("expected ErrorMsg to trigger ConnDisconnected, got %v", m.connState)
+	}
+	if !m.reconnecting {
+		t.Errorf("expected reconnecting to be true after ErrorMsg")
+	}
+	if cmd == nil {
+		t.Errorf("expected scheduleReconnectTick cmd after ErrorMsg")
+	}
+
+	// 8. Ensure View() does not panic with error message
+	_ = m.View()
+	updated, _ = m.Update(ErrorMsg{Err: fmt.Errorf("connect /dev/cu.usbserial-1101: serial: cannot open /dev/cu.usbserial-1101: Invalid serial port: error setting term settings: invalid argument")})
+	m = updated.(Model)
+	_ = m.View()
+}
+
 

@@ -48,6 +48,44 @@ type sourceReadyMsg struct {
 	port   string
 }
 
+const reconnectInterval = 750 * time.Millisecond
+
+type reconnectTickMsg struct{}
+type reconnectFailedMsg struct {
+	reason string
+}
+
+func scheduleReconnectTick() tea.Cmd {
+	return tea.Tick(reconnectInterval, func(t time.Time) tea.Msg {
+		return reconnectTickMsg{}
+	})
+}
+
+func tryReconnectCmd(cfg serial.Config) tea.Cmd {
+	return func() tea.Msg {
+		ports, err := serial.ListPorts()
+		if err != nil {
+			return reconnectFailedMsg{reason: fmt.Sprintf("Error scanning serial ports: %v", err)}
+		}
+		candidate := serial.MatchCandidatePort(cfg.Port, ports)
+		if candidate == "" {
+			return reconnectFailedMsg{
+				reason: fmt.Sprintf("Device disconnected — auto-reconnecting (waiting for %s)", cfg.Port),
+			}
+		}
+
+		candidateCfg := cfg
+		candidateCfg.Port = candidate
+		src, err := serial.NewSerialSource(candidateCfg)
+		if err != nil {
+			return reconnectFailedMsg{
+				reason: fmt.Sprintf("Detected %s — waiting for device to become ready…", candidate),
+			}
+		}
+		return sourceReadyMsg{source: src, port: candidate}
+	}
+}
+
 // Update is the Bubble Tea update function.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -85,6 +123,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── Source error ─────────────────────────────────────────────────────────
 	case ErrorMsg:
 		m.message = msg.Err.Error()
+		if m.connState == ConnConnected {
+			// A fatal read error occurred on active connection (e.g. cable unplugged)
+			m.connState = ConnDisconnected
+			m.connDetail = msg.Err.Error()
+			if m.source != nil {
+				m.source.Stop()
+				m.source = nil
+			}
+			if m.serialCfg.Port != "" && !m.isFileSource {
+				m.reconnecting = true
+				m.message = "Device disconnected — auto-reconnecting…"
+				return m, scheduleReconnectTick()
+			}
+			return m, nil
+		}
 		if m.source != nil {
 			return m, listenToSourceErrors(m.source)
 		}
@@ -94,16 +147,54 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ConnStateMsg:
 		m.connState = msg.State
 		m.connDetail = msg.Detail
+		if msg.State == ConnDisconnected {
+			if m.source != nil {
+				m.source.Stop()
+				m.source = nil
+			}
+			if m.serialCfg.Port != "" && !m.isFileSource {
+				if !m.reconnecting {
+					m.reconnecting = true
+					m.message = "Device disconnected — auto-reconnecting…"
+					return m, scheduleReconnectTick()
+				}
+			}
+		}
+		return m, nil
+
+	// ── Auto-reconnect polling ───────────────────────────────────────────────
+	case reconnectTickMsg:
+		if m.connState == ConnConnected || m.serialCfg.Port == "" || m.isFileSource {
+			m.reconnecting = false
+			return m, nil
+		}
+		m.reconnecting = true
+		return m, tryReconnectCmd(m.serialCfg)
+
+	case reconnectFailedMsg:
+		if msg.reason != "" {
+			m.message = msg.reason
+		}
+		if m.connState != ConnConnected && m.serialCfg.Port != "" && !m.isFileSource {
+			m.reconnecting = true
+			return m, scheduleReconnectTick()
+		}
+		m.reconnecting = false
 		return m, nil
 
 	// ── New source connected ─────────────────────────────────────────────────
 	case sourceReadyMsg:
+		if m.source != nil && m.source != msg.source {
+			m.source.Stop()
+		}
 		m.source = msg.source
 		m.serialCfg.Port = msg.port
 		m.connState = ConnConnected
 		m.connDetail = ""
+		m.reconnecting = false
 		m.mode = modeNormal
 		m.message = fmt.Sprintf("Connected to %s", msg.port)
+		m.saveSettings()
 		return m, tea.Batch(listenToSource(m.source), listenToSourceErrors(m.source))
 
 	// ── Mouse events ─────────────────────────────────────────────────────────
