@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
@@ -15,7 +16,15 @@ const (
 	modeNormal inputMode = iota
 	modeSearch
 	modeFilter
+	modePortPicker
+	modeProfilePicker
 )
+
+// ProfileItem represents an entry in the profile switcher list.
+type ProfileItem struct {
+	Name string
+	Path string // empty if built-in raw
+}
 
 // ConnState represents the serial connection status.
 type ConnState int
@@ -75,8 +84,25 @@ type Model struct {
 	mode    inputMode
 	message string // ephemeral status/error message
 
+	// Port & Baud picker
+	portList          []string
+	portCursor        int
+	baudList          []int
+	baudCursor        int
+	portPickerSection int // 0 = port, 1 = baud
+
+	// Profile picker
+	profileList   []ProfileItem
+	profileCursor int
+	appConfig     *config.AppConfig
+
+	// Timestamp injection (toggleable at runtime with 't')
+	injectTimestamp bool   // whether to stamp incoming records with receive time
+	tsField         string // field name for the injected timestamp
+	tsFormat        string // Go time layout for the injected timestamp
+
 	// Viewport dimensions (computed on resize)
-	tableHeight int
+	tableHeight  int
 	sidebarWidth int
 }
 
@@ -87,28 +113,57 @@ func New(
 	p parser.Parser,
 	buf *record.Buffer,
 	src serial.Source,
+	appCfg *config.AppConfig,
 ) Model {
 	cols := []record.Column{{Field: "message", Title: "Message", Width: 0}}
 	if profile != nil {
 		cols = profile.ToColumns()
 	}
 
-	m := Model{
-		keys:      defaultKeyMap(),
-		serialCfg: cfg,
-		source:    src,
-		profile:   profile,
-		parser:    p,
-		columns:   cols,
-		buffer:    buf,
-		follow:    true,
-		sidebarWidth: 20,
+	// Resolve timestamp injection settings. The profile sets the initial state;
+	// the user can toggle at runtime with 't'.
+	tsField := "_ts"
+	tsFormat := "15:04:05.000"
+	initTS := false
+	if profile != nil && profile.Ingest.Timestamp.Enabled {
+		initTS = true
+		tsField = profile.Ingest.Timestamp.TimestampField()
+		tsFormat = profile.Ingest.Timestamp.TimestampFormat()
 	}
+
+	bauds := serial.CommonBaudRates()
+	baudIdx := 4 // default to 115200 if found
+	for i, b := range bauds {
+		if b == cfg.Baud {
+			baudIdx = i
+			break
+		}
+	}
+
+	m := Model{
+		keys:            defaultKeyMap(),
+		serialCfg:       cfg,
+		source:          src,
+		profile:         profile,
+		parser:          p,
+		columns:         cols,
+		buffer:          buf,
+		follow:          true,
+		sidebarWidth:    20,
+		injectTimestamp: initTS,
+		tsField:         tsField,
+		tsFormat:        tsFormat,
+		appConfig:       appCfg,
+		baudList:        bauds,
+		baudCursor:      baudIdx,
+	}
+
 
 	// Start with an empty permissive filter.
 	m.activeFilter, _ = filter.New("")
 	return m
 }
+
 
 // Init starts the source reader goroutine (via a command) and returns the
 // initial command set.

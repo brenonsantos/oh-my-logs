@@ -23,7 +23,10 @@ func (r Record) Get(field string) string {
 
 // Column describes a single display column in the TUI table.
 type Column struct {
-	Field string // the Record.Fields key to render
-	Title string // the column header label
-	Width int    // fixed column width; 0 means flexible (fill remaining space)
+	Field  string            // the Record.Fields key to render
+	Title  string            // the column header label
+	Width  int               // fixed column width; 0 means flexible (fill remaining space)
+	Style  string            // semantic style: "timestamp", "level", "identifier", "primary", "muted"
+	Colors map[string]string // optional value -> color mapping (e.g. "ERROR" -> "red")
 }
+

@@ -20,12 +20,28 @@ func (m Model) View() string {
 	sb.WriteString(m.viewTitleBar())
 	sb.WriteByte('\n')
 
-	// 2. Table header
-	sb.WriteString(m.viewTableHeader())
+	// 2. Divider line under title bar
+	sb.WriteString(m.viewDivider())
 	sb.WriteByte('\n')
 
-	// 3. Table rows
-	sb.WriteString(m.viewTable())
+	// 3. Middle area: Modals or Table
+	if m.mode == modePortPicker {
+		sb.WriteString(m.viewPortPickerModal())
+	} else if m.mode == modeProfilePicker {
+		sb.WriteString(m.viewProfilePickerModal())
+	} else {
+		// Table Header
+		sb.WriteString(m.viewTableHeader())
+		sb.WriteByte('\n')
+
+		// Header Divider
+		sb.WriteString(m.viewDivider())
+		sb.WriteByte('\n')
+
+		// Table Rows
+		sb.WriteString(m.viewTable())
+	}
+
 	sb.WriteByte('\n')
 
 	// 4. Status bar
@@ -38,131 +54,332 @@ func (m Model) View() string {
 	return sb.String()
 }
 
-// viewTitleBar renders the top bar with port, baud, connection state, profile.
-func (m Model) viewTitleBar() string {
-	port := m.serialCfg.Port
-	if port == "" {
-		port = "(no port)"
+// viewDivider renders a clean horizontal divider across the full terminal width.
+func (m Model) viewDivider() string {
+	w := m.tableWidth()
+	if w <= 0 {
+		return ""
 	}
-	baud := fmt.Sprintf("%d", m.serialCfg.Baud)
+	return theme.Divider.Render(strings.Repeat("─", w))
+}
+
+// viewTitleBar renders the top bar with visual hierarchy.
+func (m Model) viewTitleBar() string {
+	appName := theme.Primary.Render("Oh My Logs")
+
+	portVal := m.serialCfg.Port
+	if portVal == "" {
+		portVal = "(no port)"
+	}
+	port := theme.Muted.Render("Port: ") + theme.Secondary.Render(portVal)
+	baud := theme.Muted.Render("Baud: ") + theme.Secondary.Render(fmt.Sprintf("%d", m.serialCfg.Baud))
 
 	var connStr string
 	switch m.connState {
 	case ConnConnected:
-		connStr = styleConnected.Render("● Connected")
+		connStr = theme.Success.Render("● Connected")
 	case ConnError:
-		connStr = styleError.Render("⚠ " + m.connDetail)
+		connStr = theme.Error.Render("⚠ " + m.connDetail)
 	default:
-		connStr = styleDisconnected.Render("○ Disconnected")
+		connStr = theme.Muted.Render("○ Disconnected")
 	}
 
-	profileName := "(no profile)"
+	profileVal := "(no profile)"
 	if m.profile != nil {
-		profileName = m.profile.Name
+		profileVal = m.profile.Name
 	}
+	prof := theme.Muted.Render("Profile: ") + theme.Secondary.Render(profileVal)
 
-	title := fmt.Sprintf(" Oh My Logs  │  Port: %s  Baud: %s  %s  Profile: %s",
-		port, baud, connStr, profileName)
+	sep := theme.Muted.Render("  │  ")
+	line := fmt.Sprintf("%s%s%s  %s  %s%s%s", appName, sep, port, baud, connStr, sep, prof)
 
-	return styleTitleBar.Width(m.width).Render(title)
+	return theme.TitleBar.Width(m.width).Render(line)
 }
 
 // viewTableHeader renders the column header row.
 func (m Model) viewTableHeader() string {
 	tableWidth := m.tableWidth()
-	return styleTableHeader.Width(tableWidth).Render(m.renderRow(func(col record.Column, w int) string {
-		return padOrTrunc(col.Title, w)
-	}))
+	renderedHeaders := m.renderRow(func(col record.Column, w int) string {
+		return theme.Header.Render(padOrTrunc(col.Title, w))
+	})
+	return theme.HeaderBar.Width(tableWidth).Render(renderedHeaders)
 }
 
-// viewTable renders the scrollable table body.
+// viewTable renders the scrollable table body with search match and focus highlights.
 func (m Model) viewTable() string {
 	tableWidth := m.tableWidth()
 	rows := m.visibleRows()
 	matchSet := m.searchMatchSet()
 
+	focusedAbsIdx := -1
+	if len(m.searchMatches) > 0 && m.searchCursor >= 0 && m.searchCursor < len(m.searchMatches) {
+		focusedAbsIdx = m.searchMatches[m.searchCursor]
+	}
+
 	var lines []string
 	for i, r := range rows {
 		absIdx := m.scrollOffset + i
 		isMatch := matchSet[absIdx]
+		isFocused := absIdx == focusedAbsIdx
 
 		rendered := m.renderRow(func(col record.Column, w int) string {
 			val := r.Fields[col.Field]
 			cell := padOrTrunc(val, w)
+
+			// If search active and matches, highlight the matching substring
 			if isMatch && m.searchInput != "" {
 				cell = highlightSubstring(cell, m.searchInput)
+			} else {
+				// Apply dynamic semantic or custom column style
+				cellStyle := theme.ResolveCellStyle(col, val)
+				cell = cellStyle.Render(cell)
 			}
 			return cell
 		})
 
-		if isMatch {
-			lines = append(lines, styleTableRowSelected.Width(tableWidth).Render(rendered))
-		} else {
-			lines = append(lines, styleTableRow.Width(tableWidth).Render(rendered))
+		switch {
+		case isFocused:
+			lines = append(lines, theme.SearchFocus.Width(tableWidth).Render("▶ "+rendered))
+		case isMatch:
+			lines = append(lines, theme.SearchMatch.Width(tableWidth).Render("  "+rendered))
+		default:
+			lines = append(lines, theme.RowNormal.Width(tableWidth).Render("  "+rendered))
 		}
 	}
 
-	// Pad to fill the table area.
+	// Pad remaining vertical space to keep layout stable
 	for len(lines) < m.tableHeight {
-		lines = append(lines, styleTableRow.Width(tableWidth).Render(""))
+		lines = append(lines, theme.RowNormal.Width(tableWidth).Render(""))
 	}
 
 	return strings.Join(lines, "\n")
 }
 
-// viewStatusBar renders the footer status line.
+// viewStatusBar renders statistics, active filter/search info, and message.
 func (m Model) viewStatusBar() string {
 	total := m.buffer.Len()
 	shown := len(m.visible)
 
-	followStr := styleFollowOn.Render("FOLLOW")
+	followStr := theme.FollowOn.Render("FOLLOW")
 	if !m.follow {
-		followStr = styleFollowOff.Render("PAUSED")
+		followStr = theme.FollowOff.Render("PAUSED")
+	}
+
+	tsStr := theme.Muted.Render("TS OFF")
+	if m.injectTimestamp {
+		tsStr = theme.Success.Render("TS ON")
 	}
 
 	var parts []string
-	parts = append(parts, fmt.Sprintf("%d records", total))
+	parts = append(parts, theme.Muted.Render(fmt.Sprintf("%d records", total)))
 	if shown != total {
-		parts = append(parts, fmt.Sprintf("%d shown", shown))
+		parts = append(parts, theme.Secondary.Render(fmt.Sprintf("%d shown", shown)))
 	}
 	if m.activeFilter != nil && !m.activeFilter.Empty() {
-		parts = append(parts, fmt.Sprintf("filter: %s", m.activeFilter.Raw))
+		parts = append(parts, theme.Accent.Render(fmt.Sprintf("filter: %s", m.activeFilter.Raw)))
 	}
 	if len(m.searchMatches) > 0 {
-		parts = append(parts, fmt.Sprintf("match %d/%d", m.searchCursor+1, len(m.searchMatches)))
+		matchInfo := fmt.Sprintf("match %d of %d", m.searchCursor+1, len(m.searchMatches))
+		parts = append(parts, theme.Warning.Render(matchInfo))
+	} else if m.searchInput != "" {
+		parts = append(parts, theme.Muted.Render("no matches"))
 	}
-	if m.message != "" {
-		parts = append(parts, styleMsg.Render(m.message))
-	}
+
+	parts = append(parts, tsStr)
 	parts = append(parts, followStr)
 
-	return styleStatusBar.Width(m.width).Render(strings.Join(parts, "  │  "))
+	// Action message: styled gently in muted/info or error
+	if m.message != "" {
+		lowerMsg := strings.ToLower(m.message)
+		if strings.Contains(lowerMsg, "err") || strings.Contains(lowerMsg, "fail") {
+			parts = append(parts, theme.MsgErr.Render("• "+m.message))
+		} else {
+			parts = append(parts, theme.MsgInfo.Render("• "+m.message))
+		}
+	}
+
+	sep := theme.Muted.Render("  │  ")
+	return theme.StatusBar.Width(m.width).Render(strings.Join(parts, sep))
 }
 
-// viewKeyBar renders the key hints at the bottom, or an active input field.
+// viewKeyBar renders context-sensitive key hints or input prompt.
 func (m Model) viewKeyBar() string {
 	switch m.mode {
 	case modeSearch:
-		prompt := styleInputPrompt.Render("Search: ")
-		text := styleInputText.Render(m.searchInput + "█")
-		return styleKeyHint.Width(m.width).Render(prompt + text)
+		prompt := theme.Primary.Render("Search: ")
+		text := theme.Content.Render(m.searchInput + "█")
+		help := theme.Muted.Render("  [Enter: next · ↑/↓: navigate · Esc: cancel]")
+		return theme.KeyBar.Width(m.width).Render(prompt + text + help)
+
 	case modeFilter:
-		prompt := styleInputPrompt.Render("Filter: ")
-		text := styleInputText.Render(m.filterInput + "█")
-		return styleKeyHint.Width(m.width).Render(prompt + text)
+		prompt := theme.Primary.Render("Filter: ")
+		text := theme.Content.Render(m.filterInput + "█")
+		help := theme.Muted.Render("  [Enter: apply · Esc: cancel]")
+		return theme.KeyBar.Width(m.width).Render(prompt + text + help)
+
 	default:
 		hints := []string{
-			styleKeyName.Render("Ctrl+F") + " search",
-			styleKeyName.Render("f") + " filter",
-			styleKeyName.Render("c") + " clear",
-			styleKeyName.Render("Space") + " pause",
-			styleKeyName.Render("s") + " save",
-			styleKeyName.Render("r") + " reconnect",
-			styleKeyName.Render("q") + " quit",
+			theme.KeyName.Render("Ctrl+F") + " search",
+			theme.KeyName.Render("f") + " filter",
+			theme.KeyName.Render("c") + " clear",
+			theme.KeyName.Render("Space") + " pause",
+			theme.KeyName.Render("t") + " timestamp",
+			theme.KeyName.Render("p") + " port",
+			theme.KeyName.Render("P") + " profile",
+			theme.KeyName.Render("s") + " save",
+			theme.KeyName.Render("r") + " reconnect",
+			theme.KeyName.Render("q") + " quit",
 		}
-		return styleKeyHint.Width(m.width).Render(strings.Join(hints, "   "))
+		return theme.KeyBar.Width(m.width).Render(strings.Join(hints, "   "))
 	}
 }
+
+// viewPortPickerModal renders the centered rounded modal for Port & Baud Rate.
+func (m Model) viewPortPickerModal() string {
+	modalWidth := 54
+	for _, p := range m.portList {
+		if len(p)+10 > modalWidth {
+			modalWidth = len(p) + 10
+		}
+	}
+	if modalWidth > m.width-6 {
+		modalWidth = m.width - 6
+	}
+
+	var sb strings.Builder
+
+	// Section 1: Serial Port
+	sb.WriteString(theme.ModalTitle.Render("Serial Port"))
+	sb.WriteString("\n\n")
+
+	if len(m.portList) == 0 {
+		sb.WriteString(theme.Muted.Render("  (no ports detected)"))
+		sb.WriteString("\n")
+	} else {
+		maxVisible := 6
+		startIdx := 0
+		if m.portCursor >= maxVisible {
+			startIdx = m.portCursor - maxVisible + 1
+		}
+		endIdx := startIdx + maxVisible
+		if endIdx > len(m.portList) {
+			endIdx = len(m.portList)
+		}
+
+		for i := startIdx; i < endIdx; i++ {
+			port := m.portList[i]
+			if m.portPickerSection == 0 && i == m.portCursor {
+				sb.WriteString(theme.ModalSelected.Render(fmt.Sprintf("  › %s", port)))
+			} else if i == m.portCursor {
+				sb.WriteString(theme.Accent.Render(fmt.Sprintf("  › %s", port)))
+			} else {
+				sb.WriteString(theme.ModalItem.Render(fmt.Sprintf("    %s", port)))
+			}
+			sb.WriteString("\n")
+		}
+		if len(m.portList) > maxVisible {
+			sb.WriteString(theme.Muted.Render(fmt.Sprintf("    ... (%d more)", len(m.portList)-maxVisible)))
+			sb.WriteString("\n")
+		}
+	}
+
+	sb.WriteString("\n")
+
+	// Section 2: Baud rate
+	sb.WriteString(theme.ModalTitle.Render("Baud rate"))
+	sb.WriteString("\n\n")
+
+	baudVal := m.serialCfg.Baud
+	if len(m.baudList) > 0 && m.baudCursor < len(m.baudList) {
+		baudVal = m.baudList[m.baudCursor]
+	}
+	baudStr := fmt.Sprintf("%d", baudVal)
+
+	if m.portPickerSection == 1 {
+		sb.WriteString(theme.ModalSelected.Render(fmt.Sprintf("  › %s", baudStr)))
+		sb.WriteString(theme.Muted.Render("  (←/→ to change)"))
+	} else {
+		sb.WriteString(theme.ModalItem.Render(fmt.Sprintf("    %s", baudStr)))
+	}
+	sb.WriteString("\n\n")
+
+	// Footer
+	sb.WriteString(theme.ModalFooter.Render("Enter select · Esc cancel"))
+
+	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
+	return centerBox(m.width, m.tableHeight+2, modalBox)
+}
+
+// viewProfilePickerModal renders the centered rounded modal for Profile switching.
+func (m Model) viewProfilePickerModal() string {
+	modalWidth := 48
+	for _, p := range m.profileList {
+		if len(p.Name)+10 > modalWidth {
+			modalWidth = len(p.Name) + 10
+		}
+	}
+	if modalWidth > m.width-6 {
+		modalWidth = m.width - 6
+	}
+
+	var sb strings.Builder
+
+	sb.WriteString(theme.ModalTitle.Render("Profile"))
+	sb.WriteString("\n\n")
+
+	if len(m.profileList) == 0 {
+		sb.WriteString(theme.Muted.Render("  (no profiles found)"))
+		sb.WriteString("\n")
+	} else {
+		for i, prof := range m.profileList {
+			if i == m.profileCursor {
+				sb.WriteString(theme.ModalSelected.Render(fmt.Sprintf("  › %s", prof.Name)))
+			} else {
+				sb.WriteString(theme.ModalItem.Render(fmt.Sprintf("    %s", prof.Name)))
+			}
+			sb.WriteString("\n")
+		}
+	}
+
+	sb.WriteString("\n")
+	sb.WriteString(theme.ModalFooter.Render("Enter select · Esc cancel"))
+
+	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
+	return centerBox(m.width, m.tableHeight+2, modalBox)
+}
+
+// centerBox centers a multi-line box horizontally and vertically within target dimensions.
+func centerBox(screenWidth, screenHeight int, box string) string {
+	lines := strings.Split(box, "\n")
+	boxHeight := len(lines)
+	topPad := (screenHeight - boxHeight) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+
+	var res strings.Builder
+	for i := 0; i < topPad; i++ {
+		res.WriteString(strings.Repeat(" ", screenWidth))
+		res.WriteByte('\n')
+	}
+	for _, l := range lines {
+		w := lipgloss.Width(l)
+		leftPad := (screenWidth - w) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		res.WriteString(strings.Repeat(" ", leftPad))
+		res.WriteString(l)
+		res.WriteByte('\n')
+	}
+	totalRendered := topPad + boxHeight
+	for i := totalRendered; i < screenHeight; i++ {
+		res.WriteString(strings.Repeat(" ", screenWidth))
+		res.WriteByte('\n')
+	}
+	return strings.TrimRight(res.String(), "\n")
+}
+
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -188,33 +405,33 @@ func (m Model) tableWidth() int {
 
 // renderRow calls cellFn for each column and joins them.
 func (m Model) renderRow(cellFn func(col record.Column, width int) string) string {
-	colWidths := m.computeColWidths()
+	cols := m.effectiveColumns()
+	colWidths := m.computeColWidths(cols)
 	var parts []string
-	for i, col := range m.columns {
+	for i, col := range cols {
 		parts = append(parts, cellFn(col, colWidths[i]))
 	}
-	return strings.Join(parts, " ")
+	return strings.Join(parts, "  ")
 }
 
 // computeColWidths distributes available width across columns.
-// Columns with Width > 0 get their fixed width; Width == 0 fills the rest.
-func (m Model) computeColWidths() []int {
-	total := m.tableWidth()
-	widths := make([]int, len(m.columns))
+func (m Model) computeColWidths(cols []record.Column) []int {
+	total := m.tableWidth() - 4 // reserve prefix spaces
+	widths := make([]int, len(cols))
 	flexIdx := -1
 	used := 0
 
-	for i, col := range m.columns {
+	for i, col := range cols {
 		if col.Width == 0 {
 			flexIdx = i
 		} else {
 			widths[i] = col.Width
-			used += col.Width + 1 // +1 for separator space
+			used += col.Width + 2 // +2 for column spacing
 		}
 	}
 
 	if flexIdx >= 0 {
-		flex := total - used - 1
+		flex := total - used - 2
 		if flex < 0 {
 			flex = 0
 		}
@@ -222,6 +439,28 @@ func (m Model) computeColWidths() []int {
 	}
 
 	return widths
+}
+
+// effectiveColumns returns the columns to render, prepending timestamp if enabled.
+func (m Model) effectiveColumns() []record.Column {
+	if !m.injectTimestamp {
+		return m.columns
+	}
+	for _, col := range m.columns {
+		if col.Field == m.tsField {
+			return m.columns
+		}
+	}
+	tsCol := record.Column{
+		Field: m.tsField,
+		Title: "Time",
+		Width: 14,
+		Style: "timestamp",
+	}
+	result := make([]record.Column, 0, len(m.columns)+1)
+	result = append(result, tsCol)
+	result = append(result, m.columns...)
+	return result
 }
 
 // searchMatchSet returns a set of visible-row indices that are search matches.
@@ -236,7 +475,7 @@ func (m Model) searchMatchSet() map[int]bool {
 	return set
 }
 
-// padOrTrunc pads s to width or truncates it (with "…") if too long.
+// padOrTrunc pads s to width or truncates it with "…" if too long.
 func padOrTrunc(s string, width int) string {
 	if width <= 0 {
 		return s
@@ -251,8 +490,7 @@ func padOrTrunc(s string, width int) string {
 	return s + strings.Repeat(" ", width-len(runes))
 }
 
-// highlightSubstring wraps occurrences of q (case-insensitive) in the cell
-// with the highlight style.
+// highlightSubstring wraps occurrences of q with theme.Highlight.
 func highlightSubstring(cell, q string) string {
 	lower := strings.ToLower(cell)
 	lowerQ := strings.ToLower(q)
@@ -263,8 +501,5 @@ func highlightSubstring(cell, q string) string {
 	before := cell[:idx]
 	match := cell[idx : idx+len(q)]
 	after := cell[idx+len(q):]
-	return before + styleHighlight.Render(match) + after
+	return before + theme.Highlight.Render(match) + after
 }
-
-// Ensure lipgloss is used (it's referenced via styles.go but let's be safe).
-var _ = lipgloss.NewStyle

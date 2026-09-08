@@ -86,9 +86,13 @@ oml --version
 | `g` / `End` | Go to newest record (re-enable follow) |
 | `G` / `Home` | Go to oldest record |
 | `n` / `N` | Next / previous search match |
+| `p` | Open serial port picker |
+| `P` | Open profile switcher (re-interprets buffer) |
+| `t` | Toggle auto-timestamp injection on/off |
 | `s` | Save raw log to file |
 | `r` | Reconnect |
 | `q` / `Ctrl+C` | Quit |
+
 
 **While in Search or Filter input:**
 
@@ -125,19 +129,28 @@ columns:
   - field: time
     title: Time
     width: 14        # fixed width in characters; 0 = flexible/fill
+    style: timestamp # semantic style: timestamp, level, identifier, primary, muted
 
   - field: level
     title: Level
     width: 8
+    style: level
+    colors:          # optional custom color mapping
+      ERROR: red
+      WARN: yellow
+      INFO: blue
 
   - field: module
     title: Module
     width: 10
+    style: identifier
 
   - field: message
     title: Message
     width: 0         # flexible: fills remaining space
+    style: primary
 ```
+
 
 **Parser types:**
 - `regex` — named capture groups (`(?P<name>...)`) become record fields
@@ -184,18 +197,21 @@ Timestamp     CPU   Task               Code        Message
 
 ## Filtering
 
-The filter syntax is a space-separated list of expressions (all must match — AND logic):
+The filter syntax supports substring matching, exclusions, field-specific equality, and boolean logic:
 
 | Expression | Meaning |
 |-----------|---------|
 | `motor` | any field contains "motor" (case-insensitive) |
 | `-motor` | no field contains "motor" |
+| `can, over` or `can \| over` | any field contains "can" **OR** contains "over" |
 | `module:CAN` | field `module` equals `CAN` |
 | `-module:CAN` | field `module` does NOT equal `CAN` |
-| `level:error,warn` | field `level` equals `error` OR `warn` |
-| `motor module:CAN` | contains "motor" AND module is CAN |
+| `level:error,warn` | field `level` equals `error` **OR** `warn` |
+| `motor module:CAN` | contains "motor" **AND** module is CAN |
+| `can, over -heartbeat` | (contains "can" **OR** "over") **AND** does NOT contain "heartbeat" |
 
 ---
+
 
 ## Architecture
 

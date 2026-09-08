@@ -28,6 +28,7 @@ func matchOne(r record.Record, e Expr) bool {
 }
 
 // matchContains joins all field values and checks for a substring.
+// If e.Values has multiple entries, ANY match satisfies the condition (OR semantics).
 func matchContains(r record.Record, e Expr) bool {
 	// Build a combined string of all field values for global search.
 	var parts []string
@@ -35,12 +36,21 @@ func matchContains(r record.Record, e Expr) bool {
 		parts = append(parts, v)
 	}
 	combined := strings.ToLower(strings.Join(parts, " "))
-	found := strings.Contains(combined, e.Text)
-	if e.Negate {
-		return !found
+
+	matched := false
+	for _, val := range e.Values {
+		if strings.Contains(combined, val) {
+			matched = true
+			break
+		}
 	}
-	return found
+
+	if e.Negate {
+		return !matched
+	}
+	return matched
 }
+
 
 // matchFieldEqual checks whether the named field equals any of the target values.
 func matchFieldEqual(r record.Record, e Expr) bool {

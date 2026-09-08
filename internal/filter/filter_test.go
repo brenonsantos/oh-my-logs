@@ -31,7 +31,7 @@ func TestParseFilter_Contains(t *testing.T) {
 		t.Fatalf("expected 1 expr, got %d", len(exprs))
 	}
 	e := exprs[0]
-	if e.Kind != filter.MatchContains || e.Text != "motor" || e.Negate {
+	if e.Kind != filter.MatchContains || len(e.Values) != 1 || e.Values[0] != "motor" || e.Negate {
 		t.Errorf("unexpected expr: %+v", e)
 	}
 }
@@ -42,10 +42,33 @@ func TestParseFilter_NegativeContains(t *testing.T) {
 		t.Fatalf("expected 1 expr, got %d", len(exprs))
 	}
 	e := exprs[0]
-	if !e.Negate || e.Kind != filter.MatchContains || e.Text != "motor" {
+	if !e.Negate || e.Kind != filter.MatchContains || len(e.Values) != 1 || e.Values[0] != "motor" {
 		t.Errorf("unexpected expr: %+v", e)
 	}
 }
+
+func TestParseFilter_CommaOR(t *testing.T) {
+	exprs, _ := filter.ParseFilter("can, over")
+	if len(exprs) != 1 {
+		t.Fatalf("expected 1 expr, got %d", len(exprs))
+	}
+	e := exprs[0]
+	if e.Kind != filter.MatchContains || len(e.Values) != 2 || e.Values[0] != "can" || e.Values[1] != "over" {
+		t.Errorf("unexpected expr: %+v", e)
+	}
+}
+
+func TestParseFilter_PipeOR(t *testing.T) {
+	exprs, _ := filter.ParseFilter("can | over")
+	if len(exprs) != 1 {
+		t.Fatalf("expected 1 expr, got %d", len(exprs))
+	}
+	e := exprs[0]
+	if e.Kind != filter.MatchContains || len(e.Values) != 2 || e.Values[0] != "can" || e.Values[1] != "over" {
+		t.Errorf("unexpected expr: %+v", e)
+	}
+}
+
 
 func TestParseFilter_FieldEqual(t *testing.T) {
 	exprs, _ := filter.ParseFilter("module:CAN")
@@ -185,3 +208,43 @@ func TestFilter_MultipleAND(t *testing.T) {
 		t.Error("record missing 'motor' should not match")
 	}
 }
+
+func TestFilter_ContainsOR(t *testing.T) {
+	f, err := filter.New("can, over")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rCAN := rec(map[string]string{"module": "CAN", "message": "CAN initialized"})
+	rOver := rec(map[string]string{"module": "PDM", "message": "Overcurrent detected"})
+	rADC := rec(map[string]string{"module": "ADC", "message": "ADC reading high"})
+
+	if !f.Matches(rCAN) {
+		t.Error("'can, over' should match CAN record")
+	}
+	if !f.Matches(rOver) {
+		t.Error("'can, over' should match Overcurrent record")
+	}
+	if f.Matches(rADC) {
+		t.Error("'can, over' should NOT match ADC record")
+	}
+}
+
+func TestFilter_ContainsOR_WithNegation(t *testing.T) {
+	// "can, over -ADC" means (can OR over) AND NOT adc
+	f, err := filter.New("can, over -ADC")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rCAN := rec(map[string]string{"module": "CAN", "message": "CAN initialized"})
+	rBoth := rec(map[string]string{"module": "CAN", "message": "CAN ADC error"})
+
+	if !f.Matches(rCAN) {
+		t.Error("should match pure CAN")
+	}
+	if f.Matches(rBoth) {
+		t.Error("should be excluded because it contains ADC")
+	}
+}
+

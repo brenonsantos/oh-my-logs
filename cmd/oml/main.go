@@ -86,7 +86,7 @@ func main() {
 	buf := record.NewBuffer(record.DefaultCapacity)
 
 	// ── TUI ───────────────────────────────────────────────────────────────────
-	model := tui.New(serialCfg, profile, p, buf, src)
+	model := tui.New(serialCfg, profile, p, buf, src, appCfg)
 
 	prog := tea.NewProgram(
 		model,
