@@ -223,14 +223,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.MouseButtonWheelUp:
 			switch m.mode {
 			case modePortPicker:
-				if m.portPickerSection == 0 {
-					if m.portCursor > 0 {
-						m.portCursor--
-					}
-				} else {
-					if m.baudCursor > 0 {
-						m.baudCursor--
-					}
+				if m.portCursor > 0 {
+					m.portCursor--
 				}
 			case modeProfilePicker:
 				if m.profileCursor > 0 {
@@ -248,14 +242,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.MouseButtonWheelDown:
 			switch m.mode {
 			case modePortPicker:
-				if m.portPickerSection == 0 {
-					if m.portCursor < len(m.portList)-1 {
-						m.portCursor++
-					}
-				} else {
-					if m.baudCursor < len(m.baudList)-1 {
-						m.baudCursor++
-					}
+				if m.portCursor < len(m.portList)-1 {
+					m.portCursor++
 				}
 			case modeProfilePicker:
 				if m.profileCursor < len(m.profileList)-1 {
@@ -487,19 +475,32 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case keyMatches(msg, m.keys.ProfileSwitch):
 		paths := config.FindAllProfilePaths(m.appConfig)
+		seen := make(map[string]bool)
 		var items []ProfileItem
-		items = append(items, ProfileItem{Name: "Raw (Default)", Path: ""})
+		items = append(items, ProfileItem{Name: "Raw", Path: ""})
+		seen["raw"] = true
 		for _, p := range paths {
 			prof, err := parser.LoadProfile(p)
 			if err != nil {
 				continue
 			}
+			normName := strings.ToLower(strings.TrimSpace(prof.Name))
+			if normName == "" {
+				normName = strings.ToLower(strings.TrimSuffix(filepath.Base(p), filepath.Ext(p)))
+			}
+			if seen[normName] {
+				continue
+			}
+			seen[normName] = true
 			items = append(items, ProfileItem{Name: prof.Name, Path: p})
 		}
 		m.profileList = items
 		m.profileCursor = 0
 		for i, item := range items {
-			if m.profile != nil && item.Name == m.profile.Name {
+			if m.profile != nil && strings.EqualFold(item.Name, m.profile.Name) {
+				m.profileCursor = i
+				break
+			} else if m.profile == nil && strings.EqualFold(item.Name, "raw") {
 				m.profileCursor = i
 				break
 			}
@@ -681,49 +682,35 @@ func (m Model) handlePortPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeNormal
 		return m, nil
 
-	case msg.String() == "tab" || msg.String() == "shift+tab":
-		if m.portPickerSection == 0 {
-			m.portPickerSection = 1
-		} else {
-			m.portPickerSection = 0
-		}
-		return m, nil
-
 	case msg.String() == "left" || msg.String() == "h":
-		if m.baudCursor > 0 {
-			m.baudCursor--
+		if len(m.baudList) > 0 {
+			if m.baudCursor > 0 {
+				m.baudCursor--
+			} else {
+				m.baudCursor = len(m.baudList) - 1
+			}
 		}
 		return m, nil
 
 	case msg.String() == "right" || msg.String() == "l":
-		if m.baudCursor < len(m.baudList)-1 {
-			m.baudCursor++
+		if len(m.baudList) > 0 {
+			if m.baudCursor < len(m.baudList)-1 {
+				m.baudCursor++
+			} else {
+				m.baudCursor = 0
+			}
 		}
 		return m, nil
 
 	case keyMatches(msg, m.keys.ScrollUp):
-		if m.portPickerSection == 0 {
-			if m.portCursor > 0 {
-				m.portCursor--
-			}
-		} else {
-			// In baud section: moving up switches back to ports
-			m.portPickerSection = 0
+		if m.portCursor > 0 {
+			m.portCursor--
 		}
 		return m, nil
 
 	case keyMatches(msg, m.keys.ScrollDown):
-		if m.portPickerSection == 0 {
-			if m.portCursor < len(m.portList)-1 {
-				m.portCursor++
-			} else {
-				// At bottom of ports: moving down switches to baud
-				m.portPickerSection = 1
-			}
-		} else {
-			if m.baudCursor < len(m.baudList)-1 {
-				m.baudCursor++
-			}
+		if m.portCursor < len(m.portList)-1 {
+			m.portCursor++
 		}
 		return m, nil
 

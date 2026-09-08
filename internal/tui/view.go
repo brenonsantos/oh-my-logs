@@ -447,6 +447,7 @@ func (m Model) viewKeyBar() string {
 }
 
 // viewPortPickerModal renders the centered rounded modal for Port & Baud Rate.
+// Up/Down selects the port directly, Left/Right adjusts baud rate directly.
 func (m Model) viewPortPickerModal() string {
 	modalWidth := 54
 	for _, p := range m.portList {
@@ -480,17 +481,15 @@ func (m Model) viewPortPickerModal() string {
 
 		for i := startIdx; i < endIdx; i++ {
 			port := m.portList[i]
-			if m.portPickerSection == 0 && i == m.portCursor {
+			if i == m.portCursor {
 				sb.WriteString(theme.ModalSelected.Render(fmt.Sprintf("  › %s", port)))
-			} else if i == m.portCursor {
-				sb.WriteString(theme.Accent.Render(fmt.Sprintf("  › %s", port)))
 			} else {
 				sb.WriteString(theme.ModalItem.Render(fmt.Sprintf("    %s", port)))
 			}
 			sb.WriteString("\n")
 		}
 		if len(m.portList) > maxVisible {
-			sb.WriteString(theme.Muted.Render(fmt.Sprintf("    ... (%d more)", len(m.portList)-maxVisible)))
+			sb.WriteString(theme.Muted.Render(fmt.Sprintf("    ... (%d more)", len(m.portList)-endIdx)))
 			sb.WriteString("\n")
 		}
 	}
@@ -507,16 +506,10 @@ func (m Model) viewPortPickerModal() string {
 	}
 	baudStr := fmt.Sprintf("%d", baudVal)
 
-	if m.portPickerSection == 1 {
-		sb.WriteString(theme.ModalSelected.Render(fmt.Sprintf("  › %s", baudStr)))
-		sb.WriteString(theme.Muted.Render("  (←/→ to change)"))
-	} else {
-		sb.WriteString(theme.ModalItem.Render(fmt.Sprintf("    %s", baudStr)))
-	}
-	sb.WriteString("\n\n")
+	sb.WriteString(fmt.Sprintf("    %s  %s  %s\n\n", theme.Muted.Render("←"), theme.ModalSelected.Render(baudStr), theme.Muted.Render("→")))
 
 	// Footer
-	sb.WriteString(theme.ModalFooter.Render("Enter select · Tab switch section · Esc cancel"))
+	sb.WriteString(theme.ModalFooter.Render("Enter select · ↑/↓ port · ←/→ baud · Esc cancel"))
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+2, modalBox)
@@ -546,11 +539,17 @@ func (m Model) viewProfilePickerModal() string {
 	} else {
 		for i, prof := range m.profileList {
 			tag := ""
-			if m.appConfig != nil && m.appConfig.ProfilesDir != "" {
-				absP, _ := filepath.Abs(prof.Path)
-				absGlobal, _ := filepath.Abs(m.appConfig.ProfilesDir)
-				if strings.HasPrefix(absP, absGlobal) {
-					tag = " [global]"
+			if prof.Path != "" {
+				isGlobal := false
+				if m.appConfig != nil && m.appConfig.ProfilesDir != "" {
+					absP, _ := filepath.Abs(prof.Path)
+					absGlobal, _ := filepath.Abs(m.appConfig.ProfilesDir)
+					if strings.HasPrefix(absP, absGlobal) {
+						isGlobal = true
+					}
+				}
+				if !isGlobal {
+					tag = " [local]"
 				}
 			}
 			if i == m.profileCursor {
