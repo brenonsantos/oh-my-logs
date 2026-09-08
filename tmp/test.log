@@ -1,0 +1,4 @@
+[15:42:31.102][INFO][SYS] System initialized
+[15:42:31.254][INFO][CAN] CAN initialized
+[15:42:32.103][WARN][ADC] Channel 3 reading high
+[15:42:33.876][ERROR][PDM] Overcurrent detected

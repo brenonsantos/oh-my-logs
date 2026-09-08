@@ -1,0 +1,26 @@
+name: Legacy-ECU
+
+parser:
+  type: regex
+  pattern: '^(?P<timestamp>\d+);(?P<cpu>\d+);(?P<task>[^;]+);(?P<code>[^;]+);(?P<message>.*)$'
+
+columns:
+  - field: timestamp
+    title: Timestamp
+    width: 12
+
+  - field: cpu
+    title: CPU
+    width: 5
+
+  - field: task
+    title: Task
+    width: 18
+
+  - field: code
+    title: Code
+    width: 10
+
+  - field: message
+    title: Message
+    width: 0
