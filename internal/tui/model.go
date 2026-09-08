@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -44,6 +46,31 @@ type ErrorMsg struct{ Err error }
 
 // ConnStateMsg signals a connection state change.
 type ConnStateMsg struct{ State ConnState; Detail string }
+
+// Tab represents an independent virtual tab with its own filter, visible records,
+// scroll position, follow state, and search state.
+type Tab struct {
+	Name          string
+	FilterRaw     string
+	Filter        *filter.Filter
+	Visible       []record.Record
+	ScrollOffset  int
+	Follow        bool
+	SearchInput   string
+	SearchMatches []int
+	SearchCursor  int
+}
+
+// DisplayName returns a user-friendly label for the tab.
+func (t Tab) DisplayName(defaultIndex int) string {
+	if t.Name != "" {
+		return t.Name
+	}
+	if t.FilterRaw != "" {
+		return t.FilterRaw
+	}
+	return fmt.Sprintf("Tab %d", defaultIndex)
+}
 
 // Model is the top-level Bubble Tea model.
 type Model struct {
@@ -108,6 +135,10 @@ type Model struct {
 	// Viewport dimensions (computed on resize)
 	tableHeight  int
 	sidebarWidth int
+
+	// Virtual tabs
+	tabs      []Tab
+	activeTab int
 }
 
 // New creates a new Model with sensible defaults.
@@ -198,8 +229,76 @@ func New(
 	}
 
 	// Start with an empty permissive filter.
-	m.activeFilter, _ = filter.New("")
+	initFilter, _ := filter.New("")
+	m.activeFilter = initFilter
+
+	initTab := Tab{
+		Name:      "All",
+		FilterRaw: "",
+		Filter:    initFilter,
+		Follow:    true,
+	}
+	m.tabs = []Tab{initTab}
+	m.activeTab = 0
 	return m
+}
+
+// currentTab returns a pointer to the currently active tab.
+func (m *Model) currentTab() *Tab {
+	if len(m.tabs) == 0 {
+		initFilter, _ := filter.New("")
+		m.tabs = []Tab{{
+			Name:      "All",
+			FilterRaw: "",
+			Filter:    initFilter,
+			Follow:    true,
+		}}
+		m.activeTab = 0
+	}
+	if m.activeTab < 0 {
+		m.activeTab = 0
+	}
+	if m.activeTab >= len(m.tabs) {
+		m.activeTab = len(m.tabs) - 1
+	}
+	return &m.tabs[m.activeTab]
+}
+
+// syncActiveTabToModel saves the active model's interactive state back to the active tab struct.
+func (m *Model) syncActiveTabToModel() {
+	if len(m.tabs) == 0 {
+		return
+	}
+	cur := m.currentTab()
+	cur.ScrollOffset = m.scrollOffset
+	cur.Follow = m.follow
+	cur.SearchInput = m.searchInput
+	cur.SearchMatches = m.searchMatches
+	cur.SearchCursor = m.searchCursor
+}
+
+// syncModelToActiveTab updates the model's active view state from the current tab.
+func (m *Model) syncModelToActiveTab() {
+	cur := m.currentTab()
+	m.activeFilter = cur.Filter
+	m.filterInput = cur.FilterRaw
+	m.visible = cur.Visible
+	m.scrollOffset = cur.ScrollOffset
+	m.follow = cur.Follow
+	m.searchInput = cur.SearchInput
+	m.searchMatches = cur.SearchMatches
+	m.searchCursor = cur.SearchCursor
+}
+
+// switchTab changes the active tab and synchronizes state.
+func (m *Model) switchTab(newIdx int) {
+	if len(m.tabs) <= 1 || newIdx < 0 || newIdx >= len(m.tabs) || newIdx == m.activeTab {
+		return
+	}
+	m.syncActiveTabToModel()
+	m.activeTab = newIdx
+	m.syncModelToActiveTab()
+	m.clampScroll()
 }
 
 // saveSettings persists current port, baud, profile, and timestamp display state to disk.

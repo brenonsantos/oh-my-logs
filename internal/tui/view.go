@@ -24,6 +24,14 @@ func (m Model) View() string {
 	sb.WriteString(m.viewDivider())
 	sb.WriteByte('\n')
 
+	// 2b. Virtual tab bar (when multiple tabs exist)
+	if len(m.tabs) > 1 {
+		sb.WriteString(m.viewTabBar())
+		sb.WriteByte('\n')
+		sb.WriteString(m.viewDivider())
+		sb.WriteByte('\n')
+	}
+
 	// 3. Middle area: Modals or Table
 	if m.mode == modePortPicker {
 		sb.WriteString(m.viewPortPickerModal())
@@ -69,6 +77,38 @@ func (m Model) viewDivider() string {
 		return ""
 	}
 	return theme.Divider.Render(strings.Repeat("─", w))
+}
+
+// viewTabBar renders the pill-based virtual tab switcher bar.
+func (m Model) viewTabBar() string {
+	w := m.tableWidth()
+	if w <= 0 {
+		return ""
+	}
+	var tabPills []string
+	for i := range m.tabs {
+		t := &m.tabs[i]
+		displayName := t.DisplayName(i + 1)
+		countStr := fmt.Sprintf("%d", len(t.Visible))
+		label := fmt.Sprintf("%d: %s (%s)", i+1, displayName, countStr)
+		if i == m.activeTab {
+			tabPills = append(tabPills, theme.TabActive.Render(label))
+		} else {
+			tabPills = append(tabPills, theme.TabInactive.Render(label))
+		}
+	}
+	left := " " + strings.Join(tabPills, " ")
+	hints := theme.Muted.Render("Tab: cycle · ^T: new · ^W: close  ")
+	leftW := lipgloss.Width(left)
+	hintsW := lipgloss.Width(hints)
+	gap := w - leftW - hintsW
+	if gap > 0 {
+		return left + strings.Repeat(" ", gap) + hints
+	}
+	if leftW > w {
+		return lipgloss.NewStyle().MaxWidth(w).Render(left)
+	}
+	return left
 }
 
 // viewTitleBar renders the top bar with a solid background accent and no holes or clipping.
@@ -262,6 +302,10 @@ func (m Model) viewStatusBar() string {
 	}
 
 	var parts []string
+	if len(m.tabs) > 1 {
+		tabName := m.tabs[m.activeTab].DisplayName(m.activeTab + 1)
+		parts = append(parts, theme.Primary.Render(fmt.Sprintf("tab [%d/%d: %s]", m.activeTab+1, len(m.tabs), tabName)))
+	}
 	parts = append(parts, theme.Muted.Render(fmt.Sprintf("%d records", total)))
 	if shown != total {
 		parts = append(parts, theme.Secondary.Render(fmt.Sprintf("%d shown", shown)))
@@ -305,7 +349,7 @@ func (m Model) viewKeyBar() string {
 	case modeFilter:
 		prompt := theme.Primary.Render("Filter: ")
 		text := theme.Content.Render(m.filterInput + "█")
-		help := theme.Muted.Render("  [Enter: apply · Esc: cancel]")
+		help := theme.Muted.Render("  [Enter: apply · Esc: cancel · e.g. level:ERROR,WARN -heartbeat]")
 		return "  " + prompt + text + help
 
 	case modeHelp:
@@ -315,14 +359,22 @@ func (m Model) viewKeyBar() string {
 		hints := []string{
 			theme.KeyName.Render("Ctrl+F") + " " + theme.Muted.Render("search"),
 			theme.KeyName.Render("f") + " " + theme.Muted.Render("filter"),
-			theme.KeyName.Render("Space") + " " + theme.Muted.Render("pause"),
-			theme.KeyName.Render("c") + " " + theme.Muted.Render("clear"),
-			theme.KeyName.Render("t") + " " + theme.Muted.Render("⏱ ts"),
-			theme.KeyName.Render("p") + " " + theme.Muted.Render("port"),
-			theme.KeyName.Render("P") + " " + theme.Muted.Render("profile"),
-			theme.KeyName.Render("?") + " " + theme.Muted.Render("help"),
-			theme.KeyName.Render("q") + " " + theme.Muted.Render("quit"),
 		}
+		if len(m.tabs) > 1 {
+			hints = append(hints, theme.KeyName.Render("Tab")+" "+theme.Muted.Render("tab"))
+			hints = append(hints, theme.KeyName.Render("^T")+" "+theme.Muted.Render("new tab"))
+		} else {
+			hints = append(hints, theme.KeyName.Render("^T")+" "+theme.Muted.Render("new tab"))
+		}
+		hints = append(hints,
+			theme.KeyName.Render("Space")+" "+theme.Muted.Render("pause"),
+			theme.KeyName.Render("c")+" "+theme.Muted.Render("clear"),
+			theme.KeyName.Render("t")+" "+theme.Muted.Render("⏱ ts"),
+			theme.KeyName.Render("p")+" "+theme.Muted.Render("port"),
+			theme.KeyName.Render("P")+" "+theme.Muted.Render("profile"),
+			theme.KeyName.Render("?")+" "+theme.Muted.Render("help"),
+			theme.KeyName.Render("q")+" "+theme.Muted.Render("quit"),
+		)
 		return "  " + strings.Join(hints, "   ")
 	}
 }
@@ -397,7 +449,7 @@ func (m Model) viewPortPickerModal() string {
 	sb.WriteString("\n\n")
 
 	// Footer
-	sb.WriteString(theme.ModalFooter.Render("Enter select · Esc cancel"))
+	sb.WriteString(theme.ModalFooter.Render("Enter select · Tab switch section · Esc cancel"))
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+2, modalBox)
@@ -435,7 +487,7 @@ func (m Model) viewProfilePickerModal() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(theme.ModalFooter.Render("Enter select · Esc cancel"))
+	sb.WriteString(theme.ModalFooter.Render("Enter select · ↑/↓ navigate · Esc cancel"))
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+2, modalBox)
@@ -494,15 +546,21 @@ func (m Model) viewHelpModal() string {
 		renderItem("g, Home", "Jump to top", colWidth),
 		renderItem("G, End", "Jump to bottom", colWidth),
 		renderItem("Wheel", "Smooth scroll", colWidth),
+		renderHeader("VIRTUAL TABS", colWidth),
+		renderItem("Tab, ]", "Next tab", colWidth),
+		renderItem("S-Tab, [", "Previous tab", colWidth),
+		renderItem("1 .. 9", "Jump to tab N", colWidth),
+		renderItem("Ctrl+T", "Create new tab", colWidth),
+		renderItem("Ctrl+W", "Close active tab", colWidth),
+	}
+
+	right := []string{
 		renderHeader("SEARCH & FILTER", colWidth),
 		renderItem("Ctrl+F", "Search logs", colWidth),
 		renderItem("Enter, ↓", "Next match", colWidth),
 		renderItem("n / N", "Next / prev match", colWidth),
-		renderItem("f", "Filter logs", colWidth),
+		renderItem("f", "Filter active tab", colWidth),
 		renderItem("Esc", "Cancel / clear", colWidth),
-	}
-
-	right := []string{
 		renderHeader("ACTIONS & CONTROLS", colWidth),
 		renderItem("Space", "Pause / resume", colWidth),
 		renderItem("c", "Clear buffer", colWidth),
@@ -513,10 +571,6 @@ func (m Model) viewHelpModal() string {
 		renderItem("r", "Reconnect port", colWidth),
 		renderItem("?", "Toggle this help", colWidth),
 		renderItem("q, ^C", "Quit application", colWidth),
-		renderHeader("FILTER SYNTAX", colWidth),
-		renderItem("term", "Include substring", colWidth),
-		renderItem("-term", "Exclude substring", colWidth),
-		renderItem("col:v1,v2", "Match field (OR)", colWidth),
 	}
 
 	sep := theme.Divider.Render(" │ ")
@@ -649,6 +703,10 @@ func (m Model) computeColWidths(cols []record.Column) []int {
 }
 
 func isTimestampCol(col record.Column, tsField string) bool {
+	// Uptime is device uptime, never a toggleable arrival timestamp column
+	if col.Field == "uptime" || strings.EqualFold(col.Style, "uptime") {
+		return false
+	}
 	return col.Field == tsField || col.Field == "_ts" || col.Style == "timestamp"
 }
 
