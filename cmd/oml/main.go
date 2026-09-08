@@ -13,7 +13,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const version = "0.1.0"
+const (
+	version  = "1.0.0"
+	codename = "Joseense"
+)
 
 func main() {
 	var (
@@ -33,7 +36,7 @@ func main() {
 	flag.Parse()
 
 	if *flagVersion {
-		fmt.Printf("oml (oh-my-logs) %s\n", version)
+		fmt.Printf("oml (oh-my-logs) v%s - %s\n", version, codename)
 		os.Exit(0)
 	}
 

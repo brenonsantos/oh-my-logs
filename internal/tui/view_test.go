@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -423,5 +424,133 @@ func TestUptimeAndTimestampDistinct(t *testing.T) {
 		t.Errorf("uptime should remain visible when timestamp is toggled back OFF")
 	}
 }
+
+func TestPortPickerModalRendering(t *testing.T) {
+	m := newTestModel()
+	m.mode = modePortPicker
+	m.portList = []string{"/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyUSB2"}
+	m.baudList = []int{9600, 57600, 115200}
+	m.portCursor = 0
+	m.baudCursor = 2 // 115200
+
+	v := m.View()
+	if !strings.Contains(v, "Serial Port") {
+		t.Errorf("expected view to contain 'Serial Port', got:\n%s", v)
+	}
+	if !strings.Contains(v, "Baud rate") {
+		t.Errorf("expected view to contain 'Baud rate', got:\n%s", v)
+	}
+	if !strings.Contains(v, "←") || !strings.Contains(v, "→") {
+		t.Errorf("expected view to contain left/right arrows for baud rate, got:\n%s", v)
+	}
+	if !strings.Contains(v, "115200") {
+		t.Errorf("expected view to contain 115200, got:\n%s", v)
+	}
+	if !strings.Contains(v, "/dev/ttyUSB0") {
+		t.Errorf("expected view to contain '/dev/ttyUSB0', got:\n%s", v)
+	}
+	if !strings.Contains(v, "Enter select · ↑/↓ port · ←/→ baud · Esc cancel") {
+		t.Errorf("expected footer hints for port and baud navigation, got:\n%s", v)
+	}
+
+	// Test Right arrow wraps baud cursor around
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = updated.(Model)
+	if m.baudCursor != 0 {
+		t.Errorf("expected baudCursor to wrap to 0, got %d", m.baudCursor)
+	}
+
+	// Test Left arrow wraps back
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = updated.(Model)
+	if m.baudCursor != 2 {
+		t.Errorf("expected baudCursor to wrap to 2, got %d", m.baudCursor)
+	}
+
+	// Test Down arrow navigates port cursor
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	if m.portCursor != 1 {
+		t.Errorf("expected portCursor to be 1, got %d", m.portCursor)
+	}
+
+	// Test Up arrow navigates port cursor back
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = updated.(Model)
+	if m.portCursor != 0 {
+		t.Errorf("expected portCursor to be 0, got %d", m.portCursor)
+	}
+
+	// Test mouse wheel down scrolls port
+	updated, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	m = updated.(Model)
+	if m.portCursor != 1 {
+		t.Errorf("expected mouse wheel down to increment portCursor to 1, got %d", m.portCursor)
+	}
+
+	// Test mouse wheel up scrolls port back
+	updated, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
+	m = updated.(Model)
+	if m.portCursor != 0 {
+		t.Errorf("expected mouse wheel up to decrement portCursor to 0, got %d", m.portCursor)
+	}
+}
+
+func TestProfilePickerModalRendering(t *testing.T) {
+	m := newTestModel()
+	globalDir := filepath.Join(os.TempDir(), "global_profiles")
+	m.appConfig = &config.AppConfig{
+		ProfilesDir: globalDir,
+	}
+	m.mode = modeProfilePicker
+	m.profileList = []ProfileItem{
+		{Name: "Raw", Path: ""},
+		{Name: "Zephyr", Path: filepath.Join(globalDir, "zephyr.yaml")},
+		{Name: "LocalDev", Path: filepath.Join(os.TempDir(), "workspace", "localdev.yaml")},
+	}
+	m.profileCursor = 0
+
+	v := m.View()
+	if !strings.Contains(v, "Profile") {
+		t.Errorf("expected view to contain 'Profile', got:\n%s", v)
+	}
+	if !strings.Contains(v, "[local]") {
+		t.Errorf("expected local profile to have '[local]' tag, got:\n%s", v)
+	}
+	if strings.Contains(v, "[global]") {
+		t.Errorf("modal should not display '[global]', got:\n%s", v)
+	}
+	if strings.Contains(v, "Raw [local]") {
+		t.Errorf("built-in Raw should not have '[local]' tag")
+	}
+	if strings.Contains(v, "Zephyr [local]") {
+		t.Errorf("global profile Zephyr should not have '[local]' tag")
+	}
+	if !strings.Contains(v, "Enter select · ↑/↓ navigate · Esc cancel") {
+		t.Errorf("expected footer hints for profile navigation, got:\n%s", v)
+	}
+
+	// Down arrow navigates profile cursor
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	if m.profileCursor != 1 {
+		t.Errorf("expected profileCursor 1, got %d", m.profileCursor)
+	}
+
+	// Mouse wheel down scrolls profile cursor
+	updated, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	m = updated.(Model)
+	if m.profileCursor != 2 {
+		t.Errorf("expected mouse wheel down to advance profileCursor to 2, got %d", m.profileCursor)
+	}
+
+	// Mouse wheel up scrolls profile cursor back
+	updated, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
+	m = updated.(Model)
+	if m.profileCursor != 1 {
+		t.Errorf("expected mouse wheel up to decrement profileCursor to 1, got %d", m.profileCursor)
+	}
+}
+
 
 
