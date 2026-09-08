@@ -110,7 +110,6 @@ func (m Model) viewTitleBar() string {
 	return content
 }
 
-
 // viewTableHeader renders the column header row.
 func (m Model) viewTableHeader() string {
 	renderedHeaders := m.renderRow(func(col record.Column, w int) string {
@@ -247,7 +246,6 @@ func (m Model) viewKeyBar() string {
 		return "  " + strings.Join(hints, "   ")
 	}
 }
-
 
 // viewPortPickerModal renders the centered rounded modal for Port & Baud Rate.
 func (m Model) viewPortPickerModal() string {
