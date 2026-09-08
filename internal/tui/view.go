@@ -39,8 +39,8 @@ func (m Model) View() string {
 		sb.WriteByte('\n')
 
 		// Header Divider
-		// sb.WriteString(m.viewDivider())
-		// sb.WriteByte('\n')
+		sb.WriteString(m.viewDivider())
+		sb.WriteByte('\n')
 
 		// Table Rows
 		sb.WriteString(m.viewTable())
@@ -89,7 +89,11 @@ func (m Model) viewTitleBar() string {
 	case ConnError:
 		connStr = theme.TitleConnErr.Render("⚠ " + m.connDetail)
 	default:
-		connStr = theme.TitleConnOff.Render("○ Disconnected")
+		if m.reconnecting && m.serialCfg.Port != "" && !m.isFileSource {
+			connStr = theme.Accent.Background(theme.TitleBg).Bold(true).Render("⟳ Reconnecting…")
+		} else {
+			connStr = theme.TitleConnOff.Render("○ Disconnected")
+		}
 	}
 
 	profileVal := "(no profile)"
@@ -180,9 +184,16 @@ func (m Model) viewEmptyState() string {
 	switch {
 	case m.connState != ConnConnected:
 		title = theme.Secondary.Bold(true).Render("No serial device connected")
-		subtitle = theme.Muted.Render("Press ") + theme.KeyName.Render("p") +
-			theme.Muted.Render(" to select a port   ·   Press ") +
-			theme.KeyName.Render("?") + theme.Muted.Render(" for shortcuts")
+		if m.serialCfg.Port != "" && !m.isFileSource {
+			subtitle = theme.Muted.Render("Auto-reconnecting to ") + theme.Accent.Render(m.serialCfg.Port) +
+				theme.Muted.Render("   ·   Press ") + theme.KeyName.Render("p") +
+				theme.Muted.Render(" to select a port   ·   Press ") +
+				theme.KeyName.Render("?") + theme.Muted.Render(" for shortcuts")
+		} else {
+			subtitle = theme.Muted.Render("Press ") + theme.KeyName.Render("p") +
+				theme.Muted.Render(" to select a port   ·   Press ") +
+				theme.KeyName.Render("?") + theme.Muted.Render(" for shortcuts")
+		}
 
 	case m.buffer.Len() == 0:
 		title = theme.Accent.Render("Waiting for serial data…")
@@ -234,7 +245,6 @@ func (m Model) viewEmptyState() string {
 
 	return strings.Join(lines, "\n")
 }
-
 
 // viewStatusBar renders statistics, active filter/search info, and message.
 func (m Model) viewStatusBar() string {

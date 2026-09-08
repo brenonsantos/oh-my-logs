@@ -3,7 +3,9 @@ package serial
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 	"sync"
 
 	goserial "go.bug.st/serial"
@@ -28,11 +30,12 @@ type Source interface {
 
 // SerialSource reads from a physical serial port.
 type SerialSource struct {
-	port   goserial.Port
-	lines  chan string
-	errors chan error
-	stop   chan struct{}
-	wg     sync.WaitGroup
+	port      goserial.Port
+	lines     chan string
+	errors    chan error
+	stop      chan struct{}
+	closeOnce sync.Once
+	wg        sync.WaitGroup
 }
 
 // NewSerialSource opens the serial port described by cfg and starts reading.
@@ -58,19 +61,30 @@ func NewSerialSource(cfg Config) (*SerialSource, error) {
 func (s *SerialSource) readLoop() {
 	defer s.wg.Done()
 	defer close(s.lines)
+	defer close(s.errors)
 
-	scanner := bufio.NewScanner(s.port)
-	for scanner.Scan() {
-		select {
-		case <-s.stop:
-			return
-		case s.lines <- scanner.Text():
+	reader := bufio.NewReader(s.port)
+	for {
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			cleanLine := strings.TrimRight(line, "\r\n")
+			select {
+			case <-s.stop:
+				return
+			case s.lines <- cleanLine:
+			}
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		select {
-		case s.errors <- fmt.Errorf("serial read: %w", err):
-		default:
+		if err != nil {
+			select {
+			case <-s.stop:
+				return
+			default:
+			}
+			select {
+			case s.errors <- fmt.Errorf("serial read: %w", err):
+			default:
+			}
+			return
 		}
 	}
 }
@@ -83,8 +97,10 @@ func (s *SerialSource) Errors() <-chan error { return s.errors }
 
 // Stop closes the serial port and waits for the reader goroutine to finish.
 func (s *SerialSource) Stop() {
-	close(s.stop)
-	_ = s.port.Close()
+	s.closeOnce.Do(func() {
+		close(s.stop)
+		_ = s.port.Close()
+	})
 	s.wg.Wait()
 }
 
@@ -92,10 +108,11 @@ func (s *SerialSource) Stop() {
 
 // FileSource reads lines from a file, enabling log replay without hardware.
 type FileSource struct {
-	lines  chan string
-	errors chan error
-	stop   chan struct{}
-	wg     sync.WaitGroup
+	lines     chan string
+	errors    chan error
+	stop      chan struct{}
+	closeOnce sync.Once
+	wg        sync.WaitGroup
 }
 
 // NewFileSource opens the file at path and starts emitting lines.
@@ -119,20 +136,33 @@ func NewFileSource(path string) (*FileSource, error) {
 func (s *FileSource) readLoop(f *os.File) {
 	defer s.wg.Done()
 	defer close(s.lines)
+	defer close(s.errors)
 	defer f.Close()
 
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		select {
-		case <-s.stop:
-			return
-		case s.lines <- scanner.Text():
+	reader := bufio.NewReader(f)
+	for {
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			cleanLine := strings.TrimRight(line, "\r\n")
+			select {
+			case <-s.stop:
+				return
+			case s.lines <- cleanLine:
+			}
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		select {
-		case s.errors <- fmt.Errorf("file read: %w", err):
-		default:
+		if err != nil {
+			select {
+			case <-s.stop:
+				return
+			default:
+			}
+			if err != io.EOF && err != os.ErrClosed {
+				select {
+				case s.errors <- fmt.Errorf("file read: %w", err):
+				default:
+				}
+			}
+			return
 		}
 	}
 }
@@ -145,6 +175,8 @@ func (s *FileSource) Errors() <-chan error { return s.errors }
 
 // Stop signals the goroutine to stop and waits for it to exit.
 func (s *FileSource) Stop() {
-	close(s.stop)
+	s.closeOnce.Do(func() {
+		close(s.stop)
+	})
 	s.wg.Wait()
 }

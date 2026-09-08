@@ -53,10 +53,12 @@ type Model struct {
 	height  int
 
 	// Serial / source
-	source    serial.Source
-	serialCfg serial.Config
-	connState ConnState
-	connDetail string
+	source       serial.Source
+	serialCfg    serial.Config
+	connState    ConnState
+	connDetail   string
+	reconnecting bool
+	isFileSource bool
 
 	// Profile & parser
 	profile  *parser.Profile
@@ -159,10 +161,27 @@ func New(
 		}
 	}
 
+	isFile := false
+	if _, ok := src.(*serial.FileSource); ok {
+		isFile = true
+	}
+
+	initState := ConnDisconnected
+	if src != nil {
+		initState = ConnConnected
+	}
+	reconn := false
+	if src == nil && cfg.Port != "" && !isFile {
+		reconn = true
+	}
+
 	m := Model{
 		keys:          defaultKeyMap(),
 		serialCfg:     cfg,
 		source:        src,
+		connState:     initState,
+		reconnecting:  reconn,
+		isFileSource:  isFile,
 		profile:       profile,
 		parser:        p,
 		columns:       cols,
@@ -177,7 +196,6 @@ func New(
 		baudList:      bauds,
 		baudCursor:    baudIdx,
 	}
-
 
 	// Start with an empty permissive filter.
 	m.activeFilter, _ = filter.New("")
@@ -204,13 +222,13 @@ func (m Model) saveSettings() {
 	_ = m.appConfig.SaveSettings(s)
 }
 
-
-
-// Init starts the source reader goroutine (via a command) and returns the
-// initial command set.
+// Init starts the source reader goroutines or triggers auto-reconnect if disconnected.
 func (m Model) Init() tea.Cmd {
 	if m.source != nil {
 		return tea.Batch(listenToSource(m.source), listenToSourceErrors(m.source))
+	}
+	if m.serialCfg.Port != "" && !m.isFileSource {
+		return scheduleReconnectTick()
 	}
 	return nil
 }
