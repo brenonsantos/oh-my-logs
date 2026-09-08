@@ -63,9 +63,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── New line from source ─────────────────────────────────────────────────
 	case lineMsg:
 		r, _ := m.parser.Parse(string(msg))
-		// Inject received timestamp if toggled on (regardless of profile setting).
-		if m.injectTimestamp {
-			r.Fields[m.tsField] = time.Now().Format(m.tsFormat)
+		if r.Fields == nil {
+			r.Fields = make(map[string]string)
+		}
+		// Always record arrival timestamp on ingest so past records have it when toggled on.
+		nowStr := time.Now().Format(m.tsFormat)
+		if r.Fields[m.tsField] == "" {
+			r.Fields[m.tsField] = nowStr
+		}
+		if r.Fields["_ts"] == "" {
+			r.Fields["_ts"] = nowStr
 		}
 		m.buffer.Add(r)
 		m.rebuildVisible()
@@ -186,6 +193,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case keyMatches(msg, m.keys.Quit):
+		m.saveSettings()
 		if m.source != nil {
 			m.source.Stop()
 		}
@@ -318,8 +326,9 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, connectCmd(m.serialCfg)
 
 	case keyMatches(msg, m.keys.ToggleTimestamp):
-		m.injectTimestamp = !m.injectTimestamp
-		if m.injectTimestamp {
+		m.showTimestamp = !m.showTimestamp
+		m.saveSettings()
+		if m.showTimestamp {
 			m.message = fmt.Sprintf("⏱ Timestamp ON (%s)", m.tsField)
 		} else {
 			m.message = "⏱ Timestamp OFF"
@@ -479,6 +488,7 @@ func (m Model) handlePortPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cfg.Baud = baud
 		m.serialCfg = cfg
 		m.mode = modeNormal
+		m.saveSettings()
 		return m, connectCmd(cfg)
 	}
 	return m, nil
@@ -532,22 +542,42 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.parser = newParser
 			m.columns = prof.ToColumns()
 
-			// Update timestamp injection defaults if configured
+			// Update timestamp settings if configured
 			if prof.Ingest.Timestamp.Enabled {
-				m.injectTimestamp = true
 				m.tsField = prof.Ingest.Timestamp.TimestampField()
 				m.tsFormat = prof.Ingest.Timestamp.TimestampFormat()
+				m.showTimestamp = true
+			} else {
+				for _, col := range prof.Columns {
+					if col.Style == "timestamp" || col.Field == "time" || col.Field == "timestamp" {
+						m.tsField = col.Field
+						m.showTimestamp = true
+						break
+					}
+				}
 			}
 		}
 
 		// Re-parse all existing records in the buffer using the new parser!
 		m.buffer.Transform(func(old record.Record) record.Record {
 			newRec, _ := m.parser.Parse(old.Raw)
-			if m.injectTimestamp {
-				if prevTS := old.Fields[m.tsField]; prevTS != "" {
+			if newRec.Fields == nil {
+				newRec.Fields = make(map[string]string)
+			}
+			// Preserve earlier recorded arrival timestamp
+			prevTS := old.Fields[m.tsField]
+			if prevTS == "" {
+				prevTS = old.Fields["_ts"]
+			}
+			if prevTS == "" {
+				prevTS = old.Fields["time"]
+			}
+			if prevTS != "" {
+				if newRec.Fields[m.tsField] == "" {
 					newRec.Fields[m.tsField] = prevTS
-				} else {
-					newRec.Fields[m.tsField] = time.Now().Format(m.tsFormat)
+				}
+				if newRec.Fields["_ts"] == "" {
+					newRec.Fields["_ts"] = prevTS
 				}
 			}
 			return newRec
@@ -555,6 +585,7 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		m.rebuildVisible()
 		m.mode = modeNormal
+		m.saveSettings()
 		m.message = fmt.Sprintf("Profile: %s", selected.Name)
 		return m, nil
 	}

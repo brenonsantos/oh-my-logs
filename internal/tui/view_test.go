@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -117,3 +118,105 @@ func TestEmptyStateWithoutHeader(t *testing.T) {
 		t.Errorf("log line should be rendered")
 	}
 }
+
+func TestTimestampPersistentAndToggle(t *testing.T) {
+	m := newTestModel()
+	m.connState = ConnConnected
+
+	// 1. Initially timestamp display is OFF
+	if m.showTimestamp {
+		t.Fatalf("expected showTimestamp to be false by default")
+	}
+
+	// 2. Incoming log line arrives while timestamp is hidden
+	line := "sensor init ok"
+	updated, _ := m.Update(lineMsg(line))
+	m = updated.(Model)
+
+	if len(m.visible) != 1 {
+		t.Fatalf("expected 1 visible record, got %d", len(m.visible))
+	}
+
+	// Verify timestamp was captured on the record despite being hidden
+	rec := m.visible[0]
+	if rec.Fields["_ts"] == "" {
+		t.Fatalf("expected incoming record to have arrival timestamp recorded in _ts")
+	}
+
+	// View while timestamp is disabled should NOT contain the Time column header
+	if strings.Contains(m.viewTableHeader(), "Time") {
+		t.Errorf("Time column should be hidden when timestamp is OFF, got header:\n%s", m.viewTableHeader())
+	}
+	if len(m.effectiveColumns()) != 1 {
+		t.Fatalf("expected 1 effective column when OFF, got %d", len(m.effectiveColumns()))
+	}
+
+	// 3. Press 't' to toggle timestamp ON
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = updated.(Model)
+	if !m.showTimestamp {
+		t.Fatalf("expected showTimestamp to be true after pressing 't'")
+	}
+
+	// View should now display the Time header and the recorded timestamp for the older record
+	vOn := m.View()
+	if !strings.Contains(m.viewTableHeader(), "Time") {
+		t.Errorf("Time column should appear when timestamp is ON, got header:\n%s", m.viewTableHeader())
+	}
+	if len(m.effectiveColumns()) != 2 {
+		t.Fatalf("expected 2 effective columns when ON, got %d", len(m.effectiveColumns()))
+	}
+	if !strings.Contains(vOn, rec.Fields["_ts"]) {
+		t.Errorf("expected view to display the older record's timestamp %q, got:\n%s", rec.Fields["_ts"], vOn)
+	}
+
+	// 4. Press 't' again to toggle timestamp OFF
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = updated.(Model)
+	if m.showTimestamp {
+		t.Fatalf("expected showTimestamp to be false after second 't'")
+	}
+
+	if strings.Contains(m.viewTableHeader(), "Time") {
+		t.Errorf("Time column should be hidden again when toggled OFF, got header:\n%s", m.viewTableHeader())
+	}
+	if len(m.effectiveColumns()) != 1 {
+		t.Fatalf("expected 1 effective column when toggled back OFF, got %d", len(m.effectiveColumns()))
+	}
+}
+
+func TestTUISettingsPersistence(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "oml-tui-settings-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	appCfg := &config.AppConfig{
+		ConfigDir: tempDir,
+	}
+
+	cfg := serial.Config{Port: "COM1", Baud: 115200}
+	p := parser.NewRawParser()
+	buf := record.NewBuffer(100)
+	m := New(cfg, nil, p, buf, nil, appCfg)
+
+	// Toggle timestamp -> should save ShowTimestamp: true
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = updated.(Model)
+
+	saved, err := appCfg.LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings failed: %v", err)
+	}
+	if !saved.ShowTimestamp {
+		t.Errorf("expected saved.ShowTimestamp to be true")
+	}
+	if saved.Port != "COM1" {
+		t.Errorf("expected saved.Port to be COM1, got %s", saved.Port)
+	}
+	if saved.Baud != 115200 {
+		t.Errorf("expected saved.Baud to be 115200, got %d", saved.Baud)
+	}
+}
+
