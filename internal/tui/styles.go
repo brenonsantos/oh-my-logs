@@ -69,13 +69,15 @@ type Theme struct {
 	TitleConnOff  lipgloss.Style // muted "○ Disconnected"
 	TitleConnErr  lipgloss.Style // red "⚠ ..."
 
-	StatusBar lipgloss.Style
-	KeyBar    lipgloss.Style
-	KeyName   lipgloss.Style
-	FollowOn  lipgloss.Style
-	FollowOff lipgloss.Style
-	MsgInfo   lipgloss.Style
-	MsgErr    lipgloss.Style
+	StatusBar   lipgloss.Style
+	KeyBar      lipgloss.Style
+	KeyName     lipgloss.Style
+	FollowOn    lipgloss.Style
+	FollowOff   lipgloss.Style
+	MsgInfo     lipgloss.Style
+	MsgErr      lipgloss.Style
+	TabActive   lipgloss.Style
+	TabInactive lipgloss.Style
 }
 
 // DefaultTheme returns the refined technical developer theme.
@@ -167,9 +169,18 @@ func DefaultTheme() Theme {
 
 		FollowOn:  lipgloss.NewStyle().Foreground(colorGreen).Bold(true),
 		FollowOff: lipgloss.NewStyle().Foreground(colorYellow).Bold(true),
+		MsgInfo:   lipgloss.NewStyle().Foreground(colorMuted),
+		MsgErr:    lipgloss.NewStyle().Foreground(colorRed).Bold(true),
 
-		MsgInfo: lipgloss.NewStyle().Foreground(colorMuted),
-		MsgErr:  lipgloss.NewStyle().Foreground(colorRed).Bold(true),
+		TabActive: lipgloss.NewStyle().
+			Foreground(colorHeader).
+			Background(lipgloss.Color("#2563eb")).
+			Bold(true).
+			Padding(0, 1),
+		TabInactive: lipgloss.NewStyle().
+			Foreground(colorMuted).
+			Background(lipgloss.Color("#1e293b")).
+			Padding(0, 1),
 	}
 }
 
@@ -194,7 +205,7 @@ func (t Theme) ResolveCellStyle(col record.Column, val string) lipgloss.Style {
 
 	// 2. Built-in semantic styles
 	switch strings.ToLower(col.Style) {
-	case "timestamp", "time":
+	case "timestamp", "time", "uptime":
 		return t.Muted
 	case "level":
 		return t.LevelStyle(val)
@@ -215,7 +226,7 @@ func (t Theme) ResolveCellStyle(col record.Column, val string) lipgloss.Style {
 		if strings.EqualFold(col.Field, "level") {
 			return t.LevelStyle(val)
 		}
-		if strings.EqualFold(col.Field, "time") || strings.EqualFold(col.Field, "timestamp") || strings.EqualFold(col.Field, "_ts") {
+		if strings.EqualFold(col.Field, "time") || strings.EqualFold(col.Field, "timestamp") || strings.EqualFold(col.Field, "_ts") || strings.EqualFold(col.Field, "uptime") {
 			return t.Muted
 		}
 		if strings.EqualFold(col.Field, "module") || strings.EqualFold(col.Field, "task") || strings.EqualFold(col.Field, "cpu") || strings.EqualFold(col.Field, "code") {
@@ -231,11 +242,11 @@ func (t Theme) LevelStyle(val string) lipgloss.Style {
 	switch {
 	case strings.Contains(u, "ERR") || strings.Contains(u, "FATAL") || strings.Contains(u, "CRIT"):
 		return t.Error
-	case strings.Contains(u, "WARN"):
+	case strings.Contains(u, "WARN") || strings.Contains(u, "WRN"):
 		return t.Warning
-	case strings.Contains(u, "INFO"):
+	case strings.Contains(u, "INFO") || strings.Contains(u, "INF"):
 		return lipgloss.NewStyle().Foreground(colorCyan)
-	case strings.Contains(u, "DEBUG") || strings.Contains(u, "TRACE"):
+	case strings.Contains(u, "DEBUG") || strings.Contains(u, "DBG") || strings.Contains(u, "TRACE"):
 		return t.Muted
 	default:
 		return t.Content

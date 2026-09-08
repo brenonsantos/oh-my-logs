@@ -113,10 +113,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			r.Fields["_ts"] = nowStr
 		}
 		m.buffer.Add(r)
-		m.rebuildVisible()
-		if m.follow && !m.paused {
-			m.scrollToBottom()
+
+		// Dispatch to all tabs
+		if len(m.tabs) == 0 {
+			_ = m.currentTab()
 		}
+		for i := range m.tabs {
+			if m.tabs[i].Filter == nil || m.tabs[i].Filter.Empty() || m.tabs[i].Filter.Matches(r) {
+				m.tabs[i].Visible = append(m.tabs[i].Visible, r)
+				if m.tabs[i].Follow && !m.paused {
+					if len(m.tabs[i].Visible) > m.tableHeight {
+						m.tabs[i].ScrollOffset = len(m.tabs[i].Visible) - m.tableHeight
+					} else {
+						m.tabs[i].ScrollOffset = 0
+					}
+				}
+			}
+		}
+
+		cur := m.currentTab()
+		m.visible = cur.Visible
+		m.scrollOffset = cur.ScrollOffset
+		m.follow = cur.Follow
+
 		// Re-arm the listener.
 		return m, listenToSource(m.source)
 
@@ -299,10 +318,16 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case keyMatches(msg, m.keys.Filter):
 		m.mode = modeFilter
+		m.filterInput = m.currentTab().FilterRaw
 		return m, nil
 
 	case keyMatches(msg, m.keys.Clear):
 		m.buffer.Clear()
+		for i := range m.tabs {
+			m.tabs[i].Visible = nil
+			m.tabs[i].ScrollOffset = 0
+			m.tabs[i].SearchMatches = nil
+		}
 		m.visible = nil
 		m.searchMatches = nil
 		m.scrollOffset = 0
@@ -437,6 +462,34 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.PrevMatch):
 		m.prevSearchMatch()
 		return m, nil
+
+	case keyMatches(msg, m.keys.NextTab):
+		if len(m.tabs) > 1 {
+			m.switchTab((m.activeTab + 1) % len(m.tabs))
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.PrevTab):
+		if len(m.tabs) > 1 {
+			m.switchTab((m.activeTab - 1 + len(m.tabs)) % len(m.tabs))
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.NewTab):
+		return m.handleCreateNewTab()
+
+	case keyMatches(msg, m.keys.CloseTab):
+		return m.handleCloseActiveTab()
+
+	default:
+		s := msg.String()
+		if len(s) == 1 && s >= "1" && s <= "9" {
+			idx := int(s[0] - '1')
+			if idx < len(m.tabs) {
+				m.switchTab(idx)
+				return m, nil
+			}
+		}
 	}
 
 	return m, nil
@@ -475,6 +528,7 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case keyMatches(msg, m.keys.Cancel):
 		m.mode = modeNormal
+		m.filterInput = m.currentTab().FilterRaw
 		return m, nil
 
 	case keyMatches(msg, m.keys.Confirm):
@@ -483,9 +537,19 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.message = fmt.Sprintf("filter error: %v", err)
 		} else {
 			m.activeFilter = f
+			cur := m.currentTab()
+			cur.Filter = f
+			cur.FilterRaw = m.filterInput
+			if cur.Name == "" || strings.HasPrefix(cur.Name, "Tab ") {
+				if m.filterInput != "" {
+					cur.Name = m.filterInput
+				}
+			}
 			m.rebuildVisible()
+			cur.Visible = m.visible
 			if m.follow {
 				m.scrollToBottom()
+				cur.ScrollOffset = m.scrollOffset
 			}
 		}
 		m.mode = modeNormal
@@ -674,7 +738,7 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return newRec
 		})
 
-		m.rebuildVisible()
+		m.rebuildAllTabs()
 		m.mode = modeNormal
 		m.saveSettings()
 		m.message = fmt.Sprintf("Profile: %s", selected.Name)
@@ -741,20 +805,83 @@ func handleTextInput(current string, msg tea.KeyMsg) string {
 	return current
 }
 
-// rebuildVisible refilters the buffer and updates m.visible.
+// rebuildVisible refilters the buffer and updates m.visible and the active tab.
 func (m *Model) rebuildVisible() {
 	all := m.buffer.All()
 	if m.activeFilter == nil || m.activeFilter.Empty() {
 		m.visible = all
-		return
+	} else {
+		out := make([]record.Record, 0, len(all))
+		for _, r := range all {
+			if m.activeFilter.Matches(r) {
+				out = append(out, r)
+			}
+		}
+		m.visible = out
 	}
-	out := make([]record.Record, 0, len(all))
-	for _, r := range all {
-		if m.activeFilter.Matches(r) {
-			out = append(out, r)
+	if len(m.tabs) > 0 {
+		cur := m.currentTab()
+		cur.Visible = m.visible
+	}
+}
+
+// rebuildAllTabs refilters the buffer across all tabs (e.g. on profile reload).
+func (m *Model) rebuildAllTabs() {
+	all := m.buffer.All()
+	for i := range m.tabs {
+		t := &m.tabs[i]
+		if t.Filter == nil || t.Filter.Empty() {
+			t.Visible = all
+		} else {
+			out := make([]record.Record, 0, len(all))
+			for _, r := range all {
+				if t.Filter.Matches(r) {
+					out = append(out, r)
+				}
+			}
+			t.Visible = out
 		}
 	}
-	m.visible = out
+	m.syncModelToActiveTab()
+	m.clampScroll()
+}
+
+func (m Model) handleCreateNewTab() (tea.Model, tea.Cmd) {
+	m.syncActiveTabToModel()
+	newIdx := len(m.tabs)
+	name := fmt.Sprintf("Tab %d", newIdx+1)
+	newTab := Tab{
+		Name:    name,
+		Follow:  true,
+		Visible: m.buffer.All(),
+	}
+	if len(newTab.Visible) > m.tableHeight {
+		newTab.ScrollOffset = len(newTab.Visible) - m.tableHeight
+	}
+	m.tabs = append(m.tabs, newTab)
+	m.activeTab = newIdx
+	m.syncModelToActiveTab()
+	m.recalcLayout()
+	m.mode = modeFilter
+	m.filterInput = ""
+	m.message = fmt.Sprintf("Created %s — enter filter (or Enter/Esc for all)", name)
+	return m, nil
+}
+
+func (m Model) handleCloseActiveTab() (tea.Model, tea.Cmd) {
+	if len(m.tabs) <= 1 {
+		m.message = "Cannot close the only tab"
+		return m, nil
+	}
+	closedName := m.tabs[m.activeTab].DisplayName(m.activeTab + 1)
+	m.tabs = append(m.tabs[:m.activeTab], m.tabs[m.activeTab+1:]...)
+	if m.activeTab >= len(m.tabs) {
+		m.activeTab = len(m.tabs) - 1
+	}
+	m.syncModelToActiveTab()
+	m.recalcLayout()
+	m.message = fmt.Sprintf("Closed %s", closedName)
+	return m, nil
 }
 
 func (m *Model) scrollToMatch(idx int) {
@@ -802,7 +929,6 @@ func (m *Model) prevSearchMatch() {
 	m.scrollToMatch(m.searchMatches[m.searchCursor])
 }
 
-
 func (m *Model) scrollToBottom() {
 	if len(m.visible) > m.tableHeight {
 		m.scrollOffset = len(m.visible) - m.tableHeight
@@ -822,11 +948,21 @@ func (m *Model) clampScroll() {
 	if m.scrollOffset > maxOffset {
 		m.scrollOffset = maxOffset
 	}
+	if len(m.tabs) > 0 {
+		cur := m.currentTab()
+		cur.ScrollOffset = m.scrollOffset
+		cur.Follow = m.follow
+	}
 }
 
 func (m *Model) recalcLayout() {
-	// Reserve: 1 title + 1 divider + 1 header + 1 divider + 1 divider + 1 status + 1 keys = 7 fixed rows.
-	m.tableHeight = m.height - 7
+	// Fixed rows: 1 title + 1 divider + 1 header + 1 divider + 1 divider + 1 status + 1 keys = 7 fixed rows.
+	// If more than 1 tab is present, tab bar adds 2 rows (1 row tab bar + 1 row divider).
+	fixed := 7
+	if len(m.tabs) > 1 {
+		fixed += 2
+	}
+	m.tableHeight = m.height - fixed
 	if m.tableHeight < 1 {
 		m.tableHeight = 1
 	}

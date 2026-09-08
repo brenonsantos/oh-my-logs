@@ -3,6 +3,7 @@ package parser_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -233,5 +234,84 @@ columns:
 	r, _ := parser_.Parse("hello")
 	if r.Fields["message"] != "hello" {
 		t.Errorf("message = %q, want hello", r.Fields["message"])
+	}
+}
+
+func TestLoadProfile_Zephyr(t *testing.T) {
+	path := filepath.Join("..", "..", "profiles", "examples", "zephyr.yaml")
+	p, err := parser.LoadProfile(path)
+	if err != nil {
+		t.Fatalf("failed to load zephyr.yaml: %v", err)
+	}
+	if p.Name != "Zephyr" {
+		t.Errorf("expected profile name Zephyr, got %q", p.Name)
+	}
+	bp, err := p.BuildParser()
+	if err != nil {
+		t.Fatalf("failed to build parser: %v", err)
+	}
+
+	// 1. Test standard Zephyr log line from Zcore_Init.log
+	r, err := bp.Parse("[      5.182] <inf> fs_nvs: 16 Sectors of 4096 bytes")
+	if err != nil {
+		t.Fatalf("failed to parse Zephyr log line: %v", err)
+	}
+	if r.Fields["uptime"] != "5.182" {
+		t.Errorf("expected uptime 5.182, got %q", r.Fields["uptime"])
+	}
+	if r.Fields["level"] != "inf" {
+		t.Errorf("expected level inf, got %q", r.Fields["level"])
+	}
+	if r.Fields["message"] != "fs_nvs: 16 Sectors of 4096 bytes" {
+		t.Errorf("expected message 'fs_nvs: 16 Sectors of 4096 bytes', got %q", r.Fields["message"])
+	}
+
+	// 2. Test non-matching boot line fallback to message
+	rUnmatched, err := bp.Parse("*** Booting Zephyr OS build nxp-v4.1.0-48847-ge5a841432a62 ***")
+	if err == nil {
+		t.Errorf("expected error for non-matching line")
+	}
+	if rUnmatched.Fields["message"] != "*** Booting Zephyr OS build nxp-v4.1.0-48847-ge5a841432a62 ***" {
+		t.Errorf("expected non-matching line to fallback to message, got %q", rUnmatched.Fields["message"])
+	}
+}
+
+func TestParse_ZcoreInitLog(t *testing.T) {
+	path := filepath.Join("..", "..", "profiles", "examples", "zephyr.yaml")
+	p, err := parser.LoadProfile(path)
+	if err != nil {
+		t.Fatalf("LoadProfile error: %v", err)
+	}
+	bp, err := p.BuildParser()
+	if err != nil {
+		t.Fatalf("BuildParser error: %v", err)
+	}
+
+	logPath := filepath.Join("..", "..", "Zcore_Init.log")
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Skip("Zcore_Init.log not found, skipping")
+	}
+
+	lines := strings.Split(string(data), "\n")
+	matched := 0
+	for _, l := range lines {
+		if strings.TrimSpace(l) == "" {
+			continue
+		}
+		r, err := bp.Parse(l)
+		if err == nil {
+			matched++
+			if r.Fields["uptime"] == "" || r.Fields["level"] == "" {
+				t.Errorf("expected uptime and level to be populated on match: %q", l)
+			}
+		} else {
+			if r.Fields["message"] != l {
+				t.Errorf("expected unmatched line to have message = raw line: %q", l)
+			}
+		}
+	}
+	if matched < 350 {
+		t.Errorf("expected at least 350 matched lines, got %d", matched)
 	}
 }

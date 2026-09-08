@@ -32,6 +32,7 @@ func (p *RegexParser) Parse(line string) (record.Record, error) {
 	match := p.re.FindStringSubmatch(line)
 	if match == nil {
 		r.Fields["_raw"] = line
+		r.Fields["message"] = line
 		return r, fmt.Errorf("parser: line did not match pattern: %q", line)
 	}
 

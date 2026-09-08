@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -315,6 +316,110 @@ func TestAutoReconnectLifecycle(t *testing.T) {
 	updated, _ = m.Update(ErrorMsg{Err: fmt.Errorf("connect /dev/cu.usbserial-1101: serial: cannot open /dev/cu.usbserial-1101: Invalid serial port: error setting term settings: invalid argument")})
 	m = updated.(Model)
 	_ = m.View()
+}
+
+func TestUptimeAndTimestampDistinct(t *testing.T) {
+	// Setup a model with Zephyr profile columns (uptime, level, message)
+	profPath := filepath.Join("..", "..", "profiles", "examples", "zephyr.yaml")
+	prof, err := parser.LoadProfile(profPath)
+	if err != nil {
+		t.Fatalf("failed to load zephyr profile: %v", err)
+	}
+	p, err := prof.BuildParser()
+	if err != nil {
+		t.Fatalf("failed to build parser: %v", err)
+	}
+
+	cfg := serial.Config{Port: "COM1", Baud: 115200}
+	buf := record.NewBuffer(100)
+	m := New(cfg, prof, p, buf, nil, &config.AppConfig{})
+	m.width = 120
+	m.height = 30
+	m.recalcLayout()
+	m.showTimestamp = false // initially timestamp visibility is OFF
+
+	// 1. Initial state: Uptime (s) is visible; Time (arrival ts) is NOT
+	colsOff := m.effectiveColumns()
+	if len(colsOff) != 3 {
+		t.Fatalf("expected 3 columns when timestamp is OFF, got %d", len(colsOff))
+	}
+	if colsOff[0].Field != "uptime" || colsOff[0].Title != "Uptime (s)" {
+		t.Errorf("expected first column to be 'Uptime (s)', got %q (%q)", colsOff[0].Title, colsOff[0].Field)
+	}
+
+	// Ingest a Zephyr line
+	line := "[      5.182] <inf> fs_nvs: 16 Sectors of 4096 bytes"
+	updated, _ := m.Update(lineMsg(line))
+	m = updated.(Model)
+
+	if len(m.visible) != 1 {
+		t.Fatalf("expected 1 visible record, got %d", len(m.visible))
+	}
+	rec := m.visible[0]
+	if rec.Fields["uptime"] != "5.182" {
+		t.Errorf("expected uptime '5.182', got %q", rec.Fields["uptime"])
+	}
+	if rec.Fields["_ts"] == "" {
+		t.Errorf("expected host arrival timestamp to be recorded in '_ts'")
+	}
+
+	// View with timestamp OFF: contains uptime, does NOT contain Time header
+	vOff := m.View()
+	if !strings.Contains(vOff, "Uptime (s)") {
+		t.Errorf("Uptime (s) column header should be present when timestamp is OFF")
+	}
+	if !strings.Contains(vOff, "5.182") {
+		t.Errorf("Uptime value '5.182' should be present when timestamp is OFF")
+	}
+	if strings.Contains(m.viewTableHeader(), "Time") {
+		t.Errorf("Time column header should NOT be present when timestamp is OFF")
+	}
+
+	// 2. Press 't' to toggle timestamp ON
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = updated.(Model)
+	if !m.showTimestamp {
+		t.Fatalf("expected showTimestamp to be true after pressing 't'")
+	}
+
+	// Columns when timestamp is ON: [Time, Uptime (s), Level, Message]
+	colsOn := m.effectiveColumns()
+	if len(colsOn) != 4 {
+		t.Fatalf("expected 4 columns when timestamp is ON, got %d", len(colsOn))
+	}
+	if colsOn[0].Field != "_ts" || colsOn[0].Title != "Time" {
+		t.Errorf("expected first column to be 'Time' (_ts), got %q (%q)", colsOn[0].Title, colsOn[0].Field)
+	}
+	if colsOn[1].Field != "uptime" || colsOn[1].Title != "Uptime (s)" {
+		t.Errorf("expected second column to remain 'Uptime (s)', got %q (%q)", colsOn[1].Title, colsOn[1].Field)
+	}
+
+	vOn := m.View()
+	if !strings.Contains(m.viewTableHeader(), "Time") {
+		t.Errorf("Time column header should be present when timestamp is ON")
+	}
+	if !strings.Contains(vOn, "Uptime (s)") {
+		t.Errorf("Uptime (s) column header should still be present when timestamp is ON")
+	}
+	if !strings.Contains(vOn, rec.Fields["_ts"]) {
+		t.Errorf("expected view to render arrival timestamp %q", rec.Fields["_ts"])
+	}
+	if !strings.Contains(vOn, "5.182") {
+		t.Errorf("expected view to render uptime 5.182 alongside arrival timestamp")
+	}
+
+	// 3. Press 't' again to toggle timestamp OFF
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = updated.(Model)
+	if m.showTimestamp {
+		t.Fatalf("expected showTimestamp to be false after second 't'")
+	}
+	if len(m.effectiveColumns()) != 3 {
+		t.Fatalf("expected 3 columns when toggled back OFF, got %d", len(m.effectiveColumns()))
+	}
+	if !strings.Contains(m.View(), "5.182") {
+		t.Errorf("uptime should remain visible when timestamp is toggled back OFF")
+	}
 }
 
 
