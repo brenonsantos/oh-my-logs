@@ -75,3 +75,18 @@ func (b *Buffer) Clear() {
 	b.head = 0
 	b.size = 0
 }
+
+// Transform applies fn to each record in the buffer in place.
+func (b *Buffer) Transform(fn func(r Record) Record) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.size == 0 {
+		return
+	}
+	start := (b.head - b.size + b.cap) % b.cap
+	for i := 0; i < b.size; i++ {
+		idx := (start + i) % b.cap
+		b.data[idx] = fn(b.data[idx])
+	}
+}
+

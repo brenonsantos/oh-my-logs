@@ -4,25 +4,28 @@ import "github.com/charmbracelet/bubbles/key"
 
 // keyMap holds all keyboard bindings for the application.
 type keyMap struct {
-	Search      key.Binding
-	Filter      key.Binding
-	Clear       key.Binding
-	Pause       key.Binding
-	ScrollUp    key.Binding
-	ScrollDown  key.Binding
-	PageUp      key.Binding
-	PageDown    key.Binding
-	GoToBottom  key.Binding
-	GoToTop     key.Binding
-	Port        key.Binding
-	Reconnect   key.Binding
-	SaveLog     key.Binding
-	NextMatch   key.Binding
-	PrevMatch   key.Binding
-	Confirm     key.Binding
-	Cancel      key.Binding
-	Quit        key.Binding
+	Search          key.Binding
+	Filter          key.Binding
+	Clear           key.Binding
+	Pause           key.Binding
+	ScrollUp        key.Binding
+	ScrollDown      key.Binding
+	PageUp          key.Binding
+	PageDown        key.Binding
+	GoToBottom      key.Binding
+	GoToTop         key.Binding
+	Port            key.Binding
+	Reconnect       key.Binding
+	SaveLog         key.Binding
+	NextMatch       key.Binding
+	PrevMatch       key.Binding
+	Confirm         key.Binding
+	Cancel          key.Binding
+	ToggleTimestamp key.Binding
+	ProfileSwitch   key.Binding
+	Quit            key.Binding
 }
+
 
 // defaultKeyMap returns the standard key bindings.
 func defaultKeyMap() keyMap {
@@ -95,9 +98,18 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("esc"),
 			key.WithHelp("Esc", "cancel"),
 		),
+		ToggleTimestamp: key.NewBinding(
+			key.WithKeys("t"),
+			key.WithHelp("t", "toggle timestamp"),
+		),
+		ProfileSwitch: key.NewBinding(
+			key.WithKeys("P"),
+			key.WithHelp("P", "profile"),
+		),
 		Quit: key.NewBinding(
 			key.WithKeys("q", "ctrl+c"),
 			key.WithHelp("q", "quit"),
 		),
 	}
 }
+

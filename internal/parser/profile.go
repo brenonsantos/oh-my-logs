@@ -16,9 +16,43 @@ type ParserConfig struct {
 
 // ColumnConfig describes a single column as defined in a YAML profile.
 type ColumnConfig struct {
-	Field string `yaml:"field"`
-	Title string `yaml:"title"`
-	Width int    `yaml:"width"`
+	Field  string            `yaml:"field"`
+	Title  string            `yaml:"title"`
+	Width  int               `yaml:"width"`
+	Style  string            `yaml:"style"`
+	Colors map[string]string `yaml:"colors"`
+}
+
+
+// IngestTimestamp, when enabled, stamps every received record with the system
+// clock time at which the line arrived. Useful for architectures that do not
+// include a timestamp in their serial output.
+type IngestTimestamp struct {
+	Enabled bool   `yaml:"enabled"`
+	Field   string `yaml:"field"`  // field name to inject; defaults to "_ts"
+	Format  string `yaml:"format"` // Go time layout;  defaults to "15:04:05.000"
+}
+
+// TimestampField returns the field name to use, falling back to "_ts".
+func (t IngestTimestamp) TimestampField() string {
+	if t.Field == "" {
+		return "_ts"
+	}
+	return t.Field
+}
+
+// TimestampFormat returns the Go time format string, falling back to millisecond time.
+func (t IngestTimestamp) TimestampFormat() string {
+	if t.Format == "" {
+		return "15:04:05.000"
+	}
+	return t.Format
+}
+
+// IngestConfig controls what the pipeline automatically adds to every record,
+// independent of what the parser extracts from the raw line.
+type IngestConfig struct {
+	Timestamp IngestTimestamp `yaml:"timestamp"`
 }
 
 // Profile is a parsed YAML profile file. It defines how serial output from a
@@ -27,7 +61,9 @@ type Profile struct {
 	Name    string         `yaml:"name"`
 	Parser  ParserConfig   `yaml:"parser"`
 	Columns []ColumnConfig `yaml:"columns"`
+	Ingest  IngestConfig   `yaml:"ingest"`
 }
+
 
 // LoadProfile reads a YAML file at path and unmarshals it into a Profile.
 func LoadProfile(path string) (*Profile, error) {
@@ -63,10 +99,13 @@ func (p *Profile) ToColumns() []record.Column {
 	cols := make([]record.Column, len(p.Columns))
 	for i, c := range p.Columns {
 		cols[i] = record.Column{
-			Field: c.Field,
-			Title: c.Title,
-			Width: c.Width,
+			Field:  c.Field,
+			Title:  c.Title,
+			Width:  c.Width,
+			Style:  c.Style,
+			Colors: c.Colors,
 		}
 	}
 	return cols
 }
+

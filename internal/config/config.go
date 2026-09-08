@@ -80,3 +80,51 @@ func (c *AppConfig) ListProfileFiles() ([]string, error) {
 	}
 	return paths, nil
 }
+
+// FindAllProfilePaths discovers all YAML profile files across the OS config
+// directory and the current working directory's profiles/ hierarchy.
+func FindAllProfilePaths(c *AppConfig) []string {
+	seen := make(map[string]bool)
+	var paths []string
+
+	addFile := func(path string) {
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			abs = path
+		}
+		if !seen[abs] {
+			seen[abs] = true
+			paths = append(paths, path)
+		}
+	}
+
+	// 1. AppConfig profiles dir
+	if c != nil {
+		if cfgFiles, err := c.ListProfileFiles(); err == nil {
+			for _, f := range cfgFiles {
+				addFile(f)
+			}
+		}
+	}
+
+	// 2. Local profiles and subdirectories
+	localDirs := []string{"profiles", filepath.Join("profiles", "examples")}
+	for _, dir := range localDirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			if strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml") {
+				addFile(filepath.Join(dir, name))
+			}
+		}
+	}
+
+	return paths
+}
+
