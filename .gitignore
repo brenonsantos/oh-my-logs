@@ -34,3 +34,12 @@ go.work.sum
 # Local / proprietary profiles and logs
 *.local.yaml
 profiles/local/
+*.log
+tmp/
+
+# Built binaries
+/oml
+/oml.exe
+
+# macOS
+.DS_Store
