@@ -3,23 +3,10 @@
 > **Release v1.0.0 — Joseense**
 > A cross-platform terminal UI for monitoring, filtering, searching, and recording serial output from embedded systems.
 
-```
-┌ Oh My Logs ──────────────────────────────────────────────────────────────────┐
-│  Port: /dev/ttyACM0   Baud: 115200   ● Connected   Profile: Example1        │
-├──────────────────────────────────────────────────────────────────────────────┤
-│  1: All (1248)  [2: Errors (4)]  3: CAN (312)   Tab: cycle · ^T: new · ^W: close │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Time           Level    Module    Message                                     │
-│ 15:42:31.102   INFO     SYS       System initialized                         │
-│ 15:42:31.254   INFO     CAN       CAN initialized                            │
-│ 15:42:32.103   WARN     ADC       Channel 3 reading high                     │
-│ 15:42:33.876   ERROR    PDM       Overcurrent detected                       │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ tab [2/3: Errors]  │  1248 records  │  4 shown  │  filter: level:ERROR  │  FOLLOW │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Ctrl+F search   f filter   Tab tab   ^T new tab   Space pause   ? help   q quit  │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
+<img width="926" height="676" alt="Screenshot 2026-09-08 at 18 10 32" src="https://github.com/user-attachments/assets/beaa2cf3-4b70-4240-a166-a40532f9edb1" />
+<img width="926" height="676" alt="Screenshot 2026-09-08 at 18 10 23" src="https://github.com/user-attachments/assets/3de5dc14-fcd1-4407-93f6-94f6884aa519" />
+<img width="926" height="676" alt="Screenshot 2026-09-08 at 18 09 46" src="https://github.com/user-attachments/assets/06956e71-8f40-4830-9ebc-0043e9a4f227" />
+
 
 ---
 
