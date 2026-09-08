@@ -118,6 +118,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.profileCursor > 0 {
 					m.profileCursor--
 				}
+			case modeHelp:
+				// ignore scrolling while help modal is active
 			default:
 				m.follow = false
 				m.scrollOffset -= 3
@@ -141,6 +143,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.profileCursor < len(m.profileList)-1 {
 					m.profileCursor++
 				}
+			case modeHelp:
+				// ignore scrolling while help modal is active
 			default:
 				m.scrollOffset += 3
 				if m.scrollOffset >= len(m.visible)-m.tableHeight {
@@ -171,6 +175,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handlePortPickerKey(msg)
 	case modeProfilePicker:
 		return m.handleProfilePickerKey(msg)
+	case modeHelp:
+		return m.handleHelpKey(msg)
 	default:
 		return m.handleNormalKey(msg)
 	}
@@ -320,6 +326,9 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case keyMatches(msg, m.keys.Help):
+		m.mode = modeHelp
+		return m, nil
 
 	case keyMatches(msg, m.keys.NextMatch):
 		m.nextSearchMatch()
@@ -551,6 +560,20 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	return m, nil
 }
+
+// handleHelpKey handles input while the help modal is displayed.
+func (m Model) handleHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case keyMatches(msg, m.keys.Help),
+		keyMatches(msg, m.keys.Cancel),
+		keyMatches(msg, m.keys.Confirm),
+		msg.String() == "q":
+		m.mode = modeNormal
+		return m, nil
+	}
+	return m, nil
+}
+
 
 
 // connectCmd opens a new SerialSource asynchronously and returns a
