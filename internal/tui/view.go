@@ -31,6 +31,8 @@ func (m Model) View() string {
 		sb.WriteString(m.viewProfilePickerModal())
 	} else if m.mode == modeHelp {
 		sb.WriteString(m.viewHelpModal())
+	} else if len(m.visible) == 0 {
+		sb.WriteString(m.viewEmptyState())
 	} else {
 		// Table Header
 		sb.WriteString(m.viewTableHeader())
@@ -169,6 +171,70 @@ func (m Model) viewTable() string {
 
 	return strings.Join(lines, "\n")
 }
+
+// viewEmptyState renders a centered, context-aware empty state message.
+func (m Model) viewEmptyState() string {
+	var title string
+	var subtitle string
+
+	switch {
+	case m.connState != ConnConnected:
+		title = theme.Secondary.Bold(true).Render("No serial device connected")
+		subtitle = theme.Muted.Render("Press ") + theme.KeyName.Render("p") +
+			theme.Muted.Render(" to select a port   ·   Press ") +
+			theme.KeyName.Render("?") + theme.Muted.Render(" for shortcuts")
+
+	case m.buffer.Len() == 0:
+		title = theme.Accent.Render("Waiting for serial data…")
+		subtitle = theme.Muted.Render("Press ") + theme.KeyName.Render("?") +
+			theme.Muted.Render(" for shortcuts")
+
+	default:
+		title = theme.Secondary.Bold(true).Render("No logs match current filter")
+		subtitle = theme.Muted.Render("Press ") + theme.KeyName.Render("f") +
+			theme.Muted.Render(" to edit filter   ·   Press ") +
+			theme.KeyName.Render("?") + theme.Muted.Render(" for shortcuts")
+	}
+
+	contentLines := []string{
+		title,
+		"",
+		subtitle,
+	}
+
+	tableWidth := m.tableWidth()
+	totalHeight := m.tableHeight + 1 // replaces table header (1 line) + table rows (tableHeight lines)
+	topPad := (totalHeight - len(contentLines)) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+
+	var lines []string
+	for i := 0; i < topPad; i++ {
+		lines = append(lines, theme.RowNormal.Width(tableWidth).Render(""))
+	}
+
+	for _, cl := range contentLines {
+		if cl == "" {
+			lines = append(lines, theme.RowNormal.Width(tableWidth).Render(""))
+			continue
+		}
+		w := lipgloss.Width(cl)
+		leftPad := (tableWidth - w) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		padded := strings.Repeat(" ", leftPad) + cl
+		lines = append(lines, theme.RowNormal.Width(tableWidth).Render(padded))
+	}
+
+	for len(lines) < totalHeight {
+		lines = append(lines, theme.RowNormal.Width(tableWidth).Render(""))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
 
 // viewStatusBar renders statistics, active filter/search info, and message.
 func (m Model) viewStatusBar() string {
