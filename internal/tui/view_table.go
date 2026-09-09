@@ -58,7 +58,7 @@ func (m Model) viewTable() string {
 			hasBg = true
 			rowBg = colorSelected
 			if isBookmarked {
-				prefix = "★▶"
+				prefix = "▶★"
 			} else {
 				prefix = "▶ "
 			}
@@ -67,7 +67,7 @@ func (m Model) viewTable() string {
 			hasBg = true
 			rowBg = colorSelected
 			if isBookmarked {
-				prefix = "★▌"
+				prefix = "▌★"
 			} else {
 				prefix = "▌ "
 			}
@@ -76,7 +76,7 @@ func (m Model) viewTable() string {
 			hasBg = true
 			rowBg = colorSelected
 			if isBookmarked {
-				prefix = "★▶"
+				prefix = "▶★"
 			} else {
 				prefix = "▶ "
 			}
