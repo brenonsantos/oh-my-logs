@@ -12,7 +12,7 @@ func (m Model) viewTableHeader() string {
 	renderedHeaders := m.renderRow(func(col record.Column, w int) string {
 		return theme.Header.Render(padOrTrunc(col.Title, w))
 	})
-	return "  " + renderedHeaders
+	return "   " + renderedHeaders
 }
 
 // viewTable renders the scrollable table body with search match and focus highlights.
@@ -50,50 +50,54 @@ func (m Model) viewTable() string {
 
 		var rowBg lipgloss.TerminalColor
 		hasBg := false
-		prefix := "  "
-		var prefixStyle lipgloss.Style
+		var renderedPrefix string
 
 		switch {
 		case isFocused:
 			hasBg = true
 			rowBg = colorSelected
+			cStyle := lipgloss.NewStyle().Background(rowBg).Foreground(colorYellow).Bold(true)
 			if isBookmarked {
-				prefix = "▶★"
+				bStyle := lipgloss.NewStyle().Background(rowBg).Foreground(colorYellow).Bold(true)
+				spStyle := lipgloss.NewStyle().Background(rowBg)
+				renderedPrefix = cStyle.Render("▶") + bStyle.Render("★") + spStyle.Render(" ")
 			} else {
-				prefix = "▶ "
+				renderedPrefix = cStyle.Render("▶  ")
 			}
-			prefixStyle = lipgloss.NewStyle().Background(rowBg).Foreground(colorYellow).Bold(true)
 		case isMultiSelected:
 			hasBg = true
 			rowBg = colorSelected
+			cStyle := lipgloss.NewStyle().Background(rowBg).Foreground(colorAccent).Bold(true)
 			if isBookmarked {
-				prefix = "▌★"
+				bStyle := lipgloss.NewStyle().Background(rowBg).Foreground(colorYellow).Bold(true)
+				spStyle := lipgloss.NewStyle().Background(rowBg)
+				renderedPrefix = cStyle.Render("▌") + bStyle.Render("★") + spStyle.Render(" ")
 			} else {
-				prefix = "▌ "
+				renderedPrefix = cStyle.Render("▌  ")
 			}
-			prefixStyle = lipgloss.NewStyle().Background(rowBg).Foreground(colorAccent).Bold(true)
 		case isSelectedRow:
 			hasBg = true
 			rowBg = colorSelected
+			cStyle := lipgloss.NewStyle().Background(rowBg).Foreground(colorAccent).Bold(true)
 			if isBookmarked {
-				prefix = "▶★"
+				bStyle := lipgloss.NewStyle().Background(rowBg).Foreground(colorYellow).Bold(true)
+				spStyle := lipgloss.NewStyle().Background(rowBg)
+				renderedPrefix = cStyle.Render("▶") + bStyle.Render("★") + spStyle.Render(" ")
 			} else {
-				prefix = "▶ "
+				renderedPrefix = cStyle.Render("▶  ")
 			}
-			prefixStyle = lipgloss.NewStyle().Background(rowBg).Foreground(colorAccent).Bold(true)
 		case isBookmarked:
 			hasBg = true
 			rowBg = colorBookmarkBg
-			prefix = "★ "
-			prefixStyle = lipgloss.NewStyle().Background(rowBg).Foreground(colorYellow).Bold(true)
+			bStyle := lipgloss.NewStyle().Background(rowBg).Foreground(colorYellow).Bold(true)
+			spStyle := lipgloss.NewStyle().Background(rowBg)
+			renderedPrefix = spStyle.Render(" ") + bStyle.Render("★") + spStyle.Render(" ")
 		case isMatch:
 			hasBg = true
 			rowBg = colorSearchBg
-			prefix = "  "
-			prefixStyle = lipgloss.NewStyle().Background(rowBg)
+			renderedPrefix = lipgloss.NewStyle().Background(rowBg).Render("   ")
 		default:
-			prefix = "  "
-			prefixStyle = lipgloss.NewStyle()
+			renderedPrefix = "   "
 		}
 
 		var cellParts []string
@@ -125,7 +129,7 @@ func (m Model) viewTable() string {
 		}
 
 		rowBody := strings.Join(cellParts, sep)
-		fullRow := prefixStyle.Render(prefix) + rowBody
+		fullRow := renderedPrefix + rowBody
 
 		curW := lipgloss.Width(fullRow)
 		if curW < tableWidth {
@@ -187,7 +191,7 @@ func (m Model) computeColWidths(cols []record.Column) []int {
 	tableW := m.tableWidth()
 	widths := make([]int, len(cols))
 	flexIdx := -1
-	used := 2 // prefix "  ", "▶ ", or "▌ " takes 2 chars
+	used := 3 // prefix takes 3 chars: cursor (1) + bookmark (1) + gap (1)
 
 	// Each gap between columns takes 2 spaces: "  "
 	if len(cols) > 1 {
