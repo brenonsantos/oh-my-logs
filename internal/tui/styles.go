@@ -25,6 +25,8 @@ var (
 	colorGreen  = lipgloss.Color("#4ade80") // success / connected
 	colorYellow = lipgloss.Color("#facc15") // warning / search highlight
 	colorRed    = lipgloss.Color("#f87171") // coral red / error
+	colorTxBg   = lipgloss.Color("#2a1215") // subtle dark red / maple row background for TX commands
+	colorMaple  = lipgloss.Color("#ea580c") // warm vibrant maple red-orange for TX badge and text
 )
 
 // Theme encapsulates all semantic visual styles.
@@ -250,6 +252,8 @@ func (t Theme) LevelStyle(val string) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(colorCyan)
 	case strings.Contains(u, "DEBUG") || strings.Contains(u, "DBG") || strings.Contains(u, "TRACE"):
 		return t.Muted
+	case u == "TX" || u == "OUT" || strings.HasPrefix(u, "TX"):
+		return lipgloss.NewStyle().Foreground(colorMaple).Bold(true)
 	default:
 		return t.Content
 	}
@@ -257,6 +261,8 @@ func (t Theme) LevelStyle(val string) lipgloss.Style {
 
 func (t Theme) colorByName(name string) lipgloss.Style {
 	switch strings.ToLower(name) {
+	case "maple", "orange", "tx":
+		return lipgloss.NewStyle().Foreground(colorMaple)
 	case "red", "error":
 		return t.Error
 	case "yellow", "warn", "warning":

@@ -227,9 +227,10 @@ type dummySource struct {
 	errors chan error
 }
 
-func (d *dummySource) Lines() <-chan string { return d.lines }
-func (d *dummySource) Errors() <-chan error { return d.errors }
-func (d *dummySource) Stop()                 {}
+func (d *dummySource) Lines() <-chan string        { return d.lines }
+func (d *dummySource) Errors() <-chan error        { return d.errors }
+func (d *dummySource) Stop()                        {}
+func (d *dummySource) Write(p []byte) (int, error) { return len(p), nil }
 
 func TestAutoReconnectLifecycle(t *testing.T) {
 	m := newTestModel()

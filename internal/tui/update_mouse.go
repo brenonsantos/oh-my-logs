@@ -65,7 +65,7 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeNormal
 		return m, nil
 	}
-	if m.mode == modePortPicker || m.mode == modeProfilePicker || m.mode == modeFilterPresets || m.mode == modeSavePresetPrompt || m.mode == modeGame {
+	if m.mode == modePortPicker || m.mode == modeProfilePicker || m.mode == modeFilterPresets || m.mode == modeSavePresetPrompt || m.mode == modeGame || m.mode == modeTXInput {
 		return m, nil
 	}
 

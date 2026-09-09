@@ -149,6 +149,9 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		// Re-parse all existing records in the buffer using the new parser!
 		m.buffer.Transform(func(old record.Record) record.Record {
+			if old.Fields["level"] == "TX" {
+				return old
+			}
 			newRec, _ := m.parser.Parse(old.Raw)
 			newRec.ID = old.ID
 			if newRec.Fields == nil {

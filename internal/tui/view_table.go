@@ -97,6 +97,10 @@ func (m Model) viewTable() string {
 			hasBg = true
 			rowBg = colorSearchBg
 			renderedPrefix = lipgloss.NewStyle().Background(rowBg).Render("   ")
+		case r.Fields["level"] == "TX":
+			hasBg = true
+			rowBg = colorTxBg
+			renderedPrefix = lipgloss.NewStyle().Background(rowBg).Render("   ")
 		default:
 			renderedPrefix = "   "
 		}
@@ -111,6 +115,9 @@ func (m Model) viewTable() string {
 			cellText := padOrTrunc(val, w)
 
 			cellStyle := theme.ResolveCellStyle(col, val)
+			if r.Fields["level"] == "TX" && (col.Field == "message" || col.Style == "primary" || col.Field == "raw") {
+				cellStyle = cellStyle.Foreground(colorMaple)
+			}
 			if hasBg {
 				cellStyle = cellStyle.Background(rowBg)
 			}
@@ -434,6 +441,10 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 			hasBg = true
 			rowBg = colorSearchBg
 			renderedPrefix = lipgloss.NewStyle().Background(rowBg).Render("   ")
+		case r.Fields["level"] == "TX":
+			hasBg = true
+			rowBg = colorTxBg
+			renderedPrefix = lipgloss.NewStyle().Background(rowBg).Render("   ")
 		default:
 			renderedPrefix = "   "
 		}
@@ -448,6 +459,9 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 			cellText := padOrTrunc(val, w)
 
 			cellStyle := theme.ResolveCellStyle(col, val)
+			if r.Fields["level"] == "TX" && (col.Field == "message" || col.Style == "primary" || col.Field == "raw") {
+				cellStyle = cellStyle.Foreground(colorMaple)
+			}
 			if hasBg {
 				cellStyle = cellStyle.Background(rowBg)
 			}

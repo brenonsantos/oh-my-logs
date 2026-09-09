@@ -42,6 +42,7 @@ type keyMap struct {
 	SelectDown      key.Binding
 	Help            key.Binding
 	Game            key.Binding
+	SendTX          key.Binding
 	Quit            key.Binding
 }
 
@@ -201,6 +202,10 @@ func defaultKeyMap() keyMap {
 		Game: key.NewBinding(
 			key.WithKeys("ctrl+g"),
 			key.WithHelp("^G", "mini-game"),
+		),
+		SendTX: key.NewBinding(
+			key.WithKeys("i", ":"),
+			key.WithHelp("i", "send"),
 		),
 		Quit: key.NewBinding(
 			key.WithKeys("q", "ctrl+c"),
