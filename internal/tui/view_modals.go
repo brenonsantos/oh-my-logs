@@ -130,6 +130,222 @@ func (m Model) viewProfilePickerModal() string {
 	return centerBox(m.width, m.tableHeight+2, modalBox)
 }
 
+// viewFilterPresetsModal renders the centered rounded modal for Filter Presets.
+func (m Model) viewFilterPresetsModal() string {
+	presets := m.filtersCfg.Presets
+
+	// Calculate maximum lengths for dynamic sizing
+	maxNameW := 0
+	maxFilterW := 0
+	for _, p := range presets {
+		if len(p.Name) > maxNameW {
+			maxNameW = len(p.Name)
+		}
+		if len(p.Filter) > maxFilterW {
+			maxFilterW = len(p.Filter)
+		}
+	}
+
+	nameW := maxNameW
+	if nameW < 20 {
+		nameW = 20
+	}
+	if nameW > 28 {
+		nameW = 28
+	}
+
+	// Calculate desired inner content width
+	footerFull := "Enter apply · ↑/↓ navigate · s save active · d delete · Esc cancel"
+	footerW := lipgloss.Width(footerFull) // 66
+
+	curFilter := ""
+	if cur := m.currentTab(); cur != nil && cur.FilterRaw != "" {
+		curFilter = cur.FilterRaw
+	}
+
+	// Content needs: prefix(4) + name(nameW) + sep(2) + filter(maxFilterW) + breathing margin(2)
+	rowNeededW := 4 + nameW + 2 + maxFilterW + 2
+	desiredInnerW := footerW
+	if rowNeededW > desiredInnerW {
+		desiredInnerW = rowNeededW
+	}
+	if curFilter != "" {
+		actW := 15 + len(curFilter) + 2
+		if actW > 90 {
+			actW = 90
+		}
+		if actW > desiredInnerW {
+			desiredInnerW = actW
+		}
+	}
+
+	// ModalBox padding(2+2=4) and rounded border(1+1=2) require 6 columns overhead.
+	modalWidth := desiredInnerW + 6
+	if modalWidth < 74 {
+		modalWidth = 74
+	}
+
+	// Clamp to terminal boundaries
+	maxModalW := m.width - 6
+	if maxModalW < 30 {
+		maxModalW = m.width
+	}
+	if modalWidth > maxModalW {
+		modalWidth = maxModalW
+	}
+	if modalWidth < 40 && maxModalW >= 40 {
+		modalWidth = 40
+	}
+
+	// The actual usable inner width inside ModalBox (accounting for borders and horizontal padding)
+	innerW := modalWidth - 6
+	if innerW < 20 {
+		innerW = 20
+	}
+
+	// If inner width is constrained on narrow screens, adjust name column
+	if nameW > innerW/2 {
+		nameW = innerW / 2
+	}
+	if nameW < 12 && innerW >= 24 {
+		nameW = 12
+	}
+
+	var sb strings.Builder
+	sb.WriteString(theme.ModalTitle.Render("Filter Presets"))
+	sb.WriteString("\n\n")
+
+	if len(presets) == 0 {
+		sb.WriteString(theme.Muted.Render("  (no presets available)"))
+		sb.WriteString("\n")
+	} else {
+		maxVisible := 6
+		startIdx := 0
+		if m.presetCursor >= maxVisible {
+			startIdx = m.presetCursor - maxVisible + 1
+		}
+		endIdx := startIdx + maxVisible
+		if endIdx > len(presets) {
+			endIdx = len(presets)
+		}
+
+		availFilterW := innerW - 4 - nameW - 2
+		if availFilterW < 0 {
+			availFilterW = 0
+		}
+
+		for i := startIdx; i < endIdx; i++ {
+			p := presets[i]
+			nameStr := padOrTrunc(p.Name, nameW)
+			filterStr := p.Filter
+			if availFilterW > 3 && len(filterStr) > availFilterW {
+				filterStr = filterStr[:availFilterW-3] + "..."
+			} else if len(filterStr) > availFilterW {
+				filterStr = filterStr[:availFilterW]
+			}
+
+			if i == m.presetCursor {
+				line := fmt.Sprintf("  › %s  %s", theme.ModalSelected.Render(nameStr), theme.Accent.Render(filterStr))
+				sb.WriteString(line)
+			} else {
+				line := fmt.Sprintf("    %s  %s", theme.ModalItem.Render(nameStr), theme.Muted.Render(filterStr))
+				sb.WriteString(line)
+			}
+			sb.WriteString("\n")
+		}
+		if len(presets) > maxVisible {
+			sb.WriteString(theme.Muted.Render(fmt.Sprintf("    ... (%d more)", len(presets)-endIdx)))
+			sb.WriteString("\n")
+		}
+	}
+
+	sb.WriteString("\n")
+	if curFilter != "" {
+		availActiveW := innerW - 15
+		dispFilter := curFilter
+		if availActiveW > 3 && len(dispFilter) > availActiveW {
+			dispFilter = dispFilter[:availActiveW-3] + "..."
+		} else if len(dispFilter) > availActiveW {
+			dispFilter = dispFilter[:max(0, availActiveW)]
+		}
+		sb.WriteString(theme.Muted.Render("Active filter: ") + theme.Accent.Render(dispFilter) + "\n\n")
+	}
+
+	footer := footerFull
+	if innerW < lipgloss.Width(footer) {
+		footer = "Enter apply · ↑/↓ nav · s save · d del · Esc exit"
+		if innerW < lipgloss.Width(footer) {
+			footer = "Enter apply · Esc exit"
+		}
+	}
+	sb.WriteString(theme.ModalFooter.Render(footer))
+
+	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
+	return centerBox(m.width, m.tableHeight+2, modalBox)
+}
+
+// viewSavePresetModal renders the centered prompt to save the active filter as a new preset.
+func (m Model) viewSavePresetModal() string {
+	cur := m.currentTab()
+	curFilter := ""
+	if cur != nil {
+		curFilter = cur.FilterRaw
+	}
+
+	reqW := len("Filter: ") + len(curFilter) + 8
+	modalWidth := 56
+	if reqW > modalWidth {
+		modalWidth = reqW
+	}
+	if modalWidth > 90 {
+		modalWidth = 90
+	}
+	maxModalW := m.width - 6
+	if maxModalW < 30 {
+		maxModalW = m.width
+	}
+	if modalWidth > maxModalW {
+		modalWidth = maxModalW
+	}
+	if modalWidth < 46 && maxModalW >= 46 {
+		modalWidth = 46
+	}
+
+	innerW := modalWidth - 6
+	if innerW < 20 {
+		innerW = 20
+	}
+
+	var sb strings.Builder
+	sb.WriteString(theme.ModalTitle.Render("Save Filter Preset"))
+	sb.WriteString("\n\n")
+
+	availFilterW := innerW - 8
+	dispFilter := curFilter
+	if availFilterW > 3 && len(dispFilter) > availFilterW {
+		dispFilter = dispFilter[:availFilterW-3] + "..."
+	} else if len(dispFilter) > availFilterW {
+		dispFilter = dispFilter[:max(0, availFilterW)]
+	}
+	sb.WriteString(theme.Muted.Render("Filter: ") + theme.Accent.Render(dispFilter))
+	sb.WriteString("\n\n")
+
+	prompt := theme.Secondary.Render("Preset Name: ")
+	availInputW := innerW - 17
+	dispInput := m.savePresetNameInput
+	if availInputW > 3 && len(dispInput) > availInputW {
+		dispInput = dispInput[len(dispInput)-availInputW:]
+	}
+	input := theme.ModalSelected.Render(dispInput + "█")
+	sb.WriteString("  " + prompt + input)
+	sb.WriteString("\n\n")
+
+	sb.WriteString(theme.ModalFooter.Render("Enter save · Esc cancel"))
+
+	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
+	return centerBox(m.width, m.tableHeight+2, modalBox)
+}
+
 // viewGameModal renders the active mini-game in a centered floating container
 // sized according to the game's requested dimensions.
 func (m Model) viewGameModal() string {
@@ -175,20 +391,18 @@ func (m Model) viewGameModal() string {
 
 // viewHelpModal renders a clean floating modal with categorized keyboard shortcuts.
 func (m Model) viewHelpModal() string {
-	modalWidth := 74
-	if m.width > 90 {
-		modalWidth = 76
-	}
+	colWidth := 40
+	// 2 columns of colWidth + 3 for separator " │ " + 6 for borders and padding
+	modalWidth := (colWidth * 2) + 9 // 89
 	if modalWidth > m.width-4 {
 		modalWidth = m.width - 4
+		colWidth = (modalWidth - 9) / 2
+	}
+	if colWidth < 16 {
+		colWidth = 16
 	}
 	if modalWidth < 40 {
 		modalWidth = 40
-	}
-
-	colWidth := (modalWidth - 9) / 2
-	if colWidth < 16 {
-		colWidth = 16
 	}
 
 	renderItem := func(k, desc string, maxW int) string {
@@ -244,7 +458,8 @@ func (m Model) viewHelpModal() string {
 	right := []string{
 		renderHeader("SEARCH, FILTER & PINS", colWidth),
 		renderItem("Ctrl+F", "Search logs", colWidth),
-		renderItem("f", "Filter active tab", colWidth),
+		renderItem("f", "Filter (↑/↓ hist)", colWidth),
+		renderItem("F, ^P", "Filter presets", colWidth),
 		renderItem("b, m", "Pin / unpin row", colWidth),
 		renderItem("B", "Toggle pinned only", colWidth),
 		renderItem("Ctrl+V", "Paste in input", colWidth),
@@ -258,7 +473,7 @@ func (m Model) viewHelpModal() string {
 		renderItem("c", "Clear buffer", colWidth),
 		renderItem("t", "Toggle timestamp", colWidth),
 		renderItem("s", "Save log to file", colWidth),
-		renderItem("p, P, r", "Port / Profile / Reconn", colWidth),
+		renderItem("p, P, r", "Port / Profile / Reconnect", colWidth),
 		renderItem("?, q", "Toggle help / Quit", colWidth),
 	}
 
@@ -293,7 +508,15 @@ func (m Model) viewHelpModal() string {
 	}
 
 	sb.WriteByte('\n')
-	sb.WriteString(theme.ModalFooter.Render("Press ? or Esc to close · Hold Opt (Mac) / Shift (Linux) for native select"))
+	innerW := modalWidth - 6
+	footerText := "Press ? or Esc to close · Hold Opt (Mac) / Shift (Linux) for native select"
+	if innerW < lipgloss.Width(footerText) {
+		footerText = "Press ? or Esc to close · Opt/Shift for native select"
+		if innerW < lipgloss.Width(footerText) {
+			footerText = "Press ? or Esc to close"
+		}
+	}
+	sb.WriteString(theme.ModalFooter.Render(footerText))
 
 	modalBox := theme.ModalBox.Padding(0, 2).Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+2, modalBox)

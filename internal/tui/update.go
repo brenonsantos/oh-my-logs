@@ -258,7 +258,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.profileCursor > 0 {
 					m.profileCursor--
 				}
-			case modeHelp, modeGame:
+			case modeFilterPresets:
+				if m.presetCursor > 0 {
+					m.presetCursor--
+				}
+			case modeHelp, modeGame, modeSavePresetPrompt:
 				// ignore scrolling while modal or game is active
 			default:
 				m.follow = false
@@ -280,7 +284,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.profileCursor < len(m.profileList)-1 {
 					m.profileCursor++
 				}
-			case modeHelp, modeGame:
+			case modeFilterPresets:
+				if m.filtersCfg != nil && m.presetCursor < len(m.filtersCfg.Presets)-1 {
+					m.presetCursor++
+				}
+			case modeHelp, modeGame, modeSavePresetPrompt:
 				// ignore scrolling while modal or game is active
 			default:
 				m.scrollOffset += 3

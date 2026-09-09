@@ -22,6 +22,8 @@ const (
 	modeFilter
 	modePortPicker
 	modeProfilePicker
+	modeFilterPresets
+	modeSavePresetPrompt
 	modeHelp
 	modeGame
 )
@@ -140,6 +142,14 @@ type Model struct {
 	profileCursor int
 	appConfig     *config.AppConfig
 	settings      *config.Settings
+
+	// Filter history & presets
+	filterHistory       []string
+	filterHistoryCursor int
+	filterDraft         string
+	filtersCfg          *config.FiltersConfig
+	presetCursor        int
+	savePresetNameInput string
 
 	// Easter egg mini-game
 	activeGame     game.MiniGame
@@ -262,14 +272,17 @@ func New(
 		appConfig:     appCfg,
 		settings:      savedSettings,
 		baudList:      bauds,
-		baudCursor:    baudIdx,
-		bookmarks:     make(map[uint64]struct{}),
-		splitMode:     SplitNone,
-		splitLeftTab:  0,
-		splitRightTab: 1,
-		activePane:    0,
-		syncScroll:    true,
+		baudCursor:          baudIdx,
+		bookmarks:           make(map[uint64]struct{}),
+		filterHistoryCursor: -1,
+		splitMode:           SplitNone,
+		splitLeftTab:        0,
+		splitRightTab:       1,
+		activePane:          0,
+		syncScroll:          true,
 	}
+
+	m.loadFilters()
 
 	// Start with an empty permissive filter.
 	initFilter, _ := filter.New("")
@@ -593,6 +606,26 @@ func (m Model) saveSettings() {
 	}
 	s.ShowTimestamp = m.showTimestamp
 	_ = m.appConfig.SaveSettings(s)
+}
+
+// loadFilters loads filter presets and history from config, or populates defaults.
+func (m *Model) loadFilters() {
+	if m.filtersCfg != nil {
+		return
+	}
+	if m.appConfig != nil {
+		if fc, err := m.appConfig.LoadFilters(); err == nil && fc != nil {
+			m.filtersCfg = fc
+			if len(m.filterHistory) == 0 {
+				m.filterHistory = fc.History
+			}
+			return
+		}
+	}
+	m.filtersCfg = &config.FiltersConfig{
+		Presets: config.DefaultFilterPresets(),
+		History: []string{},
+	}
 }
 
 // Init starts the source reader goroutines or triggers auto-reconnect if disconnected.

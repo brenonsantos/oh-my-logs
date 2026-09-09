@@ -6,6 +6,7 @@ import "github.com/charmbracelet/bubbles/key"
 type keyMap struct {
 	Search          key.Binding
 	Filter          key.Binding
+	FilterPresets   key.Binding
 	Clear           key.Binding
 	Pause           key.Binding
 	ScrollUp        key.Binding
@@ -71,6 +72,10 @@ func defaultKeyMap() keyMap {
 		Filter: key.NewBinding(
 			key.WithKeys("f"),
 			key.WithHelp("f", "filter"),
+		),
+		FilterPresets: key.NewBinding(
+			key.WithKeys("F", "ctrl+p"),
+			key.WithHelp("F", "filter presets"),
 		),
 		Clear: key.NewBinding(
 			key.WithKeys("c"),

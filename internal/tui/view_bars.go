@@ -271,8 +271,14 @@ func (m Model) viewKeyBar() string {
 	case modeFilter:
 		prompt := theme.Primary.Render("Filter: ")
 		text := theme.Content.Render(m.filterInput + "█")
-		help := theme.Muted.Render("  [Enter: apply · ^V: paste · Esc: cancel · e.g. level:ERROR,WARN -heartbeat]")
+		help := theme.Muted.Render("  [Enter: apply · ↑/↓: history · ^P: presets · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
+
+	case modeFilterPresets:
+		return "  " + theme.Muted.Render("Filter Presets: [Enter: apply · ↑/↓: navigate · s: save active · d: delete · Esc: close]")
+
+	case modeSavePresetPrompt:
+		return "  " + theme.Muted.Render("Save Filter Preset: [Enter: save · Esc: cancel]")
 
 	case modeHelp:
 		return "  " + theme.Muted.Render("Press ") + theme.KeyName.Render("?") + theme.Muted.Render(", ") + theme.KeyName.Render("Esc") + theme.Muted.Render(", or ") + theme.KeyName.Render("q") + theme.Muted.Render(" to close help")
@@ -281,6 +287,7 @@ func (m Model) viewKeyBar() string {
 		hints := []string{
 			theme.KeyName.Render("^F") + " " + theme.Muted.Render("search"),
 			theme.KeyName.Render("f") + " " + theme.Muted.Render("filter"),
+			theme.KeyName.Render("F") + " " + theme.Muted.Render("presets"),
 			theme.KeyName.Render("b") + " " + theme.Muted.Render("pin"),
 			theme.KeyName.Render("y") + " " + theme.Muted.Render("copy"),
 		}
