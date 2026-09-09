@@ -3,8 +3,10 @@ package parser
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/record"
+	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	"gopkg.in/yaml.v3"
 )
 
@@ -55,6 +57,14 @@ type IngestConfig struct {
 	Timestamp IngestTimestamp `yaml:"timestamp"`
 }
 
+// TimingConfig defines profile-level latency thresholds and moving-average parameters.
+type TimingConfig struct {
+	WarnThreshold  string  `yaml:"warn_threshold"`  // e.g. "50ms", "100ms"
+	AlertThreshold string  `yaml:"alert_threshold"` // e.g. "200ms", "1s"
+	WarnRatio      float64 `yaml:"warn_ratio"`      // dynamic ratio override (e.g. 3.0)
+	AlertRatio     float64 `yaml:"alert_ratio"`     // dynamic ratio override (e.g. 6.0)
+}
+
 // Profile is a parsed YAML profile file. It defines how serial output from a
 // particular architecture is parsed and displayed.
 type Profile struct {
@@ -62,8 +72,43 @@ type Profile struct {
 	Parser  ParserConfig   `yaml:"parser"`
 	Columns []ColumnConfig `yaml:"columns"`
 	Ingest  IngestConfig   `yaml:"ingest"`
+	Timing  TimingConfig   `yaml:"timing"`
 }
 
+// TimingParameters converts TimingConfig to timing.Config, parsing duration strings.
+func (p *Profile) TimingParameters() timing.Config {
+	cfg := timing.DefaultConfig()
+	if p == nil {
+		return cfg
+	}
+	if p.Timing.WarnRatio > 0 {
+		cfg.WarnRatio = p.Timing.WarnRatio
+	}
+	if p.Timing.AlertRatio > 0 {
+		cfg.AlertRatio = p.Timing.AlertRatio
+	}
+	if p.Timing.WarnThreshold != "" {
+		if d, err := time.ParseDuration(p.Timing.WarnThreshold); err == nil {
+			cfg.WarnThreshold = d
+		}
+	}
+	if p.Timing.AlertThreshold != "" {
+		if d, err := time.ParseDuration(p.Timing.AlertThreshold); err == nil {
+			cfg.AlertThreshold = d
+		}
+	}
+	return cfg
+}
+
+
+// ParseProfile unmarshals raw YAML bytes into a Profile.
+func ParseProfile(data []byte) (*Profile, error) {
+	var p Profile
+	if err := yaml.Unmarshal(data, &p); err != nil {
+		return nil, fmt.Errorf("profile: invalid YAML: %w", err)
+	}
+	return &p, nil
+}
 
 // LoadProfile reads a YAML file at path and unmarshals it into a Profile.
 func LoadProfile(path string) (*Profile, error) {
@@ -71,11 +116,11 @@ func LoadProfile(path string) (*Profile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("profile: cannot read %q: %w", path, err)
 	}
-	var p Profile
-	if err := yaml.Unmarshal(data, &p); err != nil {
+	p, err := ParseProfile(data)
+	if err != nil {
 		return nil, fmt.Errorf("profile: invalid YAML in %q: %w", path, err)
 	}
-	return &p, nil
+	return p, nil
 }
 
 // BuildParser instantiates the correct Parser implementation based on the

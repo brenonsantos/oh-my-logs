@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/brenoniehues/oh-my-logs/internal/record"
+	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -256,6 +257,20 @@ func (t Theme) LevelStyle(val string) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(colorMaple).Bold(true)
 	default:
 		return t.Content
+	}
+}
+
+// DeltaStyle returns the visual style for an inter-log latency interval.
+func (t Theme) DeltaStyle(level timing.Level) lipgloss.Style {
+	switch level {
+	case timing.LevelBurst:
+		return lipgloss.NewStyle().Foreground(colorCyan)
+	case timing.LevelHiccup:
+		return t.Warning
+	case timing.LevelAlert:
+		return lipgloss.NewStyle().Foreground(colorMaple).Bold(true)
+	default:
+		return t.Muted
 	}
 }
 

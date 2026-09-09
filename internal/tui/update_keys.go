@@ -316,12 +316,18 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, connectCmd(m.serialCfg)
 
 	case keyMatches(msg, m.keys.ToggleTimestamp):
-		m.showTimestamp = !m.showTimestamp
+		m.tsMode = m.tsMode.Next()
+		m.showTimestamp = (m.tsMode != TSModeOff)
 		m.saveSettings()
-		if m.showTimestamp {
-			m.message = fmt.Sprintf("⏱ Timestamp ON (%s)", m.tsField)
-		} else {
-			m.message = "⏱ Timestamp OFF"
+		switch m.tsMode {
+		case TSModeClock:
+			m.message = fmt.Sprintf("⏱ Timestamp: Clock (%s)", m.tsField)
+		case TSModeDelta:
+			m.message = "⏱ Timestamp: Delta-Time (Δt)"
+		case TSModeBoth:
+			m.message = "⏱ Timestamp: Both (Clock + Δt)"
+		case TSModeOff:
+			m.message = "⏱ Timestamp: OFF"
 		}
 		return m, nil
 

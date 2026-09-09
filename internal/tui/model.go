@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
@@ -10,6 +11,7 @@ import (
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
+	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -28,6 +30,59 @@ const (
 	modeGame
 	modeTXInput
 )
+
+// TimestampMode defines whether to render arrival clock time, relative delta (Δt), or both.
+type TimestampMode int
+
+const (
+	TSModeClock TimestampMode = iota // clock arrival time (e.g. 15:04:05.000)
+	TSModeDelta                      // relative elapsed time since previous log (e.g. +14.2ms)
+	TSModeBoth                       // both clock and delta columns
+	TSModeOff                        // hidden
+)
+
+func (m TimestampMode) String() string {
+	switch m {
+	case TSModeClock:
+		return "clock"
+	case TSModeDelta:
+		return "delta"
+	case TSModeBoth:
+		return "both"
+	case TSModeOff:
+		return "off"
+	default:
+		return "clock"
+	}
+}
+
+func (m TimestampMode) Next() TimestampMode {
+	switch m {
+	case TSModeClock:
+		return TSModeDelta
+	case TSModeDelta:
+		return TSModeBoth
+	case TSModeBoth:
+		return TSModeOff
+	case TSModeOff:
+		return TSModeClock
+	default:
+		return TSModeClock
+	}
+}
+
+func ParseTimestampMode(s string) TimestampMode {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "delta", "dt":
+		return TSModeDelta
+	case "both":
+		return TSModeBoth
+	case "off", "none", "false":
+		return TSModeOff
+	default:
+		return TSModeClock
+	}
+}
 
 // ProfileItem represents an entry in the profile switcher list.
 type ProfileItem struct {
@@ -163,10 +218,13 @@ type Model struct {
 	activeGame     game.MiniGame
 	logsDuringGame int
 
-	// Timestamp display & settings (toggle visibility at runtime with 't')
-	showTimestamp bool   // whether the timestamp column is displayed in the UI
-	tsField       string // field name for the arrival timestamp (e.g. "_ts" or "time")
-	tsFormat      string // Go time layout for the timestamp
+	// Timestamp & Delta-Time (Δt) display & settings (cycle mode with 't')
+	showTimestamp  bool            // whether timestamp column is displayed (true if tsMode != TSModeOff)
+	tsMode         TimestampMode   // clock, delta, both, or off
+	tsField        string          // field name for the arrival timestamp (e.g. "_ts" or "time")
+	tsFormat       string          // Go time layout for the timestamp
+	deltaTracker   *timing.Tracker // dynamic EMA latency tracker
+	lastRecordTime time.Time       // arrival time of previous stream record
 
 	// Viewport dimensions (computed on resize)
 	tableHeight  int
@@ -272,6 +330,25 @@ func New(
 		}
 	}
 
+	tsMode := TSModeClock
+	if savedSettings != nil {
+		if savedSettings.TimestampMode != "" {
+			tsMode = ParseTimestampMode(savedSettings.TimestampMode)
+		} else if !savedSettings.ShowTimestamp {
+			tsMode = TSModeOff
+		}
+	} else if !initTS {
+		tsMode = TSModeOff
+	}
+
+	var timingCfg timing.Config
+	if profile != nil {
+		timingCfg = profile.TimingParameters()
+	} else {
+		timingCfg = timing.DefaultConfig()
+	}
+	tracker := timing.NewTracker(timingCfg)
+
 	m := Model{
 		keys:          defaultKeyMap(),
 		serialCfg:     cfg,
@@ -285,7 +362,9 @@ func New(
 		buffer:        buf,
 		follow:        true,
 		sidebarWidth:  20,
-		showTimestamp: initTS,
+		showTimestamp: tsMode != TSModeOff,
+		tsMode:        tsMode,
+		deltaTracker:  tracker,
 		tsField:       tsField,
 		tsFormat:      tsFormat,
 		appConfig:     appCfg,
@@ -626,7 +705,8 @@ func (m Model) saveSettings() {
 	} else {
 		s.Profile = ""
 	}
-	s.ShowTimestamp = m.showTimestamp
+	s.ShowTimestamp = (m.tsMode != TSModeOff)
+	s.TimestampMode = m.tsMode.String()
 	s.TXEnding = m.txEnding.String()
 	s.TXHistory = m.txHistory
 	_ = m.appConfig.SaveSettings(s)

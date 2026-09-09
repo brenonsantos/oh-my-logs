@@ -188,9 +188,16 @@ func (m Model) viewStatusBar() string {
 		followStr = theme.FollowOff.Render("PAUSED")
 	}
 
-	tsStr := theme.Muted.Render("⏱ OFF")
-	if m.showTimestamp {
-		tsStr = theme.Success.Render("⏱ ON")
+	var tsStr string
+	switch m.tsMode {
+	case TSModeClock:
+		tsStr = theme.Success.Render("⏱ CLOCK")
+	case TSModeDelta:
+		tsStr = theme.Success.Render("⏱ Δt")
+	case TSModeBoth:
+		tsStr = theme.Success.Render("⏱ BOTH")
+	default:
+		tsStr = theme.Muted.Render("⏱ OFF")
 	}
 
 	var parts []string

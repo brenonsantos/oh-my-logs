@@ -15,6 +15,7 @@ type Settings struct {
 	Baud          int      `json:"baud,omitempty"`
 	Profile       string   `json:"profile,omitempty"`
 	ShowTimestamp bool     `json:"show_timestamp"`
+	TimestampMode string   `json:"timestamp_mode,omitempty"`
 	TXEnding      string   `json:"tx_ending,omitempty"`
 	TXHistory     []string `json:"tx_history,omitempty"`
 }

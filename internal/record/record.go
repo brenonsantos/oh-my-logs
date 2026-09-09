@@ -1,12 +1,16 @@
 package record
 
+import "time"
+
 // Record is the generic, profile-agnostic data object produced by a parser.
 // Fields contains named values extracted from a raw serial line.
 // Raw preserves the original unmodified line.
 type Record struct {
-	ID     uint64
-	Fields map[string]string
-	Raw    string
+	ID        uint64
+	Fields    map[string]string
+	Raw       string
+	Timestamp time.Time
+	Delta     time.Duration
 }
 
 // NewRecord creates an empty Record with the given raw line.

@@ -3,8 +3,10 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/record"
+	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -108,6 +110,20 @@ func (m Model) viewTable() string {
 		var cellParts []string
 		for colIdx, col := range cols {
 			val := r.Fields[col.Field]
+			var rowDelta time.Duration
+			if col.Field == "_delta" || col.Style == "delta" {
+				if i > 0 && !rows[i-1].Timestamp.IsZero() && !r.Timestamp.IsZero() {
+					rowDelta = r.Timestamp.Sub(rows[i-1].Timestamp)
+					val = timing.FormatDelta(rowDelta)
+				} else if r.Delta > 0 {
+					rowDelta = r.Delta
+					val = timing.FormatDelta(rowDelta)
+				} else if r.Fields["_delta"] != "" {
+					val = r.Fields["_delta"]
+				} else {
+					val = "---"
+				}
+			}
 			w := 0
 			if colIdx < len(colWidths) {
 				w = colWidths[colIdx]
@@ -115,6 +131,13 @@ func (m Model) viewTable() string {
 			cellText := padOrTrunc(val, w)
 
 			cellStyle := theme.ResolveCellStyle(col, val)
+			if col.Field == "_delta" || col.Style == "delta" {
+				if m.deltaTracker != nil && rowDelta > 0 {
+					cellStyle = theme.DeltaStyle(m.deltaTracker.Classify(rowDelta))
+				} else {
+					cellStyle = theme.Muted
+				}
+			}
 			if r.Fields["level"] == "TX" && (col.Field == "message" || col.Style == "primary" || col.Field == "raw") {
 				cellStyle = cellStyle.Foreground(colorMaple)
 			}
@@ -452,6 +475,20 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 		var cellParts []string
 		for colIdx, col := range cols {
 			val := r.Fields[col.Field]
+			var rowDelta time.Duration
+			if col.Field == "_delta" || col.Style == "delta" {
+				if i > 0 && !paneRows[i-1].Timestamp.IsZero() && !r.Timestamp.IsZero() {
+					rowDelta = r.Timestamp.Sub(paneRows[i-1].Timestamp)
+					val = timing.FormatDelta(rowDelta)
+				} else if r.Delta > 0 {
+					rowDelta = r.Delta
+					val = timing.FormatDelta(rowDelta)
+				} else if r.Fields["_delta"] != "" {
+					val = r.Fields["_delta"]
+				} else {
+					val = "---"
+				}
+			}
 			w := 0
 			if colIdx < len(colWidths) {
 				w = colWidths[colIdx]
@@ -459,6 +496,13 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 			cellText := padOrTrunc(val, w)
 
 			cellStyle := theme.ResolveCellStyle(col, val)
+			if col.Field == "_delta" || col.Style == "delta" {
+				if m.deltaTracker != nil && rowDelta > 0 {
+					cellStyle = theme.DeltaStyle(m.deltaTracker.Classify(rowDelta))
+				} else {
+					cellStyle = theme.Muted
+				}
+			}
 			if r.Fields["level"] == "TX" && (col.Field == "message" || col.Style == "primary" || col.Field == "raw") {
 				cellStyle = cellStyle.Foreground(colorMaple)
 			}
@@ -585,40 +629,67 @@ func isTimestampCol(col record.Column, tsField string) bool {
 	if col.Field == "uptime" || strings.EqualFold(col.Style, "uptime") {
 		return false
 	}
+	if col.Field == "_delta" || col.Style == "delta" {
+		return false
+	}
 	return col.Field == tsField || col.Field == "_ts" || col.Style == "timestamp"
 }
 
-// effectiveColumns returns the columns to render, respecting timestamp visibility.
+func isDeltaCol(col record.Column) bool {
+	return col.Field == "_delta" || col.Style == "delta"
+}
+
+// effectiveColumns returns the columns to render, respecting timestamp and delta mode.
 func (m Model) effectiveColumns() []record.Column {
-	if !m.showTimestamp {
-		// Filter out any timestamp columns so they are hidden
+	if m.tsMode == TSModeOff {
 		var cols []record.Column
 		for _, col := range m.columns {
-			if !isTimestampCol(col, m.tsField) {
+			if !isTimestampCol(col, m.tsField) && !isDeltaCol(col) {
 				cols = append(cols, col)
 			}
 		}
 		return cols
 	}
 
-	// When timestamp is enabled: if already present in columns, return m.columns
+	var baseCols []record.Column
 	for _, col := range m.columns {
-		if isTimestampCol(col, m.tsField) {
-			return m.columns
+		if !isTimestampCol(col, m.tsField) && !isDeltaCol(col) {
+			baseCols = append(baseCols, col)
 		}
 	}
 
-	// Otherwise, prepend the arrival timestamp column
 	tsCol := record.Column{
 		Field: m.tsField,
 		Title: "Time",
 		Width: 14,
 		Style: "timestamp",
 	}
-	result := make([]record.Column, 0, len(m.columns)+1)
-	result = append(result, tsCol)
-	result = append(result, m.columns...)
-	return result
+	deltaCol := record.Column{
+		Field: "_delta",
+		Title: "Δt",
+		Width: 10,
+		Style: "delta",
+	}
+
+	switch m.tsMode {
+	case TSModeDelta:
+		result := make([]record.Column, 0, len(baseCols)+1)
+		result = append(result, deltaCol)
+		result = append(result, baseCols...)
+		return result
+
+	case TSModeBoth:
+		result := make([]record.Column, 0, len(baseCols)+2)
+		result = append(result, tsCol, deltaCol)
+		result = append(result, baseCols...)
+		return result
+
+	default: // TSModeClock
+		result := make([]record.Column, 0, len(baseCols)+1)
+		result = append(result, tsCol)
+		result = append(result, baseCols...)
+		return result
+	}
 }
 
 // searchMatchSet returns a set of visible-row indices that are search matches.

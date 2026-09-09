@@ -2,11 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/game"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
+	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -274,19 +277,101 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+var timestampLayouts = []string{
+	"15:04:05.000000000",
+	"15:04:05.000000",
+	"15:04:05.000",
+	"15:04:05",
+	"2006-01-02 15:04:05.000000",
+	"2006-01-02 15:04:05.000",
+	"2006-01-02 15:04:05",
+	time.RFC3339Nano,
+	time.RFC3339,
+}
+
+func parseTimeString(s string) time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}
+	}
+	// Try parsing as float seconds (e.g. uptime "5.182" or "123.456789")
+	if sec, err := strconv.ParseFloat(s, 64); err == nil && sec >= 0 {
+		return time.Unix(0, int64(sec*float64(time.Second)))
+	}
+
+	// Normalize comma-separated milliseconds/microseconds (e.g. "00:00:03.165,977" -> "00:00:03.165977")
+	normalized := strings.ReplaceAll(s, ",", ".")
+
+	for _, layout := range timestampLayouts {
+		if t, err := time.Parse(layout, normalized); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
+}
+
+func tryParseRecordTimestamp(r record.Record, configuredField string) time.Time {
+	candidates := []string{configuredField, "time", "timestamp", "ts", "_ts", "uptime"}
+	for _, k := range candidates {
+		if k == "" {
+			continue
+		}
+		if v, ok := r.Fields[k]; ok && v != "" {
+			if t := parseTimeString(v); !t.IsZero() {
+				return t
+			}
+		}
+	}
+
+	// Also check if r.Raw starts with a bracketed timestamp: e.g. [12:00:01.234]
+	raw := strings.TrimSpace(r.Raw)
+	if strings.HasPrefix(raw, "[") {
+		if idx := strings.Index(raw, "]"); idx > 1 {
+			if t := parseTimeString(raw[1:idx]); !t.IsZero() {
+				return t
+			}
+		}
+	}
+	return time.Time{}
+}
+
 // ingestRecord processes a newly parsed or generated record, stamps arrival metadata,
 // pushes it into the ring buffer, and dispatches it to all active virtual tabs.
 func (m *Model) ingestRecord(r record.Record) {
 	if r.Fields == nil {
 		r.Fields = make(map[string]string)
 	}
-	nowStr := time.Now().Format(m.tsFormat)
+	ts := r.Timestamp
+	if ts.IsZero() {
+		ts = tryParseRecordTimestamp(r, m.tsField)
+		if ts.IsZero() {
+			ts = time.Now()
+		}
+		r.Timestamp = ts
+	}
+	nowStr := ts.Format(m.tsFormat)
+	if !m.lastRecordTime.IsZero() {
+		sub := ts.Sub(m.lastRecordTime)
+		if sub < 0 && sub > -24*time.Hour && m.lastRecordTime.Year() == 0 {
+			sub += 24 * time.Hour
+		}
+		r.Delta = sub
+		r.Fields["_delta"] = timing.FormatDelta(r.Delta)
+	} else {
+		r.Fields["_delta"] = "---"
+	}
+	m.lastRecordTime = ts
+	if m.deltaTracker != nil && r.Delta > 0 {
+		m.deltaTracker.Update(r.Delta)
+	}
+
 	if r.Fields[m.tsField] == "" {
 		r.Fields[m.tsField] = nowStr
 	}
 	if r.Fields["_ts"] == "" {
 		r.Fields["_ts"] = nowStr
 	}
+
 	m.nextRecordID++
 	r.ID = m.nextRecordID
 	m.buffer.Add(r)
