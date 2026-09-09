@@ -245,3 +245,7 @@ func (r *RoverRunner) View(targetWidth int) string {
 
 	return sb.String()
 }
+
+func (r *RoverRunner) Dimensions() (int, int) {
+	return 52, 14
+}

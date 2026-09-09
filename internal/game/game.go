@@ -15,6 +15,7 @@ type MiniGame interface {
 	View(width int) string
 	IsGameOver() bool
 	Score() int
+	Dimensions() (width, height int)
 }
 
 // TickMsg is sent periodically to drive the mini-game physics and rendering loop.
@@ -30,6 +31,10 @@ func Tick(d time.Duration) tea.Cmd {
 // Registry holds constructors for all available mini-games.
 var Registry = []func() MiniGame{
 	NewRoverRunner,
+	NewByteSnake,
+	NewPacketDefender,
+	NewBitBreaker,
+	NewBufferStack,
 }
 
 // RandomMiniGame selects and creates a new instance of a mini-game.

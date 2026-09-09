@@ -109,7 +109,6 @@ func DefaultTheme() Theme {
 		ModalBox: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(colorAccent).
-			Background(colorBg).
 			Padding(1, 2),
 		ModalTitle: lipgloss.NewStyle().
 			Foreground(colorHeader).

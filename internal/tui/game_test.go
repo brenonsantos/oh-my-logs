@@ -35,7 +35,7 @@ func TestModel_GameLifecycleAndBackgroundIngest(t *testing.T) {
 
 	// 3. View renders game canvas
 	gameView := m.View()
-	if !strings.Contains(gameView, "Rover Runner") {
+	if !strings.Contains(gameView, m.activeGame.Title()) {
 		t.Errorf("expected game modal title in view, got:\n%s", gameView)
 	}
 	if !strings.Contains(gameView, "SCORE:") {

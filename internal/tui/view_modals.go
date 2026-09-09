@@ -130,14 +130,22 @@ func (m Model) viewProfilePickerModal() string {
 	return centerBox(m.width, m.tableHeight+2, modalBox)
 }
 
-// viewGameModal renders the active mini-game in a centered floating container.
+// viewGameModal renders the active mini-game in a centered floating container
+// sized according to the game's requested dimensions.
 func (m Model) viewGameModal() string {
 	if m.activeGame == nil {
 		return ""
 	}
-	modalWidth := 52
+	reqW, _ := m.activeGame.Dimensions()
+	if reqW <= 0 {
+		reqW = 54
+	}
+	modalWidth := reqW
 	if modalWidth > m.width-4 {
 		modalWidth = m.width - 4
+	}
+	if modalWidth < 30 {
+		modalWidth = 30
 	}
 
 	var sb strings.Builder
@@ -155,7 +163,11 @@ func (m Model) viewGameModal() string {
 		sb.WriteString("\n\n")
 	}
 
-	sb.WriteString(m.activeGame.View(modalWidth - 6))
+	innerW := modalWidth - 6
+	if innerW < 10 {
+		innerW = 10
+	}
+	sb.WriteString(m.activeGame.View(innerW))
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+2, modalBox)
