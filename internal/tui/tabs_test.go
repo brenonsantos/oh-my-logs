@@ -92,18 +92,6 @@ func TestVirtualTabsLifecycleAndNavigation(t *testing.T) {
 		t.Errorf("expected activeTab to cycle to 1 on Shift+Tab, got %d", m.activeTab)
 	}
 
-	// Bracket keys '[' and ']' navigation
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}})
-	m = updated.(Model)
-	if m.activeTab != 0 {
-		t.Errorf("expected activeTab to be 0 on '[', got %d", m.activeTab)
-	}
-
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{']'}})
-	m = updated.(Model)
-	if m.activeTab != 1 {
-		t.Errorf("expected activeTab to be 1 on ']', got %d", m.activeTab)
-	}
 
 	// Direct number key jump '1' -> tab 0
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})

@@ -14,20 +14,34 @@ import (
 // rebuildVisible refilters the buffer and updates m.visible and the active tab.
 func (m *Model) rebuildVisible() {
 	all := m.buffer.All()
+	var base []record.Record
 	if m.activeFilter == nil || m.activeFilter.Empty() {
-		m.visible = all
+		base = all
 	} else {
-		out := make([]record.Record, 0, len(all))
+		base = make([]record.Record, 0, len(all))
 		for _, r := range all {
 			if m.activeFilter.Matches(r) {
+				base = append(base, r)
+			}
+		}
+	}
+
+	if m.bookmarkedOnly {
+		out := make([]record.Record, 0, len(base))
+		for _, r := range base {
+			if _, ok := m.bookmarks[r.ID]; ok {
 				out = append(out, r)
 			}
 		}
 		m.visible = out
+	} else {
+		m.visible = base
 	}
+
 	if len(m.tabs) > 0 {
 		cur := m.currentTab()
 		cur.Visible = m.visible
+		cur.BookmarkedOnly = m.bookmarkedOnly
 	}
 }
 
@@ -36,16 +50,28 @@ func (m *Model) rebuildAllTabs() {
 	all := m.buffer.All()
 	for i := range m.tabs {
 		t := &m.tabs[i]
+		var base []record.Record
 		if t.Filter == nil || t.Filter.Empty() {
-			t.Visible = all
+			base = all
 		} else {
-			out := make([]record.Record, 0, len(all))
+			base = make([]record.Record, 0, len(all))
 			for _, r := range all {
 				if t.Filter.Matches(r) {
+					base = append(base, r)
+				}
+			}
+		}
+
+		if t.BookmarkedOnly {
+			out := make([]record.Record, 0, len(base))
+			for _, r := range base {
+				if _, ok := m.bookmarks[r.ID]; ok {
 					out = append(out, r)
 				}
 			}
 			t.Visible = out
+		} else {
+			t.Visible = base
 		}
 	}
 	m.syncModelToActiveTab()

@@ -199,6 +199,12 @@ func (m Model) viewStatusBar() string {
 		parts = append(parts, theme.Muted.Render("no matches"))
 	}
 
+	if m.bookmarkedOnly {
+		parts = append(parts, theme.Warning.Render(fmt.Sprintf("★ %d pinned (only)", len(m.bookmarks))))
+	} else if len(m.bookmarks) > 0 {
+		parts = append(parts, theme.Warning.Render(fmt.Sprintf("★ %d pinned", len(m.bookmarks))))
+	}
+
 	parts = append(parts, tsStr)
 	parts = append(parts, followStr)
 
@@ -238,6 +244,7 @@ func (m Model) viewKeyBar() string {
 		hints := []string{
 			theme.KeyName.Render("^F") + " " + theme.Muted.Render("search"),
 			theme.KeyName.Render("f") + " " + theme.Muted.Render("filter"),
+			theme.KeyName.Render("b") + " " + theme.Muted.Render("pin"),
 			theme.KeyName.Render("y") + " " + theme.Muted.Render("copy"),
 		}
 		if len(m.tabs) > 1 {

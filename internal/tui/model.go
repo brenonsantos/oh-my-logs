@@ -62,7 +62,8 @@ type Tab struct {
 	SearchInput   string
 	SearchMatches []int
 	SearchCursor  int
-	SelectedRow   int // selected row index into Visible (-1 if none)
+	SelectedRow    int // selected row index into Visible (-1 if none)
+	BookmarkedOnly bool
 }
 
 // DisplayName returns a user-friendly label for the tab.
@@ -154,6 +155,11 @@ type Model struct {
 	selectionEnd   int // multi-row drag end (-1 if none)
 	lastClickTime  time.Time
 	lastClickRow   int
+
+	// Bookmarks / pinning
+	bookmarks      map[uint64]struct{} // set of bookmarked record IDs
+	bookmarkedOnly bool                // when true, filter to show only bookmarked rows
+	nextRecordID   uint64
 }
 
 // New creates a new Model with sensible defaults.
@@ -241,6 +247,7 @@ func New(
 		settings:      savedSettings,
 		baudList:      bauds,
 		baudCursor:    baudIdx,
+		bookmarks:     make(map[uint64]struct{}),
 	}
 
 	// Start with an empty permissive filter.
@@ -297,6 +304,7 @@ func (m *Model) syncActiveTabToModel() {
 	cur.SearchMatches = m.searchMatches
 	cur.SearchCursor = m.searchCursor
 	cur.SelectedRow = m.selectedRow
+	cur.BookmarkedOnly = m.bookmarkedOnly
 }
 
 // syncModelToActiveTab updates the model's active view state from the current tab.
@@ -311,6 +319,7 @@ func (m *Model) syncModelToActiveTab() {
 	m.searchMatches = cur.SearchMatches
 	m.searchCursor = cur.SearchCursor
 	m.selectedRow = cur.SelectedRow
+	m.bookmarkedOnly = cur.BookmarkedOnly
 	m.selectionStart = -1
 	m.selectionEnd = -1
 }
