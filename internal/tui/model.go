@@ -6,6 +6,7 @@ import (
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
+	"github.com/brenoniehues/oh-my-logs/internal/game"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
@@ -22,6 +23,7 @@ const (
 	modePortPicker
 	modeProfilePicker
 	modeHelp
+	modeGame
 )
 
 // ProfileItem represents an entry in the profile switcher list.
@@ -128,6 +130,10 @@ type Model struct {
 	profileCursor int
 	appConfig     *config.AppConfig
 	settings      *config.Settings
+
+	// Easter egg mini-game
+	activeGame     game.MiniGame
+	logsDuringGame int
 
 	// Timestamp display & settings (toggle visibility at runtime with 't')
 	showTimestamp bool   // whether the timestamp column is displayed in the UI
