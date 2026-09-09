@@ -23,6 +23,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleSearchKey(msg)
 	case modeFilter:
 		return m.handleFilterKey(msg)
+	case modeFilterPresets:
+		return m.handleFilterPresetsKey(msg)
+	case modeSavePresetPrompt:
+		return m.handleSavePresetPromptKey(msg)
 	case modePortPicker:
 		return m.handlePortPickerKey(msg)
 	case modeProfilePicker:
@@ -55,6 +59,14 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.Filter):
 		m.mode = modeFilter
 		m.filterInput = m.currentTab().FilterRaw
+		m.filterDraft = m.filterInput
+		m.filterHistoryCursor = -1
+		return m, nil
+
+	case keyMatches(msg, m.keys.FilterPresets):
+		m.loadFilters()
+		m.presetCursor = 0
+		m.mode = modeFilterPresets
 		return m, nil
 
 	case keyMatches(msg, m.keys.Clear):
@@ -437,6 +449,8 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.Cancel):
 		m.mode = modeNormal
 		m.filterInput = m.currentTab().FilterRaw
+		m.filterHistoryCursor = -1
+		m.filterDraft = ""
 		return m, nil
 
 	case keyMatches(msg, m.keys.Confirm):
@@ -459,8 +473,56 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.scrollToBottom()
 				cur.ScrollOffset = m.scrollOffset
 			}
+
+			// Record in filter history if non-empty and unique from last entry
+			trimmed := strings.TrimSpace(m.filterInput)
+			if trimmed != "" {
+				if len(m.filterHistory) == 0 || m.filterHistory[len(m.filterHistory)-1] != trimmed {
+					m.filterHistory = append(m.filterHistory, trimmed)
+					if m.filtersCfg != nil {
+						m.filtersCfg.History = m.filterHistory
+						if m.appConfig != nil {
+							_ = m.appConfig.SaveFilters(m.filtersCfg)
+						}
+					}
+				}
+			}
 		}
+		m.filterHistoryCursor = -1
+		m.filterDraft = ""
 		m.mode = modeNormal
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollUp) || msg.Type == tea.KeyUp:
+		if len(m.filterHistory) > 0 {
+			if m.filterHistoryCursor == -1 {
+				m.filterDraft = m.filterInput
+				m.filterHistoryCursor = len(m.filterHistory) - 1
+			} else if m.filterHistoryCursor > 0 {
+				m.filterHistoryCursor--
+			}
+			if m.filterHistoryCursor >= 0 && m.filterHistoryCursor < len(m.filterHistory) {
+				m.filterInput = m.filterHistory[m.filterHistoryCursor]
+			}
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollDown) || msg.Type == tea.KeyDown:
+		if m.filterHistoryCursor != -1 {
+			if m.filterHistoryCursor < len(m.filterHistory)-1 {
+				m.filterHistoryCursor++
+				m.filterInput = m.filterHistory[m.filterHistoryCursor]
+			} else {
+				m.filterHistoryCursor = -1
+				m.filterInput = m.filterDraft
+			}
+		}
+		return m, nil
+
+	case msg.Type == tea.KeyCtrlP || msg.String() == "ctrl+p":
+		m.loadFilters()
+		m.presetCursor = 0
+		m.mode = modeFilterPresets
 		return m, nil
 
 	case msg.Type == tea.KeyCtrlV || msg.String() == "ctrl+v":
@@ -646,6 +708,151 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+// handleFilterPresetsKey handles keyboard navigation and actions in the filter presets modal.
+func (m Model) handleFilterPresetsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.loadFilters()
+	presets := m.filtersCfg.Presets
+
+	switch {
+	case keyMatches(msg, m.keys.Cancel) || msg.String() == "q":
+		m.mode = modeNormal
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollUp) || msg.String() == "k" || msg.Type == tea.KeyUp:
+		if len(presets) > 0 {
+			if m.presetCursor > 0 {
+				m.presetCursor--
+			} else {
+				m.presetCursor = len(presets) - 1
+			}
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollDown) || msg.String() == "j" || msg.Type == tea.KeyDown:
+		if len(presets) > 0 {
+			if m.presetCursor < len(presets)-1 {
+				m.presetCursor++
+			} else {
+				m.presetCursor = 0
+			}
+		}
+		return m, nil
+
+	case msg.String() == "s" || msg.String() == "a" || msg.String() == "+":
+		cur := m.currentTab()
+		if cur == nil || strings.TrimSpace(cur.FilterRaw) == "" {
+			m.message = "No active filter on current tab to save"
+			return m, nil
+		}
+		m.savePresetNameInput = cur.Name
+		if m.savePresetNameInput == "" || strings.HasPrefix(m.savePresetNameInput, "Tab ") {
+			m.savePresetNameInput = cur.FilterRaw
+		}
+		m.mode = modeSavePresetPrompt
+		return m, nil
+
+	case msg.String() == "d" || msg.String() == "x" || msg.Type == tea.KeyDelete:
+		if len(presets) == 0 || m.presetCursor < 0 || m.presetCursor >= len(presets) {
+			return m, nil
+		}
+		delName := presets[m.presetCursor].Name
+		m.filtersCfg.Presets = append(presets[:m.presetCursor], presets[m.presetCursor+1:]...)
+		if m.presetCursor >= len(m.filtersCfg.Presets) && m.presetCursor > 0 {
+			m.presetCursor = len(m.filtersCfg.Presets) - 1
+		}
+		if m.appConfig != nil {
+			_ = m.appConfig.SaveFilters(m.filtersCfg)
+		}
+		m.message = fmt.Sprintf("Deleted preset %q", delName)
+		return m, nil
+
+	case keyMatches(msg, m.keys.Confirm):
+		if len(presets) == 0 || m.presetCursor < 0 || m.presetCursor >= len(presets) {
+			m.mode = modeNormal
+			return m, nil
+		}
+		selected := presets[m.presetCursor]
+		f, err := filter.New(selected.Filter)
+		if err != nil {
+			m.message = fmt.Sprintf("invalid filter preset: %v", err)
+			m.mode = modeNormal
+			return m, nil
+		}
+
+		m.activeFilter = f
+		cur := m.currentTab()
+		cur.Filter = f
+		cur.FilterRaw = selected.Filter
+		cur.Name = selected.Name
+		m.rebuildVisible()
+		cur.Visible = m.visible
+		if m.follow {
+			m.scrollToBottom()
+			cur.ScrollOffset = m.scrollOffset
+		}
+
+		// Add to filter history if new
+		if len(m.filterHistory) == 0 || m.filterHistory[len(m.filterHistory)-1] != selected.Filter {
+			m.filterHistory = append(m.filterHistory, selected.Filter)
+			if m.filtersCfg != nil {
+				m.filtersCfg.History = m.filterHistory
+				if m.appConfig != nil {
+					_ = m.appConfig.SaveFilters(m.filtersCfg)
+				}
+			}
+		}
+
+		m.mode = modeNormal
+		m.message = fmt.Sprintf("✓ Applied preset: %s", selected.Name)
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// handleSavePresetPromptKey handles keyboard input for naming a new filter preset.
+func (m Model) handleSavePresetPromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case keyMatches(msg, m.keys.Cancel):
+		m.mode = modeFilterPresets
+		return m, nil
+
+	case keyMatches(msg, m.keys.Confirm):
+		name := strings.TrimSpace(m.savePresetNameInput)
+		if name == "" {
+			name = "Custom Preset"
+		}
+		cur := m.currentTab()
+		curFilter := ""
+		if cur != nil {
+			curFilter = cur.FilterRaw
+		}
+		if curFilter == "" {
+			m.mode = modeFilterPresets
+			m.message = "No filter expression to save"
+			return m, nil
+		}
+
+		newPreset := config.FilterPreset{
+			Name:   name,
+			Filter: curFilter,
+		}
+		m.filtersCfg.Presets = append(m.filtersCfg.Presets, newPreset)
+		m.presetCursor = len(m.filtersCfg.Presets) - 1
+		if m.appConfig != nil {
+			_ = m.appConfig.SaveFilters(m.filtersCfg)
+		}
+
+		m.mode = modeFilterPresets
+		m.message = fmt.Sprintf("✓ Saved preset %q", name)
+		return m, nil
+
+	default:
+		m.savePresetNameInput = handleTextInput(m.savePresetNameInput, msg)
+		return m, nil
+	}
 }
 
 // handleHelpKey handles input while the help modal is displayed.

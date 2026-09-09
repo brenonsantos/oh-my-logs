@@ -33,6 +33,10 @@ func (m Model) View() string {
 		sb.WriteString(m.viewPortPickerModal())
 	} else if m.mode == modeProfilePicker {
 		sb.WriteString(m.viewProfilePickerModal())
+	} else if m.mode == modeFilterPresets {
+		sb.WriteString(m.viewFilterPresetsModal())
+	} else if m.mode == modeSavePresetPrompt {
+		sb.WriteString(m.viewSavePresetModal())
 	} else if m.mode == modeHelp {
 		sb.WriteString(m.viewHelpModal())
 	} else if m.mode == modeGame {
