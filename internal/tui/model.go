@@ -26,6 +26,7 @@ const (
 	modeSavePresetPrompt
 	modeHelp
 	modeGame
+	modeTXInput
 )
 
 // ProfileItem represents an entry in the profile switcher list.
@@ -151,6 +152,13 @@ type Model struct {
 	presetCursor        int
 	savePresetNameInput string
 
+	// Serial TX transmission prompt
+	txInput         string
+	txHistory       []string
+	txHistoryCursor int
+	txDraft         string
+	txEnding        serial.LineEnding
+
 	// Easter egg mini-game
 	activeGame     game.MiniGame
 	logsDuringGame int
@@ -253,6 +261,17 @@ func New(
 		reconn = true
 	}
 
+	txEnd := serial.EndingCRLF
+	var txHist []string
+	if savedSettings != nil {
+		if savedSettings.TXEnding != "" {
+			txEnd = serial.ParseLineEnding(savedSettings.TXEnding)
+		}
+		if len(savedSettings.TXHistory) > 0 {
+			txHist = append(txHist, savedSettings.TXHistory...)
+		}
+	}
+
 	m := Model{
 		keys:          defaultKeyMap(),
 		serialCfg:     cfg,
@@ -275,6 +294,9 @@ func New(
 		baudCursor:          baudIdx,
 		bookmarks:           make(map[uint64]struct{}),
 		filterHistoryCursor: -1,
+		txEnding:            txEnd,
+		txHistory:           txHist,
+		txHistoryCursor:     -1,
 		splitMode:           SplitNone,
 		splitLeftTab:        0,
 		splitRightTab:       1,
@@ -605,6 +627,8 @@ func (m Model) saveSettings() {
 		s.Profile = ""
 	}
 	s.ShowTimestamp = m.showTimestamp
+	s.TXEnding = m.txEnding.String()
+	s.TXHistory = m.txHistory
 	_ = m.appConfig.SaveSettings(s)
 }
 

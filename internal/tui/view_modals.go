@@ -469,6 +469,7 @@ func (m Model) viewHelpModal() string {
 		renderItem("Drag mouse", "Select multiple rows", colWidth),
 		renderItem("2x Click", "Copy row to clipboard", colWidth),
 		renderHeader("ACTIONS & CONTROLS", colWidth),
+		renderItem("i, :", "Send serial cmd (TX)", colWidth),
 		renderItem("Space", "Pause / resume follow", colWidth),
 		renderItem("c", "Clear buffer", colWidth),
 		renderItem("t", "Toggle timestamp", colWidth),

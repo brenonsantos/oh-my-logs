@@ -280,6 +280,12 @@ func (m Model) viewKeyBar() string {
 	case modeSavePresetPrompt:
 		return "  " + theme.Muted.Render("Save Filter Preset: [Enter: save · Esc: cancel]")
 
+	case modeTXInput:
+		prompt := lipgloss.NewStyle().Foreground(colorMaple).Bold(true).Render(fmt.Sprintf("TX [%s] › ", m.txEnding.String()))
+		text := theme.Content.Render(m.txInput + "█")
+		help := theme.Muted.Render("  [Enter: send · Tab: line ending · ↑/↓: history · ^V: paste · Esc: cancel]")
+		return "  " + prompt + text + help
+
 	case modeHelp:
 		return "  " + theme.Muted.Render("Press ") + theme.KeyName.Render("?") + theme.Muted.Render(", ") + theme.KeyName.Render("Esc") + theme.Muted.Render(", or ") + theme.KeyName.Render("q") + theme.Muted.Render(" to close help")
 
@@ -287,6 +293,7 @@ func (m Model) viewKeyBar() string {
 		hints := []string{
 			theme.KeyName.Render("^F") + " " + theme.Muted.Render("search"),
 			theme.KeyName.Render("f") + " " + theme.Muted.Render("filter"),
+			theme.KeyName.Render("i") + " " + theme.Muted.Render("send"),
 			theme.KeyName.Render("F") + " " + theme.Muted.Render("presets"),
 			theme.KeyName.Render("b") + " " + theme.Muted.Render("pin"),
 			theme.KeyName.Render("y") + " " + theme.Muted.Render("copy"),

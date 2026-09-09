@@ -34,6 +34,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleHelpKey(msg)
 	case modeGame:
 		return m.handleGameKey(msg)
+	case modeTXInput:
+		return m.handleTXKey(msg)
 	default:
 		return m.handleNormalKey(msg)
 	}
@@ -60,6 +62,13 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filterInput = m.currentTab().FilterRaw
 		m.filterDraft = m.filterInput
 		m.filterHistoryCursor = -1
+		return m, nil
+
+	case keyMatches(msg, m.keys.SendTX):
+		m.mode = modeTXInput
+		m.txInput = ""
+		m.txDraft = ""
+		m.txHistoryCursor = -1
 		return m, nil
 
 	case keyMatches(msg, m.keys.FilterPresets):
@@ -534,6 +543,109 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	default:
 		m.filterInput = handleTextInput(m.filterInput, msg)
+	}
+	return m, nil
+}
+
+func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case keyMatches(msg, m.keys.Cancel):
+		m.mode = modeNormal
+		m.txInput = ""
+		m.txDraft = ""
+		m.txHistoryCursor = -1
+		return m, nil
+
+	case keyMatches(msg, m.keys.Confirm) || msg.Type == tea.KeyEnter:
+		if len(m.txInput) == 0 && m.txEnding == serial.EndingNone {
+			m.mode = modeNormal
+			m.txHistoryCursor = -1
+			m.txDraft = ""
+			return m, nil
+		}
+
+		payload, err := serial.FormatTXPayload(m.txInput, m.txEnding)
+		if err != nil {
+			m.message = fmt.Sprintf("TX format error: %v", err)
+			return m, nil
+		}
+
+		if m.source == nil {
+			m.message = "TX failed: disconnected"
+			m.mode = modeNormal
+			m.txHistoryCursor = -1
+			m.txDraft = ""
+			m.txInput = ""
+			return m, nil
+		}
+
+		n, err := m.source.Write(payload)
+		if err != nil {
+			m.message = fmt.Sprintf("TX error: %v", err)
+		} else {
+			m.message = fmt.Sprintf("✓ Sent %d bytes [%s]", n, m.txEnding.String())
+			m.recordTXMessage(m.txInput)
+		}
+
+		trimmed := strings.TrimSpace(m.txInput)
+		if trimmed != "" {
+			if len(m.txHistory) == 0 || m.txHistory[len(m.txHistory)-1] != trimmed {
+				m.txHistory = append(m.txHistory, trimmed)
+				m.saveSettings()
+			}
+		}
+
+		m.txHistoryCursor = -1
+		m.txDraft = ""
+		m.txInput = ""
+		m.mode = modeNormal
+		return m, nil
+
+	case msg.Type == tea.KeyTab || msg.String() == "tab" || msg.Type == tea.KeyCtrlE || msg.String() == "ctrl+e":
+		m.txEnding = m.txEnding.Next()
+		m.saveSettings()
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollUp) || msg.Type == tea.KeyUp:
+		if len(m.txHistory) > 0 {
+			if m.txHistoryCursor == -1 {
+				m.txDraft = m.txInput
+				m.txHistoryCursor = len(m.txHistory) - 1
+			} else if m.txHistoryCursor > 0 {
+				m.txHistoryCursor--
+			}
+			if m.txHistoryCursor >= 0 && m.txHistoryCursor < len(m.txHistory) {
+				m.txInput = m.txHistory[m.txHistoryCursor]
+			}
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollDown) || msg.Type == tea.KeyDown:
+		if m.txHistoryCursor != -1 {
+			if m.txHistoryCursor < len(m.txHistory)-1 {
+				m.txHistoryCursor++
+				m.txInput = m.txHistory[m.txHistoryCursor]
+			} else {
+				m.txHistoryCursor = -1
+				m.txInput = m.txDraft
+			}
+		}
+		return m, nil
+
+	case msg.Type == tea.KeyCtrlV || msg.String() == "ctrl+v":
+		clipText, err := clipboard.Read()
+		if err == nil && clipText != "" {
+			clean := strings.ReplaceAll(strings.ReplaceAll(clipText, "\r", ""), "\n", " ")
+			m.txInput += strings.TrimSpace(clean)
+		}
+		return m, nil
+
+	case msg.Type == tea.KeyCtrlU || msg.String() == "ctrl+u":
+		m.txInput = ""
+		return m, nil
+
+	default:
+		m.txInput = handleTextInput(m.txInput, msg)
 	}
 	return m, nil
 }

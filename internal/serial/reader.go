@@ -24,6 +24,8 @@ type Source interface {
 	Errors() <-chan error
 	// Stop signals the source to stop and waits for its goroutine to exit.
 	Stop()
+	// Write transmits raw bytes to the underlying destination.
+	Write(p []byte) (n int, err error)
 }
 
 // ── SerialSource ─────────────────────────────────────────────────────────────
@@ -36,6 +38,7 @@ type SerialSource struct {
 	stop      chan struct{}
 	closeOnce sync.Once
 	wg        sync.WaitGroup
+	writeMu   sync.Mutex
 }
 
 // NewSerialSource opens the serial port described by cfg and starts reading.
@@ -102,6 +105,24 @@ func (s *SerialSource) Stop() {
 		_ = s.port.Close()
 	})
 	s.wg.Wait()
+}
+
+// Write transmits raw bytes to the physical serial port.
+func (s *SerialSource) Write(p []byte) (int, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	select {
+	case <-s.stop:
+		return 0, fmt.Errorf("serial: port is closed")
+	default:
+	}
+
+	if s.port == nil {
+		return 0, fmt.Errorf("serial: port is nil")
+	}
+
+	return s.port.Write(p)
 }
 
 // ── FileSource ────────────────────────────────────────────────────────────────
@@ -180,3 +201,12 @@ func (s *FileSource) Stop() {
 	})
 	s.wg.Wait()
 }
+
+// ErrReadOnlySource indicates that the source is read-only and cannot transmit data.
+var ErrReadOnlySource = fmt.Errorf("source is read-only")
+
+// Write implements Source for FileSource, returning ErrReadOnlySource.
+func (s *FileSource) Write(p []byte) (int, error) {
+	return 0, fmt.Errorf("file source: %w", ErrReadOnlySource)
+}
+

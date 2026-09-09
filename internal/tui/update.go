@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/game"
+	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -105,58 +106,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── New line from source ─────────────────────────────────────────────────
 	case lineMsg:
 		r, _ := m.parser.Parse(string(msg))
-		if r.Fields == nil {
-			r.Fields = make(map[string]string)
-		}
-		// Always record arrival timestamp on ingest so past records have it when toggled on.
-		nowStr := time.Now().Format(m.tsFormat)
-		if r.Fields[m.tsField] == "" {
-			r.Fields[m.tsField] = nowStr
-		}
-		if r.Fields["_ts"] == "" {
-			r.Fields["_ts"] = nowStr
-		}
-		m.nextRecordID++
-		r.ID = m.nextRecordID
-		m.buffer.Add(r)
-		if m.mode == modeGame {
-			m.logsDuringGame++
-		}
-
-		// Dispatch to all tabs
-		if len(m.tabs) == 0 {
-			_ = m.currentTab()
-		}
-		for i := range m.tabs {
-			if m.tabs[i].BookmarkedOnly {
-				continue
-			}
-			if m.tabs[i].Filter == nil || m.tabs[i].Filter.Empty() || m.tabs[i].Filter.Matches(r) {
-				m.tabs[i].Visible = append(m.tabs[i].Visible, r)
-				if m.tabs[i].Follow && !m.paused {
-					h := m.tableHeight
-					if m.splitMode == SplitHorizontal {
-						if i == m.paneTabIdx(0) {
-							h = m.paneDataHeight(0)
-						} else if i == m.paneTabIdx(1) {
-							h = m.paneDataHeight(1)
-						}
-					}
-					if len(m.tabs[i].Visible) > h {
-						m.tabs[i].ScrollOffset = len(m.tabs[i].Visible) - h
-					} else {
-						m.tabs[i].ScrollOffset = 0
-					}
-				}
-			}
-		}
-
-		cur := m.currentTab()
-		m.visible = cur.Visible
-		m.scrollOffset = cur.ScrollOffset
-		m.follow = cur.Follow
-
-		// Re-arm the listener.
+		m.ingestRecord(r)
 		return m, listenToSource(m.source)
 
 	// ── Source error ─────────────────────────────────────────────────────────
@@ -322,4 +272,74 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// ingestRecord processes a newly parsed or generated record, stamps arrival metadata,
+// pushes it into the ring buffer, and dispatches it to all active virtual tabs.
+func (m *Model) ingestRecord(r record.Record) {
+	if r.Fields == nil {
+		r.Fields = make(map[string]string)
+	}
+	nowStr := time.Now().Format(m.tsFormat)
+	if r.Fields[m.tsField] == "" {
+		r.Fields[m.tsField] = nowStr
+	}
+	if r.Fields["_ts"] == "" {
+		r.Fields["_ts"] = nowStr
+	}
+	m.nextRecordID++
+	r.ID = m.nextRecordID
+	m.buffer.Add(r)
+	if m.mode == modeGame {
+		m.logsDuringGame++
+	}
+
+	// Dispatch to all tabs
+	if len(m.tabs) == 0 {
+		_ = m.currentTab()
+	}
+	for i := range m.tabs {
+		if m.tabs[i].BookmarkedOnly {
+			continue
+		}
+		if m.tabs[i].Filter == nil || m.tabs[i].Filter.Empty() || m.tabs[i].Filter.Matches(r) {
+			m.tabs[i].Visible = append(m.tabs[i].Visible, r)
+			if m.tabs[i].Follow && !m.paused {
+				h := m.tableHeight
+				if m.splitMode == SplitHorizontal {
+					if i == m.paneTabIdx(0) {
+						h = m.paneDataHeight(0)
+					} else if i == m.paneTabIdx(1) {
+						h = m.paneDataHeight(1)
+					}
+				}
+				if len(m.tabs[i].Visible) > h {
+					m.tabs[i].ScrollOffset = len(m.tabs[i].Visible) - h
+				} else {
+					m.tabs[i].ScrollOffset = 0
+				}
+			}
+		}
+	}
+
+	cur := m.currentTab()
+	m.visible = cur.Visible
+	m.scrollOffset = cur.ScrollOffset
+	m.follow = cur.Follow
+}
+
+// recordTXMessage adds an outbound transmission record to the log buffer for chronological correlation.
+func (m *Model) recordTXMessage(cmdText string) {
+	endingStr := m.txEnding.String()
+	raw := fmt.Sprintf("TX [%s] › %s", endingStr, cmdText)
+	if cmdText == "" {
+		raw = fmt.Sprintf("TX [%s] ›", endingStr)
+	}
+	r := record.NewRecord(raw)
+	r.Fields["message"] = raw
+	r.Fields["level"] = "TX"
+	r.Fields["ending"] = endingStr
+	r.Fields["raw"] = raw
+	r.Fields["cmd"] = cmdText
+	m.ingestRecord(r)
 }
