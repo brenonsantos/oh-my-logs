@@ -87,8 +87,8 @@ func (m Model) handleCreateNewTab() (tea.Model, tea.Cmd) {
 		Follow:  true,
 		Visible: m.buffer.All(),
 	}
-	if len(newTab.Visible) > m.tableHeight {
-		newTab.ScrollOffset = len(newTab.Visible) - m.tableHeight
+	if len(newTab.Visible) > m.activeDataHeight() {
+		newTab.ScrollOffset = len(newTab.Visible) - m.activeDataHeight()
 	}
 	m.tabs = append(m.tabs, newTab)
 	m.activeTab = newIdx
@@ -119,7 +119,7 @@ func (m Model) handleCloseActiveTab() (tea.Model, tea.Cmd) {
 func (m *Model) scrollToMatch(idx int) {
 	m.follow = false
 	// Center the match in the viewport
-	half := m.tableHeight / 2
+	half := m.activeDataHeight() / 2
 	m.scrollOffset = idx - half
 	m.clampScroll()
 }
@@ -161,8 +161,9 @@ func (m *Model) prevSearchMatch() {
 }
 
 func (m *Model) scrollToBottom() {
-	if len(m.visible) > m.tableHeight {
-		m.scrollOffset = len(m.visible) - m.tableHeight
+	h := m.activeDataHeight()
+	if len(m.visible) > h {
+		m.scrollOffset = len(m.visible) - h
 	} else {
 		m.scrollOffset = 0
 	}
@@ -172,7 +173,8 @@ func (m *Model) clampScroll() {
 	if m.scrollOffset < 0 {
 		m.scrollOffset = 0
 	}
-	maxOffset := len(m.visible) - m.tableHeight
+	h := m.activeDataHeight()
+	maxOffset := len(m.visible) - h
 	if maxOffset < 0 {
 		maxOffset = 0
 	}

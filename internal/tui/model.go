@@ -50,6 +50,15 @@ type ErrorMsg struct{ Err error }
 // ConnStateMsg signals a connection state change.
 type ConnStateMsg struct{ State ConnState; Detail string }
 
+// SplitMode defines the dual-pane view state.
+type SplitMode int
+
+const (
+	SplitNone       SplitMode = iota // Standard single-pane view
+	SplitVertical                    // Side-by-side split (left & right)
+	SplitHorizontal                  // Stacked split (top & bottom)
+)
+
 // Tab represents an independent virtual tab with its own filter, visible records,
 // scroll position, follow state, and search state.
 type Tab struct {
@@ -160,6 +169,13 @@ type Model struct {
 	bookmarks      map[uint64]struct{} // set of bookmarked record IDs
 	bookmarkedOnly bool                // when true, filter to show only bookmarked rows
 	nextRecordID   uint64
+
+	// Dual-pane split view & chronological sync
+	splitMode     SplitMode
+	splitLeftTab  int  // index into m.tabs for pane 0 (left / top)
+	splitRightTab int  // index into m.tabs for pane 1 (right / bottom)
+	activePane    int  // 0 for pane 0 (splitLeftTab), 1 for pane 1 (splitRightTab)
+	syncScroll    bool // when true, scrolling one pane time-locks the other
 }
 
 // New creates a new Model with sensible defaults.
@@ -248,6 +264,11 @@ func New(
 		baudList:      bauds,
 		baudCursor:    baudIdx,
 		bookmarks:     make(map[uint64]struct{}),
+		splitMode:     SplitNone,
+		splitLeftTab:  0,
+		splitRightTab: 1,
+		activePane:    0,
+		syncScroll:    true,
 	}
 
 	// Start with an empty permissive filter.
@@ -270,7 +291,7 @@ func New(
 	return m
 }
 
-// currentTab returns a pointer to the currently active tab.
+// currentTab returns a pointer to the currently active/focused tab.
 func (m *Model) currentTab() *Tab {
 	if len(m.tabs) == 0 {
 		initFilter, _ := filter.New("")
@@ -282,14 +303,212 @@ func (m *Model) currentTab() *Tab {
 			SelectedRow: -1,
 		}}
 		m.activeTab = 0
+		m.splitLeftTab = 0
+		m.splitRightTab = 0
+	}
+	targetIdx := m.activeTabIdx()
+	if targetIdx < 0 {
+		targetIdx = 0
+	}
+	if targetIdx >= len(m.tabs) {
+		targetIdx = len(m.tabs) - 1
+	}
+	return &m.tabs[targetIdx]
+}
+
+// activeTabIdx returns the index of the currently focused tab in m.tabs.
+func (m *Model) activeTabIdx() int {
+	if m.splitMode != SplitNone {
+		if m.activePane == 1 {
+			if m.splitRightTab >= 0 && m.splitRightTab < len(m.tabs) {
+				return m.splitRightTab
+			}
+		} else {
+			if m.splitLeftTab >= 0 && m.splitLeftTab < len(m.tabs) {
+				return m.splitLeftTab
+			}
+		}
 	}
 	if m.activeTab < 0 {
-		m.activeTab = 0
+		return 0
 	}
 	if m.activeTab >= len(m.tabs) {
-		m.activeTab = len(m.tabs) - 1
+		return len(m.tabs) - 1
 	}
-	return &m.tabs[m.activeTab]
+	return m.activeTab
+}
+
+// toggleSplit switches between SplitNone and the requested split mode (SplitVertical or SplitHorizontal).
+func (m *Model) toggleSplit(mode SplitMode) {
+	if m.splitMode == mode {
+		// Close split mode — resume single tab with the currently focused tab
+		m.syncActiveTabToModel()
+		m.activeTab = m.activeTabIdx()
+		m.splitMode = SplitNone
+		m.activePane = 0
+		m.syncModelToActiveTab()
+		m.clampScroll()
+		m.message = "Split view closed (single tab)"
+		return
+	}
+
+	m.syncActiveTabToModel()
+	if len(m.tabs) == 1 {
+		// Automatically create a second tab if only 1 exists
+		initFilter, _ := filter.New("")
+		m.tabs = append(m.tabs, Tab{
+			Name:        "Tab 2",
+			FilterRaw:   "",
+			Filter:      initFilter,
+			Visible:     m.buffer.All(),
+			Follow:      true,
+			SelectedRow: -1,
+		})
+		m.splitLeftTab = 0
+		m.splitRightTab = 1
+	} else {
+		m.splitLeftTab = m.activeTab
+		if m.splitRightTab == m.splitLeftTab || m.splitRightTab < 0 || m.splitRightTab >= len(m.tabs) {
+			m.splitRightTab = (m.splitLeftTab + 1) % len(m.tabs)
+		}
+	}
+
+	m.splitMode = mode
+	m.activePane = 0
+	m.syncScroll = true // default to chronological sync on split
+
+	// Ensure viewports and follow offsets match the split pane heights
+	for p := 0; p < 2; p++ {
+		t := m.currentTabForPane(p)
+		if t != nil {
+			h := m.paneDataHeight(p)
+			if t.Follow && len(t.Visible) > h {
+				t.ScrollOffset = len(t.Visible) - h
+			} else {
+				maxO := len(t.Visible) - h
+				if maxO < 0 {
+					maxO = 0
+				}
+				if t.ScrollOffset > maxO {
+					t.ScrollOffset = maxO
+				}
+			}
+		}
+	}
+
+	m.syncModelToActiveTab()
+	m.syncOtherPaneChronologically()
+	m.clampScroll()
+	if mode == SplitVertical {
+		m.message = "Split view: Vertical (side-by-side) · [S] Sync ON · [w] Switch pane"
+	} else {
+		m.message = "Split view: Horizontal (stacked) · [S] Sync ON · [w] Switch pane"
+	}
+}
+
+// switchPaneFocus toggles focus between primary pane (0) and secondary pane (1) without moving tabs.
+func (m *Model) switchPaneFocus() {
+	if m.splitMode == SplitNone {
+		return
+	}
+	m.syncActiveTabToModel()
+	if m.activePane == 0 {
+		m.activePane = 1
+	} else {
+		m.activePane = 0
+	}
+	m.syncModelToActiveTab()
+	m.clampScroll()
+
+	paneName := "Left"
+	if m.splitMode == SplitHorizontal {
+		paneName = "Top"
+		if m.activePane == 1 {
+			paneName = "Bottom"
+		}
+	} else if m.activePane == 1 {
+		paneName = "Right"
+	}
+	cur := m.currentTab()
+	m.message = fmt.Sprintf("Focus: %s Pane [%s]", paneName, cur.DisplayName(m.activeTabIdx()+1))
+}
+
+// toggleSyncScroll toggles chronological time-locked scrolling on/off.
+func (m *Model) toggleSyncScroll() {
+	m.syncScroll = !m.syncScroll
+	if m.syncScroll {
+		m.message = "Chronological Sync: ON"
+		m.syncOtherPaneChronologically()
+	} else {
+		m.message = "Chronological Sync: OFF (Independent scrolling)"
+	}
+}
+
+// currentTabForPane returns the tab assigned to the given pane index (0 = left/top, 1 = right/bottom).
+func (m *Model) currentTabForPane(pane int) *Tab {
+	idx := m.paneTabIdx(pane)
+	if idx < 0 || idx >= len(m.tabs) {
+		return m.currentTab()
+	}
+	return &m.tabs[idx]
+}
+
+// paneTabIdx returns the tab index in m.tabs assigned to pane 0 or 1.
+// Positions are frozen: pane 0 is always splitLeftTab, pane 1 is always splitRightTab.
+func (m *Model) paneTabIdx(pane int) int {
+	if pane == 1 {
+		if m.splitRightTab >= 0 && m.splitRightTab < len(m.tabs) {
+			return m.splitRightTab
+		}
+		if len(m.tabs) > 1 {
+			return 1
+		}
+		return 0
+	}
+	if m.splitLeftTab >= 0 && m.splitLeftTab < len(m.tabs) {
+		return m.splitLeftTab
+	}
+	return 0
+}
+
+// paneDataHeight returns the number of visible log data rows for the given pane (0 or 1).
+func (m *Model) paneDataHeight(pane int) int {
+	if m.splitMode != SplitHorizontal {
+		h := m.tableHeight
+		if h < 1 {
+			return 1
+		}
+		return h
+	}
+
+	totalH := m.tableHeight + 2
+	availH := totalH - 1
+	topH := availH / 2
+	if topH < 3 {
+		topH = 3
+	}
+	bottomH := availH - topH
+	if bottomH < 3 {
+		bottomH = 3
+	}
+
+	if pane == 1 {
+		h := bottomH - 2
+		if h < 1 {
+			return 1
+		}
+		return h
+	}
+	h := topH - 2
+	if h < 1 {
+		return 1
+	}
+	return h
+}
+
+// activeDataHeight returns the number of visible log data rows in the currently focused pane.
+func (m *Model) activeDataHeight() int {
+	return m.paneDataHeight(m.activePane)
 }
 
 // syncActiveTabToModel saves the active model's interactive state back to the active tab struct.
@@ -298,6 +517,9 @@ func (m *Model) syncActiveTabToModel() {
 		return
 	}
 	cur := m.currentTab()
+	cur.Filter = m.activeFilter
+	cur.FilterRaw = m.filterInput
+	cur.Visible = m.visible
 	cur.ScrollOffset = m.scrollOffset
 	cur.Follow = m.follow
 	cur.SearchInput = m.searchInput
@@ -326,11 +548,29 @@ func (m *Model) syncModelToActiveTab() {
 
 // switchTab changes the active tab and synchronizes state.
 func (m *Model) switchTab(newIdx int) {
-	if len(m.tabs) <= 1 || newIdx < 0 || newIdx >= len(m.tabs) || newIdx == m.activeTab {
+	if len(m.tabs) <= 1 || newIdx < 0 || newIdx >= len(m.tabs) {
 		return
 	}
 	m.syncActiveTabToModel()
-	m.activeTab = newIdx
+	if m.splitMode != SplitNone {
+		if m.activePane == 0 {
+			if newIdx == m.splitRightTab {
+				// Tab is already displayed on the right pane: shift focus to right pane without changing positions
+				m.activePane = 1
+			} else {
+				m.splitLeftTab = newIdx
+			}
+		} else {
+			if newIdx == m.splitLeftTab {
+				// Tab is already displayed on the left pane: shift focus to left pane without changing positions
+				m.activePane = 0
+			} else {
+				m.splitRightTab = newIdx
+			}
+		}
+	} else {
+		m.activeTab = newIdx
+	}
 	m.syncModelToActiveTab()
 	m.clampScroll()
 }

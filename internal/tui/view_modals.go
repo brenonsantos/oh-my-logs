@@ -234,6 +234,11 @@ func (m Model) viewHelpModal() string {
 		renderItem("1 .. 9", "Jump to tab N", colWidth),
 		renderItem("Ctrl+T", "Create new tab", colWidth),
 		renderItem("Ctrl+W", "Close active tab", colWidth),
+		renderHeader("SPLIT DUAL VIEW", colWidth),
+		renderItem("|", "Toggle vertical split", colWidth),
+		renderItem("_", "Toggle horiz split", colWidth),
+		renderItem("w", "Switch pane focus", colWidth),
+		renderItem("S", "Toggle sync scroll", colWidth),
 	}
 
 	right := []string{
