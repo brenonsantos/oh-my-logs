@@ -40,6 +40,9 @@ tmp/
 # Built binaries
 /oml
 /oml.exe
+dist/
 
 # macOS
 .DS_Store
+oml
+plan.md
