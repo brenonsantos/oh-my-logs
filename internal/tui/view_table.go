@@ -46,6 +46,7 @@ func (m Model) viewTable() string {
 			}
 		}
 		isSelectedRow := absIdx == m.selectedRow
+		_, isBookmarked := m.bookmarks[r.ID]
 
 		var rowBg lipgloss.TerminalColor
 		hasBg := false
@@ -56,18 +57,35 @@ func (m Model) viewTable() string {
 		case isFocused:
 			hasBg = true
 			rowBg = colorSelected
-			prefix = "▶ "
+			if isBookmarked {
+				prefix = "★▶"
+			} else {
+				prefix = "▶ "
+			}
 			prefixStyle = lipgloss.NewStyle().Background(rowBg).Foreground(colorYellow).Bold(true)
 		case isMultiSelected:
 			hasBg = true
 			rowBg = colorSelected
-			prefix = "▌ "
+			if isBookmarked {
+				prefix = "★▌"
+			} else {
+				prefix = "▌ "
+			}
 			prefixStyle = lipgloss.NewStyle().Background(rowBg).Foreground(colorAccent).Bold(true)
 		case isSelectedRow:
 			hasBg = true
 			rowBg = colorSelected
-			prefix = "▶ "
+			if isBookmarked {
+				prefix = "★▶"
+			} else {
+				prefix = "▶ "
+			}
 			prefixStyle = lipgloss.NewStyle().Background(rowBg).Foreground(colorAccent).Bold(true)
+		case isBookmarked:
+			hasBg = true
+			rowBg = colorBookmarkBg
+			prefix = "★ "
+			prefixStyle = lipgloss.NewStyle().Background(rowBg).Foreground(colorYellow).Bold(true)
 		case isMatch:
 			hasBg = true
 			rowBg = colorSearchBg

@@ -116,6 +116,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if r.Fields["_ts"] == "" {
 			r.Fields["_ts"] = nowStr
 		}
+		m.nextRecordID++
+		r.ID = m.nextRecordID
 		m.buffer.Add(r)
 		if m.mode == modeGame {
 			m.logsDuringGame++
@@ -126,6 +128,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.currentTab()
 		}
 		for i := range m.tabs {
+			if m.tabs[i].BookmarkedOnly {
+				continue
+			}
 			if m.tabs[i].Filter == nil || m.tabs[i].Filter.Empty() || m.tabs[i].Filter.Matches(r) {
 				m.tabs[i].Visible = append(m.tabs[i].Visible, r)
 				if m.tabs[i].Follow && !m.paused {

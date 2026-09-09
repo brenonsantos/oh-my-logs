@@ -27,6 +27,10 @@ type keyMap struct {
 	PrevTab         key.Binding
 	NewTab          key.Binding
 	CloseTab        key.Binding
+	ToggleBookmark  key.Binding
+	NextBookmark    key.Binding
+	PrevBookmark    key.Binding
+	BookmarksOnly   key.Binding
 	CopyRow         key.Binding
 	CopyRaw         key.Binding
 	SelectUp        key.Binding
@@ -81,7 +85,7 @@ func defaultKeyMap() keyMap {
 			key.WithHelp("↓/j", "scroll down"),
 		),
 		PageUp: key.NewBinding(
-			key.WithKeys("pgup", "ctrl+u", "b"),
+			key.WithKeys("pgup", "ctrl+u"),
 			key.WithHelp("PgUp/Ctrl+U", "page up"),
 		),
 		PageDown: key.NewBinding(
@@ -134,12 +138,12 @@ func defaultKeyMap() keyMap {
 			key.WithHelp("P", "profile"),
 		),
 		NextTab: key.NewBinding(
-			key.WithKeys("tab", "]"),
-			key.WithHelp("Tab/]", "next tab"),
+			key.WithKeys("tab"),
+			key.WithHelp("Tab", "next tab"),
 		),
 		PrevTab: key.NewBinding(
-			key.WithKeys("shift+tab", "backtab", "["),
-			key.WithHelp("Shift+Tab/[", "prev tab"),
+			key.WithKeys("shift+tab", "backtab"),
+			key.WithHelp("Shift+Tab", "prev tab"),
 		),
 		NewTab: key.NewBinding(
 			key.WithKeys("ctrl+t"),
@@ -148,6 +152,22 @@ func defaultKeyMap() keyMap {
 		CloseTab: key.NewBinding(
 			key.WithKeys("ctrl+w"),
 			key.WithHelp("Ctrl+W", "close tab"),
+		),
+		ToggleBookmark: key.NewBinding(
+			key.WithKeys("b", "m"),
+			key.WithHelp("b/m", "bookmark row"),
+		),
+		NextBookmark: key.NewBinding(
+			key.WithKeys("]"),
+			key.WithHelp("]", "next bookmark"),
+		),
+		PrevBookmark: key.NewBinding(
+			key.WithKeys("["),
+			key.WithHelp("[", "prev bookmark"),
+		),
+		BookmarksOnly: key.NewBinding(
+			key.WithKeys("B"),
+			key.WithHelp("B", "show bookmarked only"),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),

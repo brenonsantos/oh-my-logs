@@ -9,9 +9,10 @@ import (
 
 // Palette defines the refined color values across the theme.
 var (
-	colorBg       = lipgloss.Color("#12131a") // dark slate for modals
-	colorSelected = lipgloss.Color("#1e293b") // focused selection / row highlight
-	colorSearchBg = lipgloss.Color("#1e2238") // non-focused search match row
+	colorBg         = lipgloss.Color("#12131a") // dark slate for modals
+	colorSelected   = lipgloss.Color("#1e293b") // focused selection / row highlight
+	colorSearchBg   = lipgloss.Color("#1e2238") // non-focused search match row
+	colorBookmarkBg = lipgloss.Color("#282012") // faded golden row background for bookmarked rows
 
 	colorFg      = lipgloss.Color("#e2e8f0") // crisp white/slate (clean log text)
 	colorHeader  = lipgloss.Color("#f8fafc") // bright white for column headers
@@ -47,6 +48,7 @@ type Theme struct {
 	SearchMatch lipgloss.Style // search match row
 	SearchFocus lipgloss.Style // active focused search match
 	Highlight   lipgloss.Style // matching substring highlight
+	BookmarkRow lipgloss.Style // bookmarked row background highlight
 	RowNormal   lipgloss.Style // normal table row
 
 	// Modals & Panels
@@ -104,6 +106,7 @@ func DefaultTheme() Theme {
 		SearchMatch: lipgloss.NewStyle().Background(colorSearchBg).Foreground(colorFg),
 		SearchFocus: lipgloss.NewStyle().Background(colorSelected).Foreground(colorYellow).Bold(true),
 		Highlight:   lipgloss.NewStyle().Background(colorYellow).Foreground(lipgloss.Color("#000000")).Bold(true),
+		BookmarkRow: lipgloss.NewStyle().Background(colorBookmarkBg).Foreground(colorFg),
 		RowNormal:   lipgloss.NewStyle().Foreground(colorFg),
 
 		ModalBox: lipgloss.NewStyle().

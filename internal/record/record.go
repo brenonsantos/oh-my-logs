@@ -4,6 +4,7 @@ package record
 // Fields contains named values extracted from a raw serial line.
 // Raw preserves the original unmodified line.
 type Record struct {
+	ID     uint64
 	Fields map[string]string
 	Raw    string
 }
