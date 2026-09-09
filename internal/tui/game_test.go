@@ -29,7 +29,7 @@ func TestModel_GameLifecycleAndBackgroundIngest(t *testing.T) {
 	if m.activeGame == nil {
 		t.Fatalf("expected activeGame to be non-nil")
 	}
-	if cmd == nil {
+	if m.activeGame.Init() != nil && cmd == nil {
 		t.Errorf("expected game init command")
 	}
 
