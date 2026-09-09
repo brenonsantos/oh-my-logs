@@ -134,8 +134,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.tabs[i].Filter == nil || m.tabs[i].Filter.Empty() || m.tabs[i].Filter.Matches(r) {
 				m.tabs[i].Visible = append(m.tabs[i].Visible, r)
 				if m.tabs[i].Follow && !m.paused {
-					if len(m.tabs[i].Visible) > m.tableHeight {
-						m.tabs[i].ScrollOffset = len(m.tabs[i].Visible) - m.tableHeight
+					h := m.tableHeight
+					if m.splitMode == SplitHorizontal {
+						if i == m.paneTabIdx(0) {
+							h = m.paneDataHeight(0)
+						} else if i == m.paneTabIdx(1) {
+							h = m.paneDataHeight(1)
+						}
+					}
+					if len(m.tabs[i].Visible) > h {
+						m.tabs[i].ScrollOffset = len(m.tabs[i].Visible) - h
 					} else {
 						m.tabs[i].ScrollOffset = 0
 					}
@@ -256,6 +264,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.follow = false
 				m.scrollOffset -= 3
 				m.clampScroll()
+				if m.splitMode != SplitNone && m.syncScroll {
+					m.syncOtherPaneChronologically()
+				}
 			}
 			return m, nil
 
@@ -273,10 +284,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// ignore scrolling while modal or game is active
 			default:
 				m.scrollOffset += 3
-				if m.scrollOffset >= len(m.visible)-m.tableHeight {
+				h := m.activeDataHeight()
+				if m.scrollOffset >= len(m.visible)-h {
 					m.follow = true
 				}
 				m.clampScroll()
+				if m.splitMode != SplitNone && m.syncScroll {
+					m.syncOtherPaneChronologically()
+				}
 			}
 			return m, nil
 

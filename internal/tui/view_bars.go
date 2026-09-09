@@ -22,20 +22,33 @@ func (m Model) viewTabBar() string {
 	if w <= 0 {
 		return ""
 	}
+	activeIdx := m.activeTabIdx()
 	var tabPills []string
 	for i := range m.tabs {
 		t := &m.tabs[i]
 		displayName := t.DisplayName(i + 1)
 		countStr := fmt.Sprintf("%d", len(t.Visible))
-		label := fmt.Sprintf("%d: %s (%s)", i+1, displayName, countStr)
-		if i == m.activeTab {
+		tag := ""
+		if m.splitMode != SplitNone {
+			if i == m.paneTabIdx(0) {
+				tag = " [P1]"
+			} else if i == m.paneTabIdx(1) {
+				tag = " [P2]"
+			}
+		}
+		label := fmt.Sprintf("%d: %s (%s)%s", i+1, displayName, countStr, tag)
+		if i == activeIdx {
 			tabPills = append(tabPills, theme.TabActive.Render(label))
 		} else {
 			tabPills = append(tabPills, theme.TabInactive.Render(label))
 		}
 	}
 	left := " " + strings.Join(tabPills, " ")
-	hints := theme.Muted.Render("Tab: cycle · ^T: new · ^W: close  ")
+	hintsText := "Tab: cycle · ^T: new · ^W: close  "
+	if m.splitMode != SplitNone {
+		hintsText = "w: pane · S: sync · |/_: split · Tab: cycle  "
+	}
+	hints := theme.Muted.Render(hintsText)
 	leftW := lipgloss.Width(left)
 	hintsW := lipgloss.Width(hints)
 	gap := w - leftW - hintsW
@@ -181,7 +194,31 @@ func (m Model) viewStatusBar() string {
 	}
 
 	var parts []string
-	if len(m.tabs) > 1 {
+	if m.splitMode != SplitNone {
+		splitType := "SPLIT [VERT]"
+		if m.splitMode == SplitHorizontal {
+			splitType = "SPLIT [HORIZ]"
+		}
+		parts = append(parts, theme.Primary.Bold(true).Render(splitType))
+
+		if m.syncScroll {
+			parts = append(parts, theme.Success.Bold(true).Render("⟷ SYNC ON"))
+		} else {
+			parts = append(parts, theme.Muted.Render("⟷ SYNC OFF"))
+		}
+
+		paneName := "Left"
+		if m.splitMode == SplitHorizontal {
+			paneName = "Top"
+			if m.activePane == 1 {
+				paneName = "Bottom"
+			}
+		} else if m.activePane == 1 {
+			paneName = "Right"
+		}
+		cur := m.currentTab()
+		parts = append(parts, theme.Accent.Render(fmt.Sprintf("focus: %s [%s]", paneName, cur.DisplayName(m.activeTabIdx()+1))))
+	} else if len(m.tabs) > 1 {
 		tabName := m.tabs[m.activeTab].DisplayName(m.activeTab + 1)
 		parts = append(parts, theme.Primary.Render(fmt.Sprintf("tab [%d/%d: %s]", m.activeTab+1, len(m.tabs), tabName)))
 	}
@@ -246,6 +283,17 @@ func (m Model) viewKeyBar() string {
 			theme.KeyName.Render("f") + " " + theme.Muted.Render("filter"),
 			theme.KeyName.Render("b") + " " + theme.Muted.Render("pin"),
 			theme.KeyName.Render("y") + " " + theme.Muted.Render("copy"),
+		}
+		if m.splitMode != SplitNone {
+			hints = append(hints,
+				theme.KeyName.Render("w")+" "+theme.Muted.Render("pane"),
+				theme.KeyName.Render("S")+" "+theme.Muted.Render("sync"),
+				theme.KeyName.Render("|")+" "+theme.Muted.Render("close"),
+			)
+		} else {
+			hints = append(hints,
+				theme.KeyName.Render("|")+" "+theme.Muted.Render("split"),
+			)
 		}
 		if len(m.tabs) > 1 {
 			hints = append(hints, theme.KeyName.Render("Tab")+" "+theme.Muted.Render("tab"))

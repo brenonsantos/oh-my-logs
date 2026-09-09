@@ -92,6 +92,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selectionEnd = -1
 		wasFollow := m.follow
 		m.follow = false
+		h := m.activeDataHeight()
 		if len(m.visible) > 0 {
 			if m.selectedRow < 0 {
 				if wasFollow {
@@ -100,7 +101,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						m.selectedRow = 0
 					}
 				} else {
-					m.selectedRow = m.scrollOffset + m.tableHeight - 1
+					m.selectedRow = m.scrollOffset + h - 1
 					if m.selectedRow >= len(m.visible) {
 						m.selectedRow = len(m.visible) - 1
 					}
@@ -118,11 +119,15 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.scrollOffset--
 		}
 		m.clampScroll()
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
 		return m, nil
 
 	case keyMatches(msg, m.keys.ScrollDown):
 		m.selectionStart = -1
 		m.selectionEnd = -1
+		h := m.activeDataHeight()
 		if len(m.visible) > 0 {
 			if m.selectedRow < 0 {
 				m.selectedRow = m.scrollOffset
@@ -132,8 +137,8 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else if m.selectedRow < len(m.visible)-1 {
 				m.selectedRow++
 			}
-			if m.selectedRow >= m.scrollOffset+m.tableHeight {
-				m.scrollOffset = m.selectedRow - m.tableHeight + 1
+			if m.selectedRow >= m.scrollOffset+h {
+				m.scrollOffset = m.selectedRow - h + 1
 			}
 			if m.selectedRow >= len(m.visible)-1 {
 				m.follow = true
@@ -142,37 +147,48 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		} else {
 			m.scrollOffset++
-			if m.scrollOffset >= len(m.visible)-m.tableHeight {
+			if m.scrollOffset >= len(m.visible)-h {
 				m.follow = true
 			}
 		}
 		m.clampScroll()
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
 		return m, nil
 
 	case keyMatches(msg, m.keys.PageUp):
+		h := m.activeDataHeight()
 		m.follow = false
-		m.scrollOffset -= m.tableHeight
+		m.scrollOffset -= h
 		if m.selectedRow >= 0 {
-			m.selectedRow -= m.tableHeight
+			m.selectedRow -= h
 			if m.selectedRow < 0 {
 				m.selectedRow = 0
 			}
 		}
 		m.clampScroll()
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
 		return m, nil
 
 	case keyMatches(msg, m.keys.PageDown):
-		m.scrollOffset += m.tableHeight
+		h := m.activeDataHeight()
+		m.scrollOffset += h
 		if m.selectedRow >= 0 {
-			m.selectedRow += m.tableHeight
+			m.selectedRow += h
 			if m.selectedRow >= len(m.visible) {
 				m.selectedRow = len(m.visible) - 1
 			}
 		}
-		if m.scrollOffset >= len(m.visible)-m.tableHeight {
+		if m.scrollOffset >= len(m.visible)-h {
 			m.follow = true
 		}
 		m.clampScroll()
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
 		return m, nil
 
 	case keyMatches(msg, m.keys.GoToBottom):
@@ -181,6 +197,9 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selectedRow = -1
 		m.selectionStart = -1
 		m.selectionEnd = -1
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
 		return m, nil
 
 	case keyMatches(msg, m.keys.GoToTop):
@@ -194,6 +213,9 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.scrollOffset = 0
 		if len(m.visible) > 0 {
 			m.selectedRow = 0
+		}
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
 		}
 		return m, nil
 
@@ -297,14 +319,30 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case keyMatches(msg, m.keys.NextTab):
 		if len(m.tabs) > 1 {
-			m.switchTab((m.activeTab + 1) % len(m.tabs))
+			m.switchTab((m.activeTabIdx() + 1) % len(m.tabs))
 		}
 		return m, nil
 
 	case keyMatches(msg, m.keys.PrevTab):
 		if len(m.tabs) > 1 {
-			m.switchTab((m.activeTab - 1 + len(m.tabs)) % len(m.tabs))
+			m.switchTab((m.activeTabIdx() - 1 + len(m.tabs)) % len(m.tabs))
 		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.SplitVertical):
+		m.toggleSplit(SplitVertical)
+		return m, nil
+
+	case keyMatches(msg, m.keys.SplitHorizontal):
+		m.toggleSplit(SplitHorizontal)
+		return m, nil
+
+	case keyMatches(msg, m.keys.SwitchPane):
+		m.switchPaneFocus()
+		return m, nil
+
+	case keyMatches(msg, m.keys.ToggleSyncScroll):
+		m.toggleSyncScroll()
 		return m, nil
 
 	case keyMatches(msg, m.keys.NewTab):
@@ -798,10 +836,14 @@ func (m Model) handleNextBookmark() (tea.Model, tea.Cmd) {
 	if found >= 0 {
 		m.selectedRow = found
 		m.follow = false
-		if m.selectedRow < m.scrollOffset || m.selectedRow >= m.scrollOffset+m.tableHeight {
-			m.scrollOffset = m.selectedRow - m.tableHeight/2
+		h := m.activeDataHeight()
+		if m.selectedRow < m.scrollOffset || m.selectedRow >= m.scrollOffset+h {
+			m.scrollOffset = m.selectedRow - h/2
 		}
 		m.clampScroll()
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
 		m.message = fmt.Sprintf("★ Bookmark at row %d", m.selectedRow+1)
 	} else {
 		m.message = "No bookmarks in visible view"
@@ -836,10 +878,14 @@ func (m Model) handlePrevBookmark() (tea.Model, tea.Cmd) {
 	if found >= 0 {
 		m.selectedRow = found
 		m.follow = false
-		if m.selectedRow < m.scrollOffset || m.selectedRow >= m.scrollOffset+m.tableHeight {
-			m.scrollOffset = m.selectedRow - m.tableHeight/2
+		h := m.activeDataHeight()
+		if m.selectedRow < m.scrollOffset || m.selectedRow >= m.scrollOffset+h {
+			m.scrollOffset = m.selectedRow - h/2
 		}
 		m.clampScroll()
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
 		m.message = fmt.Sprintf("★ Bookmark at row %d", m.selectedRow+1)
 	} else {
 		m.message = "No bookmarks in visible view"

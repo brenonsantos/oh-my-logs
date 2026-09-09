@@ -37,8 +37,10 @@ func (m Model) View() string {
 		sb.WriteString(m.viewHelpModal())
 	} else if m.mode == modeGame {
 		sb.WriteString(m.viewGameModal())
-	} else if len(m.visible) == 0 {
+	} else if len(m.visible) == 0 && m.splitMode == SplitNone {
 		sb.WriteString(m.viewEmptyState())
+	} else if m.splitMode != SplitNone {
+		sb.WriteString(m.viewSplitTable())
 	} else {
 		// Table Header
 		sb.WriteString(m.viewTableHeader())

@@ -81,6 +81,11 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m.handleKeyBarMouseClick(msg)
 	}
 
+	// Split mode table click handling
+	if m.splitMode != SplitNone {
+		return m.handleSplitTableMouseClick(msg)
+	}
+
 	// Table rows click
 	tableStartY := 4
 	if len(m.tabs) > 1 {
@@ -113,6 +118,99 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	m.selectedRow = -1
 	m.selectionStart = -1
 	m.selectionEnd = -1
+	return m, nil
+}
+
+func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	tableStartY := 4
+	if len(m.tabs) > 1 {
+		tableStartY = 6
+	}
+	totalH := m.tableHeight + 2
+	tableEndY := tableStartY + totalH
+
+	if msg.Y < tableStartY || msg.Y >= tableEndY {
+		return m, nil
+	}
+
+	if m.splitMode == SplitVertical {
+		splitX := (m.width - 1) / 2
+		clickedPane := 0
+		if msg.X > splitX {
+			clickedPane = 1
+		}
+		if m.activePane != clickedPane {
+			m.switchPaneFocus()
+		}
+
+		dataStartY := tableStartY + 2
+		if msg.Y >= dataStartY && msg.Y < tableEndY {
+			rowOffset := msg.Y - dataStartY
+			absIdx := m.scrollOffset + rowOffset
+			if absIdx >= 0 && absIdx < len(m.visible) {
+				m.follow = false
+				m.selectedRow = absIdx
+				m.selectionStart = absIdx
+				m.selectionEnd = absIdx
+
+				now := time.Now()
+				if m.lastClickRow == absIdx && now.Sub(m.lastClickTime) < 400*time.Millisecond {
+					_ = clipboard.Copy(m.visible[absIdx].Raw)
+					m.message = "✓ Copied row to clipboard"
+				}
+				m.lastClickTime = now
+				m.lastClickRow = absIdx
+
+				if m.syncScroll {
+					m.syncOtherPaneChronologically()
+				}
+			}
+		}
+		return m, nil
+	}
+
+	// SplitHorizontal
+	availH := totalH - 1
+	topH := availH / 2
+	dividerY := tableStartY + topH
+	clickedPane := 0
+	if msg.Y > dividerY {
+		clickedPane = 1
+	}
+	if m.activePane != clickedPane {
+		m.switchPaneFocus()
+	}
+
+	var dataStartY, dataEndY int
+	if clickedPane == 0 {
+		dataStartY = tableStartY + 2
+		dataEndY = tableStartY + topH
+	} else {
+		dataStartY = dividerY + 1 + 2
+		dataEndY = tableEndY
+	}
+	if msg.Y >= dataStartY && msg.Y < dataEndY {
+		rowOffset := msg.Y - dataStartY
+		absIdx := m.scrollOffset + rowOffset
+		if absIdx >= 0 && absIdx < len(m.visible) {
+			m.follow = false
+			m.selectedRow = absIdx
+			m.selectionStart = absIdx
+			m.selectionEnd = absIdx
+
+			now := time.Now()
+			if m.lastClickRow == absIdx && now.Sub(m.lastClickTime) < 400*time.Millisecond {
+				_ = clipboard.Copy(m.visible[absIdx].Raw)
+				m.message = "✓ Copied row to clipboard"
+			}
+			m.lastClickTime = now
+			m.lastClickRow = absIdx
+
+			if m.syncScroll {
+				m.syncOtherPaneChronologically()
+			}
+		}
+	}
 	return m, nil
 }
 
@@ -198,7 +296,8 @@ func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		// Dragging below table viewport: auto-scroll down
 		m.scrollOffset++
 		m.clampScroll()
-		endIdx := m.scrollOffset + m.tableHeight - 1
+		h := m.activeDataHeight()
+		endIdx := m.scrollOffset + h - 1
 		if endIdx >= len(m.visible) {
 			endIdx = len(m.visible) - 1
 		}
@@ -248,8 +347,9 @@ func (m Model) handleSelectUp() (tea.Model, tea.Cmd) {
 	if m.selectionStart < 0 || m.selectionEnd < 0 {
 		anchor := m.selectedRow
 		if anchor < 0 {
-			if m.scrollOffset+m.tableHeight < len(m.visible) {
-				anchor = m.scrollOffset + m.tableHeight - 1
+			h := m.activeDataHeight()
+			if m.scrollOffset+h < len(m.visible) {
+				anchor = m.scrollOffset + h - 1
 			} else {
 				anchor = len(m.visible) - 1
 			}
@@ -302,8 +402,9 @@ func (m Model) handleSelectDown() (tea.Model, tea.Cmd) {
 	}
 	m.selectedRow = m.selectionEnd
 
-	if m.selectionEnd >= m.scrollOffset+m.tableHeight {
-		m.scrollOffset = m.selectionEnd - m.tableHeight + 1
+	h := m.activeDataHeight()
+	if m.selectionEnd >= m.scrollOffset+h {
+		m.scrollOffset = m.selectionEnd - h + 1
 		m.clampScroll()
 	}
 

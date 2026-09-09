@@ -31,6 +31,10 @@ type keyMap struct {
 	NextBookmark    key.Binding
 	PrevBookmark    key.Binding
 	BookmarksOnly   key.Binding
+	SplitVertical   key.Binding
+	SplitHorizontal key.Binding
+	SwitchPane      key.Binding
+	ToggleSyncScroll key.Binding
 	CopyRow         key.Binding
 	CopyRaw         key.Binding
 	SelectUp        key.Binding
@@ -168,6 +172,22 @@ func defaultKeyMap() keyMap {
 		BookmarksOnly: key.NewBinding(
 			key.WithKeys("B"),
 			key.WithHelp("B", "show bookmarked only"),
+		),
+		SplitVertical: key.NewBinding(
+			key.WithKeys("|"),
+			key.WithHelp("|", "split vertical"),
+		),
+		SplitHorizontal: key.NewBinding(
+			key.WithKeys("_"),
+			key.WithHelp("_", "split horizontal"),
+		),
+		SwitchPane: key.NewBinding(
+			key.WithKeys("w"),
+			key.WithHelp("w", "switch pane"),
+		),
+		ToggleSyncScroll: key.NewBinding(
+			key.WithKeys("S"),
+			key.WithHelp("S", "toggle sync scroll"),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
