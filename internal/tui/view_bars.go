@@ -280,26 +280,26 @@ func (m Model) viewKeyBar() string {
 	switch m.mode {
 	case modeSearch:
 		prompt := theme.Primary.Render("Search: ")
-		text := theme.Content.Render(m.searchInput + "█")
-		help := theme.Muted.Render("  [Enter: next · ↑/↓: navigate · ^V: paste · Esc: cancel]")
+		text := renderInputWithCursor(m.searchInput, m.searchPos, theme.Content)
+		help := theme.Muted.Render("  [Enter: next · ↑/↓: matches · ←/→: cursor · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
 
 	case modeFilter:
 		prompt := theme.Primary.Render("Filter: ")
-		text := theme.Content.Render(m.filterInput + "█")
-		help := theme.Muted.Render("  [Enter: apply · ↑/↓: history · ^P: presets · ^V: paste · Esc: cancel]")
+		text := renderInputWithCursor(m.filterInput, m.filterCursor, theme.Content)
+		help := theme.Muted.Render("  [Enter: apply · ↑/↓: history · ←/→: cursor · ^P: presets · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
 
 	case modeFilterPresets:
 		return "  " + theme.Muted.Render("Filter Presets: [Enter: apply · ↑/↓: navigate · s: save active · d: delete · Esc: close]")
 
 	case modeSavePresetPrompt:
-		return "  " + theme.Muted.Render("Save Filter Preset: [Enter: save · Esc: cancel]")
+		return "  " + theme.Muted.Render("Save Filter Preset: [Enter: save · ←/→: cursor · Esc: cancel]")
 
 	case modeTXInput:
 		prompt := lipgloss.NewStyle().Foreground(colorMaple).Bold(true).Render(fmt.Sprintf("TX [%s] › ", m.txEnding.String()))
-		text := theme.Content.Render(m.txInput + "█")
-		help := theme.Muted.Render("  [Enter: send · Tab: line ending · ↑/↓: history · ^V: paste · Esc: cancel]")
+		text := renderInputWithCursor(m.txInput, m.txCursor, theme.Content)
+		help := theme.Muted.Render("  [Enter: send · Tab: line ending · ↑/↓: history · ←/→: cursor · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
 
 	case modeHelp:
@@ -343,3 +343,36 @@ func (m Model) viewKeyBar() string {
 		return "  " + strings.Join(hints, "   ")
 	}
 }
+
+// renderInputWithCursor renders input text with an accurate visual block cursor.
+// If the cursor is at the end (pos >= len(runes)), a "█" block is appended.
+// If the cursor is over a character, that character is styled with highlighted/inverted colors.
+func renderInputWithCursor(text string, pos int, baseStyle lipgloss.Style) string {
+	runes := []rune(text)
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > len(runes) {
+		pos = len(runes)
+	}
+
+	cursorCharStyle := lipgloss.NewStyle().
+		Background(colorCyan).
+		Foreground(lipgloss.Color("#000000")).
+		Bold(true)
+	cursorEndBlock := lipgloss.NewStyle().
+		Foreground(colorCyan).
+		Bold(true).
+		Render("█")
+
+	if pos >= len(runes) {
+		return baseStyle.Render(text) + cursorEndBlock
+	}
+
+	before := baseStyle.Render(string(runes[:pos]))
+	underCursor := cursorCharStyle.Render(string(runes[pos]))
+	after := baseStyle.Render(string(runes[pos+1:]))
+
+	return before + underCursor + after
+}
+

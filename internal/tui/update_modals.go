@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/brenoniehues/oh-my-logs/internal/clipboard"
 	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -237,6 +238,7 @@ func (m Model) handleFilterPresetsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.savePresetNameInput == "" || strings.HasPrefix(m.savePresetNameInput, "Tab ") {
 			m.savePresetNameInput = cur.FilterRaw
 		}
+		m.savePresetNameCursor = len([]rune(m.savePresetNameInput))
 		m.mode = modeSavePresetPrompt
 		return m, nil
 
@@ -336,8 +338,21 @@ func (m Model) handleSavePresetPromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("✓ Saved preset %q", name)
 		return m, nil
 
+	case msg.Type == tea.KeyCtrlV || msg.String() == "ctrl+v":
+		clipText, err := clipboard.Read()
+		if err == nil && clipText != "" {
+			clean := strings.ReplaceAll(strings.ReplaceAll(clipText, "\r", ""), "\n", " ")
+			m.savePresetNameInput, m.savePresetNameCursor = insertStringAtCursor(m.savePresetNameInput, m.savePresetNameCursor, strings.TrimSpace(clean))
+		}
+		return m, nil
+
+	case msg.Type == tea.KeyCtrlU || msg.String() == "ctrl+u":
+		m.savePresetNameInput = ""
+		m.savePresetNameCursor = 0
+		return m, nil
+
 	default:
-		m.savePresetNameInput = handleTextInput(m.savePresetNameInput, msg)
+		m.savePresetNameInput, m.savePresetNameCursor = handleTextInputWithCursor(m.savePresetNameInput, m.savePresetNameCursor, msg)
 		return m, nil
 	}
 }

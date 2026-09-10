@@ -96,6 +96,7 @@ func (m Model) handleCreateNewTab() (tea.Model, tea.Cmd) {
 	m.recalcLayout()
 	m.mode = modeFilter
 	m.filterInput = ""
+	m.filterCursor = 0
 	m.message = fmt.Sprintf("Created %s — enter filter (or Enter/Esc for all)", name)
 	return m, nil
 }

@@ -53,6 +53,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.Search):
 		m.mode = modeSearch
 		m.searchInput = ""
+		m.searchPos = 0
 		m.searchMatches = nil
 		m.searchCursor = 0
 		return m, nil
@@ -61,6 +62,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeFilter
 		m.filterInput = m.currentTab().FilterRaw
 		m.filterDraft = m.filterInput
+		m.filterCursor = len([]rune(m.filterInput))
 		m.filterHistoryCursor = -1
 		return m, nil
 
@@ -68,6 +70,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeTXInput
 		m.txInput = ""
 		m.txDraft = ""
+		m.txCursor = 0
 		m.txHistoryCursor = -1
 		return m, nil
 
@@ -403,6 +406,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selectionStart = -1
 		m.selectionEnd = -1
 		m.searchInput = ""
+		m.searchPos = 0
 		m.searchMatches = nil
 		return m, nil
 
@@ -438,22 +442,25 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		clipText, err := clipboard.Read()
 		if err == nil && clipText != "" {
 			clean := strings.ReplaceAll(strings.ReplaceAll(clipText, "\r", ""), "\n", " ")
-			m.searchInput += strings.TrimSpace(clean)
+			m.searchInput, m.searchPos = insertStringAtCursor(m.searchInput, m.searchPos, strings.TrimSpace(clean))
 			m.runSearch()
 		}
 		return m, nil
 
-	case msg.String() == "down":
+	case msg.String() == "down" || msg.Type == tea.KeyDown:
 		m.nextSearchMatch()
 		return m, nil
 
-	case msg.String() == "up":
+	case msg.String() == "up" || msg.Type == tea.KeyUp:
 		m.prevSearchMatch()
 		return m, nil
 
 	default:
-		m.searchInput = handleTextInput(m.searchInput, msg)
-		m.runSearch()
+		prev := m.searchInput
+		m.searchInput, m.searchPos = handleTextInputWithCursor(m.searchInput, m.searchPos, msg)
+		if m.searchInput != prev {
+			m.runSearch()
+		}
 	}
 	return m, nil
 }
@@ -463,6 +470,7 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.Cancel):
 		m.mode = modeNormal
 		m.filterInput = m.currentTab().FilterRaw
+		m.filterCursor = len([]rune(m.filterInput))
 		m.filterHistoryCursor = -1
 		m.filterDraft = ""
 		return m, nil
@@ -507,7 +515,7 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeNormal
 		return m, nil
 
-	case keyMatches(msg, m.keys.ScrollUp) || msg.Type == tea.KeyUp:
+	case msg.Type == tea.KeyUp || msg.String() == "up":
 		if len(m.filterHistory) > 0 {
 			if m.filterHistoryCursor == -1 {
 				m.filterDraft = m.filterInput
@@ -517,18 +525,21 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			if m.filterHistoryCursor >= 0 && m.filterHistoryCursor < len(m.filterHistory) {
 				m.filterInput = m.filterHistory[m.filterHistoryCursor]
+				m.filterCursor = len([]rune(m.filterInput))
 			}
 		}
 		return m, nil
 
-	case keyMatches(msg, m.keys.ScrollDown) || msg.Type == tea.KeyDown:
+	case msg.Type == tea.KeyDown || msg.String() == "down":
 		if m.filterHistoryCursor != -1 {
 			if m.filterHistoryCursor < len(m.filterHistory)-1 {
 				m.filterHistoryCursor++
 				m.filterInput = m.filterHistory[m.filterHistoryCursor]
+				m.filterCursor = len([]rune(m.filterInput))
 			} else {
 				m.filterHistoryCursor = -1
 				m.filterInput = m.filterDraft
+				m.filterCursor = len([]rune(m.filterInput))
 			}
 		}
 		return m, nil
@@ -543,12 +554,12 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		clipText, err := clipboard.Read()
 		if err == nil && clipText != "" {
 			clean := strings.ReplaceAll(strings.ReplaceAll(clipText, "\r", ""), "\n", " ")
-			m.filterInput += strings.TrimSpace(clean)
+			m.filterInput, m.filterCursor = insertStringAtCursor(m.filterInput, m.filterCursor, strings.TrimSpace(clean))
 		}
 		return m, nil
 
 	default:
-		m.filterInput = handleTextInput(m.filterInput, msg)
+		m.filterInput, m.filterCursor = handleTextInputWithCursor(m.filterInput, m.filterCursor, msg)
 	}
 	return m, nil
 }
@@ -558,6 +569,7 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.Cancel):
 		m.mode = modeNormal
 		m.txInput = ""
+		m.txCursor = 0
 		m.txDraft = ""
 		m.txHistoryCursor = -1
 		return m, nil
@@ -567,6 +579,7 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeNormal
 			m.txHistoryCursor = -1
 			m.txDraft = ""
+			m.txCursor = 0
 			return m, nil
 		}
 
@@ -582,6 +595,7 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.txHistoryCursor = -1
 			m.txDraft = ""
 			m.txInput = ""
+			m.txCursor = 0
 			return m, nil
 		}
 
@@ -604,6 +618,7 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.txHistoryCursor = -1
 		m.txDraft = ""
 		m.txInput = ""
+		m.txCursor = 0
 		m.mode = modeNormal
 		return m, nil
 
@@ -612,7 +627,7 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.saveSettings()
 		return m, nil
 
-	case keyMatches(msg, m.keys.ScrollUp) || msg.Type == tea.KeyUp:
+	case msg.Type == tea.KeyUp || msg.String() == "up":
 		if len(m.txHistory) > 0 {
 			if m.txHistoryCursor == -1 {
 				m.txDraft = m.txInput
@@ -622,18 +637,21 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			if m.txHistoryCursor >= 0 && m.txHistoryCursor < len(m.txHistory) {
 				m.txInput = m.txHistory[m.txHistoryCursor]
+				m.txCursor = len([]rune(m.txInput))
 			}
 		}
 		return m, nil
 
-	case keyMatches(msg, m.keys.ScrollDown) || msg.Type == tea.KeyDown:
+	case msg.Type == tea.KeyDown || msg.String() == "down":
 		if m.txHistoryCursor != -1 {
 			if m.txHistoryCursor < len(m.txHistory)-1 {
 				m.txHistoryCursor++
 				m.txInput = m.txHistory[m.txHistoryCursor]
+				m.txCursor = len([]rune(m.txInput))
 			} else {
 				m.txHistoryCursor = -1
 				m.txInput = m.txDraft
+				m.txCursor = len([]rune(m.txInput))
 			}
 		}
 		return m, nil
@@ -642,16 +660,17 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		clipText, err := clipboard.Read()
 		if err == nil && clipText != "" {
 			clean := strings.ReplaceAll(strings.ReplaceAll(clipText, "\r", ""), "\n", " ")
-			m.txInput += strings.TrimSpace(clean)
+			m.txInput, m.txCursor = insertStringAtCursor(m.txInput, m.txCursor, strings.TrimSpace(clean))
 		}
 		return m, nil
 
 	case msg.Type == tea.KeyCtrlU || msg.String() == "ctrl+u":
 		m.txInput = ""
+		m.txCursor = 0
 		return m, nil
 
 	default:
-		m.txInput = handleTextInput(m.txInput, msg)
+		m.txInput, m.txCursor = handleTextInputWithCursor(m.txInput, m.txCursor, msg)
 	}
 	return m, nil
 }
@@ -665,23 +684,139 @@ func keyMatches(msg tea.KeyMsg, b interface{ Keys() []string }) bool {
 	return false
 }
 
-// handleTextInput processes printable key presses and backspace for text fields.
+// handleTextInput is a backward-compatible wrapper appending/deleting at the end.
 func handleTextInput(current string, msg tea.KeyMsg) string {
-	switch msg.Type {
-	case tea.KeyBackspace, tea.KeyDelete:
-		if len(current) > 0 {
-			runes := []rune(current)
-			return string(runes[:len(runes)-1])
-		}
-	case tea.KeyRunes:
-		for _, r := range msg.Runes {
-			if unicode.IsPrint(r) {
-				current += string(r)
-			}
-		}
-	case tea.KeySpace:
-		current += " "
+	res, _ := handleTextInputWithCursor(current, len([]rune(current)), msg)
+	return res
+}
+
+// insertStringAtCursor inserts toInsert into current at the 0-indexed rune position pos,
+// returning the resulting string and the new cursor position after the inserted text.
+func insertStringAtCursor(current string, pos int, toInsert string) (string, int) {
+	runes := []rune(current)
+	if pos < 0 {
+		pos = 0
 	}
-	return current
+	if pos > len(runes) {
+		pos = len(runes)
+	}
+	ins := []rune(toInsert)
+	result := make([]rune, 0, len(runes)+len(ins))
+	result = append(result, runes[:pos]...)
+	result = append(result, ins...)
+	result = append(result, runes[pos:]...)
+	return string(result), pos + len(ins)
+}
+
+// handleTextInputWithCursor handles printable character insertion, deletion, and horizontal navigation.
+// It accepts the current string and the 0-indexed rune cursor position pos, returning the updated string and cursor.
+func handleTextInputWithCursor(current string, pos int, msg tea.KeyMsg) (string, int) {
+	runes := []rune(current)
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > len(runes) {
+		pos = len(runes)
+	}
+
+	switch msg.Type {
+	case tea.KeyLeft:
+		if pos > 0 {
+			pos--
+		}
+		return current, pos
+
+	case tea.KeyRight:
+		if pos < len(runes) {
+			pos++
+		}
+		return current, pos
+
+	case tea.KeyHome, tea.KeyCtrlA:
+		return current, 0
+
+	case tea.KeyEnd, tea.KeyCtrlE:
+		return current, len(runes)
+
+	case tea.KeyBackspace:
+		if pos > 0 {
+			runes = append(runes[:pos-1], runes[pos:]...)
+			pos--
+			return string(runes), pos
+		}
+		return current, pos
+
+	case tea.KeyDelete, tea.KeyCtrlD:
+		if pos < len(runes) {
+			runes = append(runes[:pos], runes[pos+1:]...)
+			return string(runes), pos
+		}
+		return current, pos
+
+	case tea.KeyCtrlK:
+		runes = runes[:pos]
+		return string(runes), pos
+
+	case tea.KeyCtrlU:
+		return "", 0
+
+	case tea.KeyRunes:
+		if !msg.Alt {
+			for _, r := range msg.Runes {
+				if unicode.IsPrint(r) {
+					runes = append(runes[:pos], append([]rune{r}, runes[pos:]...)...)
+					pos++
+				}
+			}
+			return string(runes), pos
+		}
+
+	case tea.KeySpace:
+		runes = append(runes[:pos], append([]rune{' '}, runes[pos:]...)...)
+		pos++
+		return string(runes), pos
+	}
+
+	// String fallback for terminals reporting specific escape sequence names
+	switch msg.String() {
+	case "left", "ctrl+b":
+		if pos > 0 {
+			pos--
+		}
+	case "right", "ctrl+f":
+		if pos < len(runes) {
+			pos++
+		}
+	case "home", "ctrl+a":
+		pos = 0
+	case "end", "ctrl+e":
+		pos = len(runes)
+	case "delete", "ctrl+d":
+		if pos < len(runes) {
+			runes = append(runes[:pos], runes[pos+1:]...)
+			return string(runes), pos
+		}
+	case "ctrl+k":
+		runes = runes[:pos]
+		return string(runes), pos
+	case "ctrl+u":
+		return "", 0
+	case "alt+left", "alt+b", "ctrl+left":
+		for pos > 0 && unicode.IsSpace(runes[pos-1]) {
+			pos--
+		}
+		for pos > 0 && !unicode.IsSpace(runes[pos-1]) {
+			pos--
+		}
+	case "alt+right", "alt+f", "ctrl+right":
+		for pos < len(runes) && !unicode.IsSpace(runes[pos]) {
+			pos++
+		}
+		for pos < len(runes) && unicode.IsSpace(runes[pos]) {
+			pos++
+		}
+	}
+
+	return string(runes), pos
 }
 

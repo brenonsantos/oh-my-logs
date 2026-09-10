@@ -171,11 +171,13 @@ type Model struct {
 	// Filter
 	activeFilter *filter.Filter
 	filterInput  string
+	filterCursor int // rune cursor position in filterInput
 
 	// Search
 	searchInput   string
+	searchPos     int // rune cursor position in searchInput
 	searchMatches []int // indices into visible
-	searchCursor  int
+	searchCursor  int // match navigation index into searchMatches
 
 	// Scroll / follow
 	scrollOffset int // index of the top visible row
@@ -200,15 +202,17 @@ type Model struct {
 	settings      *config.Settings
 
 	// Filter history & presets
-	filterHistory       []string
-	filterHistoryCursor int
-	filterDraft         string
-	filtersCfg          *config.FiltersConfig
-	presetCursor        int
-	savePresetNameInput string
+	filterHistory        []string
+	filterHistoryCursor  int
+	filterDraft          string
+	filtersCfg           *config.FiltersConfig
+	presetCursor         int
+	savePresetNameInput  string
+	savePresetNameCursor int // rune cursor position in savePresetNameInput
 
 	// Serial TX transmission prompt
 	txInput         string
+	txCursor        int // rune cursor position in txInput
 	txHistory       []string
 	txHistoryCursor int
 	txDraft         string
@@ -648,10 +652,12 @@ func (m *Model) syncModelToActiveTab() {
 	cur := m.currentTab()
 	m.activeFilter = cur.Filter
 	m.filterInput = cur.FilterRaw
+	m.filterCursor = len([]rune(m.filterInput))
 	m.visible = cur.Visible
 	m.scrollOffset = cur.ScrollOffset
 	m.follow = cur.Follow
 	m.searchInput = cur.SearchInput
+	m.searchPos = len([]rune(m.searchInput))
 	m.searchMatches = cur.SearchMatches
 	m.searchCursor = cur.SearchCursor
 	m.selectedRow = cur.SelectedRow
