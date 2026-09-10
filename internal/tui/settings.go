@@ -18,6 +18,7 @@ const (
 	settingRowTimestamp
 	settingRowFollow
 	settingRowDirectToDisk
+	settingRowTheme
 	settingRowCount
 )
 
@@ -34,14 +35,14 @@ func (m Model) ensureSettings() *config.Settings {
 			Baud:           115200,
 			BufferCapacity: 50000,
 			DefaultFollow:  true,
-			Theme:          "dark-slate",
+			Theme:          PaletteDarkSlate.Name,
 		}
 	}
 	if m.settings.BufferCapacity <= 0 {
 		m.settings.BufferCapacity = 50000
 	}
 	if m.settings.Theme == "" {
-		m.settings.Theme = "dark-slate"
+		m.settings.Theme = PaletteDarkSlate.Name
 	}
 	return m.settings
 }
@@ -60,6 +61,8 @@ func (m Model) settingRowName(row settingRow) string {
 		return "Auto-Follow on Launch"
 	case settingRowDirectToDisk:
 		return "Direct-to-Disk Stream"
+	case settingRowTheme:
+		return "Theme Palette"
 	default:
 		return "Unknown"
 	}
@@ -79,6 +82,8 @@ func (m Model) settingRowDescription(row settingRow) string {
 		return "Automatically follow newest incoming logs upon startup"
 	case settingRowDirectToDisk:
 		return "Continuous unbuffered disk tee for overnight soak tests"
+	case settingRowTheme:
+		return "Active color scheme across all tables, bars, modals, and tabs"
 	default:
 		return ""
 	}
@@ -152,6 +157,12 @@ func (m Model) settingValueLabel(row settingRow) string {
 			return "Enabled"
 		}
 		return "Disabled"
+
+	case settingRowTheme:
+		if s.Theme != "" {
+			return s.Theme
+		}
+		return CurrentThemeName()
 
 	default:
 		return ""
@@ -247,6 +258,25 @@ func (m Model) adjustSetting(row settingRow, delta int) Model {
 		} else {
 			m.message = "Direct-to-disk overnight stream disabled"
 		}
+
+	case settingRowTheme:
+		opts := AvailableThemes()
+		curTheme := m.settings.Theme
+		if curTheme == "" {
+			curTheme = CurrentThemeName()
+		}
+		curIdx := 0
+		for i, name := range opts {
+			if strings.EqualFold(normalizeThemeName(name), normalizeThemeName(curTheme)) {
+				curIdx = i
+				break
+			}
+		}
+		nextIdx := (curIdx + delta + len(opts)) % len(opts)
+		newTheme := opts[nextIdx]
+		m.settings.Theme = newTheme
+		SetCurrentTheme(newTheme)
+		m.message = fmt.Sprintf("Theme set to %s", newTheme)
 	}
 
 	m.saveSettings()

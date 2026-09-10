@@ -366,6 +366,9 @@ func New(
 		if savedSettings.BufferCapacity > 0 && buf != nil && buf.Cap() != savedSettings.BufferCapacity {
 			buf.Resize(savedSettings.BufferCapacity)
 		}
+		if savedSettings.Theme != "" {
+			SetCurrentTheme(savedSettings.Theme)
+		}
 	}
 
 	m := Model{
