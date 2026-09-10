@@ -307,52 +307,137 @@ func (m Model) viewKeyBar() string {
 		help := theme.Muted.Render("  [Enter: send · Tab: line ending · ↑/↓: history · ←/→: cursor · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
 
+	case modeSettings:
+		return "  " + theme.Muted.Render("Settings: [↑/↓: select · ←/→: adjust · Space: toggle · Enter/Esc: close]")
+
 	case modeHelp:
 		return "  " + theme.Muted.Render("Press ") + theme.KeyName.Render("?") + theme.Muted.Render(", ") + theme.KeyName.Render("Esc") + theme.Muted.Render(", or ") + theme.KeyName.Render("q") + theme.Muted.Render(" to close help")
 
 	default:
-		hints := []string{
-			theme.KeyName.Render("^F") + " " + theme.Muted.Render("search"),
-			theme.KeyName.Render("f") + " " + theme.Muted.Render("filter"),
-			theme.KeyName.Render("i") + " " + theme.Muted.Render("send"),
-			theme.KeyName.Render("F") + " " + theme.Muted.Render("presets"),
-			theme.KeyName.Render("b") + " " + theme.Muted.Render("pin"),
-			theme.KeyName.Render("y") + " " + theme.Muted.Render("copy"),
+		hint := func(k, action string) string {
+			return theme.KeyName.Render(k) + " " + theme.Muted.Render(action)
 		}
-		if m.splitMode != SplitNone {
-			hints = append(hints,
-				theme.KeyName.Render("w")+" "+theme.Muted.Render("pane"),
-				theme.KeyName.Render("S")+" "+theme.Muted.Render("sync"),
-				theme.KeyName.Render("|")+" "+theme.Muted.Render("close"),
+
+		var candidates []string
+
+		// Context 1: Row Selection Active
+		if m.selectedRow >= 0 {
+			if m.selectionStart >= 0 && m.selectionEnd >= 0 && m.selectionStart != m.selectionEnd {
+				start := m.selectionStart
+				end := m.selectionEnd
+				if start > end {
+					start, end = end, start
+				}
+				count := end - start + 1
+				candidates = append(candidates, hint("y", fmt.Sprintf("copy (%d)", count)))
+			} else {
+				candidates = append(candidates, hint("y", "copy"))
+			}
+			candidates = append(candidates,
+				hint("Y", "raw"),
+				hint("b", "pin"),
+				hint("Esc", "unselect"),
+				hint("f", "filter"),
+				hint("^F", "search"),
+				hint("Space", "resume"),
+				hint("c", "clear"),
+				hint(",", "⚙ cfg"),
+				hint("i", "send"),
+			)
+			if m.connState == ConnConnected && !m.isFileSource {
+				candidates = append(candidates, hint("D", "disconnect"))
+			} else if m.serialCfg.Port != "" && !m.isFileSource {
+				candidates = append(candidates, hint("r", "reconnect"))
+			}
+		} else if m.splitMode != SplitNone {
+			// Context 2: Split View Active
+			splitCloseKey := "|"
+			if m.splitMode == SplitHorizontal {
+				splitCloseKey = "_"
+			}
+			candidates = append(candidates,
+				hint("f", "filter"),
+				hint("^F", "search"),
+				hint("w", "pane"),
+				hint("S", "sync"),
+				hint(splitCloseKey, "unsplit"),
+				hint("Space", "pause"),
+				hint("c", "clear"),
+				hint(",", "⚙ cfg"),
+				hint("i", "send"),
+			)
+			if m.connState == ConnConnected && !m.isFileSource {
+				candidates = append(candidates, hint("D", "disconnect"))
+			} else if m.serialCfg.Port != "" && !m.isFileSource {
+				candidates = append(candidates, hint("r", "reconnect"))
+			}
+			candidates = append(candidates,
+				hint("t", "⏱ ts"),
 			)
 		} else {
-			hints = append(hints,
-				theme.KeyName.Render("|")+" "+theme.Muted.Render("split"),
+			// Context 3: Normal Follow / Stream Mode
+			pauseLabel := "pause"
+			if !m.follow {
+				pauseLabel = "resume"
+			}
+			candidates = append(candidates,
+				hint("f", "filter"),
+				hint("^F", "search"),
 			)
+			// Connection control (Disconnect / Reconnect / Port)
+			if m.connState == ConnConnected && !m.isFileSource {
+				candidates = append(candidates, hint("D", "disconnect"))
+			} else if m.serialCfg.Port != "" && !m.isFileSource {
+				candidates = append(candidates, hint("r", "reconnect"))
+			} else if !m.isFileSource {
+				candidates = append(candidates, hint("p", "port"))
+			}
+			if len(m.tabs) > 1 {
+				candidates = append(candidates, hint("Tab", "tab"), hint("^T", "new tab"))
+			} else {
+				candidates = append(candidates, hint("^T", "new tab"))
+			}
+			candidates = append(candidates,
+				hint("t", "⏱ ts"),
+				hint("P", "profile"),
+				hint("F", "presets"),
+				hint(",", "⚙ cfg"),
+				hint("Space", pauseLabel),
+				hint("c", "clear"),
+				hint("i", "send"),
+				hint("|", "split"),
+			)
+			if (m.connState == ConnConnected || m.serialCfg.Port != "") && !m.isFileSource {
+				candidates = append(candidates, hint("p", "port"))
+			}
 		}
-		if len(m.tabs) > 1 {
-			hints = append(hints, theme.KeyName.Render("Tab")+" "+theme.Muted.Render("tab"))
-			hints = append(hints, theme.KeyName.Render("^T")+" "+theme.Muted.Render("new tab"))
-		} else {
-			hints = append(hints, theme.KeyName.Render("^T")+" "+theme.Muted.Render("new tab"))
+
+		// Adaptive width budget:
+		// Always anchor `? help · q quit` at the right end of the bar.
+		sep := theme.Muted.Render(" · ")
+		sepWidth := lipgloss.Width(sep)
+		anchor := hint("?", "help") + sep + hint("q", "quit")
+		anchorWidth := lipgloss.Width(anchor)
+
+		targetWidth := m.width - 4
+		if targetWidth < anchorWidth+10 {
+			return "  " + anchor
 		}
-		hints = append(hints,
-			theme.KeyName.Render("Space")+" "+theme.Muted.Render("pause"),
-			theme.KeyName.Render("c")+" "+theme.Muted.Render("clear"),
-			theme.KeyName.Render("t")+" "+theme.Muted.Render("⏱ ts"),
-		)
-		if m.connState == ConnConnected && !m.isFileSource {
-			hints = append(hints, theme.KeyName.Render("D")+" "+theme.Muted.Render("disconnect"))
-		} else if m.serialCfg.Port != "" && !m.isFileSource {
-			hints = append(hints, theme.KeyName.Render("r")+" "+theme.Muted.Render("reconnect"))
+
+		var shown []string
+		usedWidth := 2 + anchorWidth // prefix "  " + anchor
+
+		for _, c := range candidates {
+			cWidth := lipgloss.Width(c)
+			needed := cWidth + sepWidth
+			if usedWidth+needed <= targetWidth {
+				shown = append(shown, c)
+				usedWidth += needed
+			}
 		}
-		hints = append(hints,
-			theme.KeyName.Render("p")+" "+theme.Muted.Render("port"),
-			theme.KeyName.Render("P")+" "+theme.Muted.Render("profile"),
-			theme.KeyName.Render("?")+" "+theme.Muted.Render("help"),
-			theme.KeyName.Render("q")+" "+theme.Muted.Render("quit"),
-		)
-		return "  " + strings.Join(hints, "   ")
+
+		shown = append(shown, anchor)
+		return "  " + strings.Join(shown, sep)
 	}
 }
 

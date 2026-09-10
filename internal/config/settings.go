@@ -11,13 +11,18 @@ import (
 
 // Settings stores user configuration that persists across application restarts.
 type Settings struct {
-	Port          string   `json:"port,omitempty"`
-	Baud          int      `json:"baud,omitempty"`
-	Profile       string   `json:"profile,omitempty"`
-	ShowTimestamp bool     `json:"show_timestamp"`
-	TimestampMode string   `json:"timestamp_mode,omitempty"`
-	TXEnding      string   `json:"tx_ending,omitempty"`
-	TXHistory     []string `json:"tx_history,omitempty"`
+	Port           string   `json:"port,omitempty"`
+	Baud           int      `json:"baud,omitempty"`
+	Profile        string   `json:"profile,omitempty"`
+	ShowTimestamp  bool     `json:"show_timestamp"`
+	TimestampMode  string   `json:"timestamp_mode,omitempty"`
+	TXEnding       string   `json:"tx_ending,omitempty"`
+	TXHistory      []string `json:"tx_history,omitempty"`
+	BufferCapacity int      `json:"buffer_capacity,omitempty"`
+	DefaultFollow  bool     `json:"default_follow"`
+	DirectToDisk   bool     `json:"direct_to_disk"`
+	LogDir         string   `json:"log_dir,omitempty"`
+	Theme          string   `json:"theme,omitempty"`
 }
 
 // SettingsPath returns the absolute path to settings.json in the config directory.
@@ -29,10 +34,13 @@ func (c *AppConfig) SettingsPath() string {
 }
 
 // LoadSettings reads saved settings from disk. If the file does not exist,
-// it returns a default Settings struct with Baud set to 115200.
+// it returns a default Settings struct with Baud set to 115200 and BufferCapacity set to 50000.
 func (c *AppConfig) LoadSettings() (*Settings, error) {
 	s := &Settings{
-		Baud: 115200,
+		Baud:           115200,
+		BufferCapacity: 50000,
+		DefaultFollow:  true,
+		Theme:          "dark-slate",
 	}
 	if c == nil || c.ConfigDir == "" {
 		return s, nil
@@ -53,6 +61,12 @@ func (c *AppConfig) LoadSettings() (*Settings, error) {
 
 	if s.Baud <= 0 {
 		s.Baud = 115200
+	}
+	if s.BufferCapacity <= 0 {
+		s.BufferCapacity = 50000
+	}
+	if s.Theme == "" {
+		s.Theme = "dark-slate"
 	}
 	return s, nil
 }

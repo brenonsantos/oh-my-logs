@@ -505,6 +505,7 @@ func (m Model) viewHelpModal() string {
 		renderItem("Space", "Pause / resume follow", colWidth),
 		renderItem("c", "Clear buffer", colWidth),
 		renderItem("t", "Toggle timestamp / Δt", colWidth),
+		renderItem(", , C", "Settings & preferences", colWidth),
 		renderItem("s", "Save log to file", colWidth),
 		renderItem("D, r", "Disconnect / Reconnect", colWidth),
 		renderItem("p, P", "Port / Profile select", colWidth),

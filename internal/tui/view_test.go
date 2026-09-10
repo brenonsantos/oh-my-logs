@@ -568,5 +568,69 @@ func TestProfilePickerModalRendering(t *testing.T) {
 	}
 }
 
+func TestKeyBar_AdaptiveWidthFitting(t *testing.T) {
+	m := newTestModel()
+	m.connState = ConnConnected
+	m.serialCfg = serial.Config{Port: "/dev/ttyUSB0", Baud: 115200}
+	m.selectedRow = -1
+
+	// 1. Small width (60 cols): should fit essential hints without wrapping or exceeding width
+	m.width = 60
+	bar60 := m.viewKeyBar()
+	if !strings.Contains(bar60, "help") {
+		t.Errorf("expected bar to always include 'help' anchor, got: %s", bar60)
+	}
+	if !strings.Contains(bar60, "filter") {
+		t.Errorf("expected high-priority 'filter' in 60-col bar, got: %s", bar60)
+	}
+	// Visual line length must not exceed 60
+	lines := strings.Split(bar60, "\n")
+	if len(lines) > 1 {
+		t.Errorf("expected single-line keyBar, got %d lines:\n%s", len(lines), bar60)
+	}
+
+	// 2. Standard 130 cols (user's terminal dimension): should fit more hints including cfg, disconnect, presets, etc.
+	m.width = 130
+	bar130 := m.viewKeyBar()
+	if !strings.Contains(bar130, "filter") || !strings.Contains(bar130, "search") || !strings.Contains(bar130, "disconnect") || !strings.Contains(bar130, "cfg") {
+		t.Errorf("expected filter, search, disconnect, cfg in 130-col bar, got:\n%s", bar130)
+	}
+	if !strings.Contains(bar130, "help") || !strings.Contains(bar130, "quit") {
+		t.Errorf("expected help and quit anchors in 130-col bar, got:\n%s", bar130)
+	}
+
+	// 3. Wide terminal (220 cols): fits almost all hints
+	m.width = 220
+	bar220 := m.viewKeyBar()
+	if !strings.Contains(bar220, "cfg") || !strings.Contains(bar220, "port") || !strings.Contains(bar220, "presets") {
+		t.Errorf("expected cfg, port, presets in wide bar, got:\n%s", bar220)
+	}
+}
+
+func TestKeyBar_ContextAwareSelectionAndSplit(t *testing.T) {
+	m := newTestModel()
+	m.width = 130
+
+	// 1. Row selection active: copy and pin should be prioritized first
+	m.selectedRow = 3
+	m.selectionStart = 3
+	m.selectionEnd = 7 // 5 rows selected
+	barSel := m.viewKeyBar()
+	if !strings.Contains(barSel, "copy (5)") {
+		t.Errorf("expected copy (5) in selection key bar, got:\n%s", barSel)
+	}
+	if !strings.Contains(barSel, "unselect") {
+		t.Errorf("expected unselect in selection key bar, got:\n%s", barSel)
+	}
+
+	// 2. Split view active: pane and sync should be prioritized
+	m.selectedRow = -1
+	m.splitMode = SplitVertical
+	barSplit := m.viewKeyBar()
+	if !strings.Contains(barSplit, "pane") || !strings.Contains(barSplit, "sync") {
+		t.Errorf("expected pane and sync in split key bar, got:\n%s", barSplit)
+	}
+}
+
 
 

@@ -29,6 +29,7 @@ const (
 	modeHelp
 	modeGame
 	modeTXInput
+	modeSettings
 )
 
 // TimestampMode defines whether to render arrival clock time, relative delta (Δt), or both.
@@ -251,6 +252,9 @@ type Model struct {
 	bookmarkedOnly bool                // when true, filter to show only bookmarked rows
 	nextRecordID   uint64
 
+	// Settings modal
+	settingsCursor int
+
 	// Dual-pane split view & chronological sync
 	splitMode     SplitMode
 	splitLeftTab  int  // index into m.tabs for pane 0 (left / top)
@@ -354,6 +358,16 @@ func New(
 	}
 	tracker := timing.NewTracker(timingCfg)
 
+	initFollow := true
+	if savedSettings != nil {
+		if !savedSettings.DefaultFollow && savedSettings.BufferCapacity > 0 {
+			initFollow = false
+		}
+		if savedSettings.BufferCapacity > 0 && buf != nil && buf.Cap() != savedSettings.BufferCapacity {
+			buf.Resize(savedSettings.BufferCapacity)
+		}
+	}
+
 	m := Model{
 		keys:          defaultKeyMap(),
 		serialCfg:     cfg,
@@ -365,7 +379,7 @@ func New(
 		parser:        p,
 		columns:       cols,
 		buffer:        buf,
-		follow:        true,
+		follow:        initFollow,
 		sidebarWidth:  20,
 		showTimestamp: tsMode != TSModeOff,
 		tsMode:        tsMode,
@@ -716,6 +730,14 @@ func (m Model) saveSettings() {
 	s.TimestampMode = m.tsMode.String()
 	s.TXEnding = m.txEnding.String()
 	s.TXHistory = m.txHistory
+	if m.buffer != nil {
+		s.BufferCapacity = m.buffer.Cap()
+	}
+	if m.settings != nil {
+		s.DefaultFollow = m.settings.DefaultFollow
+		s.DirectToDisk = m.settings.DirectToDisk
+		s.Theme = m.settings.Theme
+	}
 	_ = m.appConfig.SaveSettings(s)
 }
 

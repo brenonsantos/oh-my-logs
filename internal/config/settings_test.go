@@ -27,12 +27,25 @@ func TestSettingsSaveAndLoad(t *testing.T) {
 	if s.Baud != 115200 {
 		t.Errorf("expected default baud 115200, got %d", s.Baud)
 	}
+	if s.BufferCapacity != 50000 {
+		t.Errorf("expected default buffer capacity 50000, got %d", s.BufferCapacity)
+	}
+	if !s.DefaultFollow {
+		t.Errorf("expected default follow true")
+	}
+	if s.Theme != "dark-slate" {
+		t.Errorf("expected default theme dark-slate, got %s", s.Theme)
+	}
 
 	// 2. Save settings
 	s.Port = "/dev/ttyUSB0"
 	s.Baud = 921600
 	s.Profile = "STM32-PDM"
 	s.ShowTimestamp = true
+	s.BufferCapacity = 100000
+	s.DefaultFollow = false
+	s.DirectToDisk = true
+	s.Theme = "monokai"
 
 	if err := cfg.SaveSettings(s); err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)
@@ -55,5 +68,17 @@ func TestSettingsSaveAndLoad(t *testing.T) {
 	}
 	if !loaded.ShowTimestamp {
 		t.Errorf("expected ShowTimestamp to be true")
+	}
+	if loaded.BufferCapacity != 100000 {
+		t.Errorf("expected buffer capacity 100000, got %d", loaded.BufferCapacity)
+	}
+	if loaded.DefaultFollow {
+		t.Errorf("expected DefaultFollow false")
+	}
+	if !loaded.DirectToDisk {
+		t.Errorf("expected DirectToDisk true")
+	}
+	if loaded.Theme != "monokai" {
+		t.Errorf("expected theme monokai, got %s", loaded.Theme)
 	}
 }
