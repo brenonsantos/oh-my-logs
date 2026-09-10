@@ -119,7 +119,8 @@ else
     LATEST_URL="https://api.github.com/repos/$REPO/releases/latest"
     ASSET_URL=""
     if command -v curl >/dev/null 2>&1; then
-        ASSET_URL="$(curl -fsSL -H "User-Agent: oh-my-logs-installer" "$LATEST_URL" 2>/dev/null | grep -E "browser_download_url.*_${GOOS}_${GOARCH}\.tar\.gz" | cut -d '"' -f 4 || true)"
+        JSON="$(curl -fsSL -H "User-Agent: oh-my-logs-installer" "$LATEST_URL" 2>/dev/null || true)"
+        ASSET_URL="$(printf "%s" "$JSON" | grep -o "https://[^\"]*_${GOOS}_${GOARCH}\.tar\.gz" | head -n 1 || true)"
     fi
 
     if [ -z "$ASSET_URL" ]; then
@@ -129,7 +130,15 @@ else
     fi
 
     print_step "Downloading $(basename "$ASSET_URL")..."
-    curl -fsSL -o "$TMP_DIR/oml.tar.gz" "$ASSET_URL"
+    if ! curl -fsSL -o "$TMP_DIR/oml.tar.gz" "$ASSET_URL"; then
+        print_error "Failed to download $ASSET_URL"
+        exit 1
+    fi
+
+    if ! gzip -t "$TMP_DIR/oml.tar.gz" 2>/dev/null; then
+        print_error "Downloaded archive is corrupted or not a valid gzip file."
+        exit 1
+    fi
 
     print_step "Extracting archive..."
     tar -xzf "$TMP_DIR/oml.tar.gz" -C "$TMP_DIR"
