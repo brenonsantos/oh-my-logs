@@ -190,6 +190,9 @@ func (m *Model) clampScroll() {
 }
 
 func (m *Model) recalcLayout() {
+	if m.height <= 0 {
+		return
+	}
 	// Fixed rows: 1 title + 1 divider + 1 header + 1 divider + 1 divider + 1 status + 1 keys = 7 fixed rows.
 	// If more than 1 tab is present, tab bar adds 2 rows (1 row tab bar + 1 row divider).
 	fixed := 7

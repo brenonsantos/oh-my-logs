@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -326,5 +327,149 @@ func TestWiresharkInspectorDrawer(t *testing.T) {
 		t.Errorf("expected inspectorHeight 0 in FormatParsed, got %d", m.inspectorHeight)
 	}
 }
+
+func TestViewHeightConsistency(t *testing.T) {
+	records := make([]record.Record, 100)
+	for i := 0; i < 100; i++ {
+		records[i] = record.Record{
+			ID:        uint64(i + 1),
+			Raw:       fmt.Sprintf("[%d] Test log message payload with 52 bytes of raw data!!", i+1),
+			Timestamp: time.Now(),
+			Fields:    map[string]string{"message": fmt.Sprintf("msg %d", i+1)},
+		}
+	}
+	m := newTestModelWithRecords(records)
+	m.width = 241
+	m.height = 59
+	m.recalcLayout()
+
+	checkLines := func(desc string) {
+		t.Helper()
+		v := m.View()
+		lines := strings.Split(v, "\n")
+		t.Logf("%s: view lines = %d (expected %d), tableH = %d, inspH = %d, split = %d", desc, len(lines), m.height, m.tableHeight, m.inspectorHeight, m.splitMode)
+		if len(lines) != m.height {
+			t.Errorf("%s: expected exactly %d lines in View(), got %d", desc, m.height, len(lines))
+		}
+	}
+
+	checkLines("1 tab, parsed")
+
+	// Switch to Hex
+	m.displayFormat = FormatHex
+	m.currentTab().DisplayFormat = FormatHex
+	m.recalcLayout()
+	checkLines("1 tab, hex")
+
+	// Add second tab
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	m = newM.(Model)
+	m.recalcLayout()
+	checkLines("2 tabs, hex")
+
+	// Split vertical (|)
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'|'}})
+	m = newM.(Model)
+	checkLines("split vertical")
+
+	// Focus pane 0 (left tab, which has FormatHex!)
+	m.activePane = 0
+	m.splitLeftTab = 0
+	m.activeTab = 0
+	m.syncModelToActiveTab()
+	checkLines("split vertical with left hex")
+}
+
+func TestUserBugSequence(t *testing.T) {
+	records := make([]record.Record, 400)
+	for i := 0; i < 400; i++ {
+		records[i] = record.Record{
+			ID:        uint64(i + 1),
+			Raw:       fmt.Sprintf("[%d] Test log message payload with 52 bytes of raw data!!", i+1),
+			Timestamp: time.Now(),
+			Fields:    map[string]string{"message": fmt.Sprintf("msg %d", i+1)},
+		}
+	}
+	m := newTestModelWithRecords(records)
+	m.width = 241
+	m.height = 59
+	m.recalcLayout()
+
+	// 1. Switch to FormatHex (press x twice: Parsed -> Raw -> Hex)
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	newM, _ = newM.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	m = newM.(Model)
+
+	v1 := m.View()
+	lines1 := strings.Split(v1, "\n")
+	t.Logf("State 1 (Hex, 1 tab): lines=%d (height=%d), tableH=%d, inspH=%d", len(lines1), m.height, m.tableHeight, m.inspectorHeight)
+
+	// 2. Press | to enter split view (toggleSplit)
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'|'}})
+	m = newM.(Model)
+
+	v2 := m.View()
+	lines2 := strings.Split(v2, "\n")
+	t.Logf("State 2 (Split vertical): lines=%d (height=%d), tableH=%d, inspH=%d", len(lines2), m.height, m.tableHeight, m.inspectorHeight)
+	if len(lines2) != m.height {
+		t.Fatalf("State 2 expected exactly %d lines, got %d", m.height, len(lines2))
+	}
+	if !strings.Contains(v2, "HEX DUMP (16B/line)") {
+		t.Errorf("State 2 expected view to contain inspector divider in split mode")
+	}
+	if !strings.Contains(v2, "0000: ") {
+		t.Errorf("State 2 expected view to contain hex dump line in split mode")
+	}
+
+	// 4. Test tab switching between Hex and Parsed
+	// Tab 1 is Hex, Tab 2 is Parsed
+	m.tabs[0].DisplayFormat = FormatHex
+	m.tabs[1].DisplayFormat = FormatParsed
+	m.activeTab = 0
+	m.syncModelToActiveTab()
+	// Switch to Tab 2 (Parsed) with Tab key
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = newM.(Model)
+	vTab2 := m.View()
+	linesTab2 := strings.Split(vTab2, "\n")
+	t.Logf("State 4 (Switch to Tab 2 Parsed): lines=%d (height=%d), tableH=%d, inspH=%d", len(linesTab2), m.height, m.tableHeight, m.inspectorHeight)
+	if len(linesTab2) != m.height {
+		t.Fatalf("State 4 expected exactly %d lines, got %d", m.height, len(linesTab2))
+	}
+
+	// Switch back to Tab 1 (Hex) with Tab key
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = newM.(Model)
+	vTab1 := m.View()
+	linesTab1 := strings.Split(vTab1, "\n")
+	t.Logf("State 5 (Switch back to Tab 1 Hex): lines=%d (height=%d), tableH=%d, inspH=%d", len(linesTab1), m.height, m.tableHeight, m.inspectorHeight)
+	if len(linesTab1) != m.height {
+		t.Fatalf("State 5 expected exactly %d lines, got %d", m.height, len(linesTab1))
+	}
+
+	// Now unsplit with |
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'|'}})
+	m = newM.(Model)
+	vUnsplit := m.View()
+	linesUnsplit := strings.Split(vUnsplit, "\n")
+	t.Logf("State 6 (Unsplit): lines=%d (height=%d), tableH=%d, inspH=%d", len(linesUnsplit), m.height, m.tableHeight, m.inspectorHeight)
+	if len(linesUnsplit) != m.height {
+		t.Fatalf("State 6 expected exactly %d lines, got %d", m.height, len(linesUnsplit))
+	}
+
+	// Now press Tab to switch to Tab 2 (Parsed) in single pane
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = newM.(Model)
+	vTab2Single := m.View()
+	linesTab2Single := strings.Split(vTab2Single, "\n")
+	t.Logf("State 7 (Tab 2 Parsed in single pane): lines=%d (height=%d), tableH=%d, inspH=%d", len(linesTab2Single), m.height, m.tableHeight, m.inspectorHeight)
+	if len(linesTab2Single) != m.height {
+		t.Fatalf("State 7 expected exactly %d lines, got %d", m.height, len(linesTab2Single))
+	}
+	if strings.Contains(vTab2Single, "HEX DUMP (16B/line)") {
+		t.Errorf("State 7 should NOT contain inspector drawer in Parsed format")
+	}
+}
+
 
 

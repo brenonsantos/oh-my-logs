@@ -47,6 +47,12 @@ func (m Model) View() string {
 		sb.WriteString(m.viewEmptyState())
 	} else if m.splitMode != SplitNone {
 		sb.WriteString(m.viewSplitTable())
+		if m.isInspectorActive() && m.inspectorHeight > 0 {
+			sb.WriteByte('\n')
+			sb.WriteString(m.viewInspectorDivider())
+			sb.WriteByte('\n')
+			sb.WriteString(m.viewInspectorDrawer())
+		}
 	} else {
 		// Table Header
 		sb.WriteString(m.viewTableHeader())

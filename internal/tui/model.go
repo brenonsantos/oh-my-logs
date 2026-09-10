@@ -497,6 +497,7 @@ func (m *Model) toggleSplit(mode SplitMode) {
 		m.splitMode = SplitNone
 		m.activePane = 0
 		m.syncModelToActiveTab()
+		m.recalcLayout()
 		m.clampScroll()
 		m.message = "Split view closed (single tab)"
 		return
@@ -526,6 +527,7 @@ func (m *Model) toggleSplit(mode SplitMode) {
 	m.splitMode = mode
 	m.activePane = 0
 	m.syncScroll = true // default to chronological sync on split
+	m.recalcLayout()
 
 	// Ensure viewports and follow offsets match the split pane heights
 	for p := 0; p < 2; p++ {
@@ -561,6 +563,7 @@ func (m *Model) switchPaneFocus() {
 	if m.splitMode == SplitNone {
 		return
 	}
+	oldInsp := m.isInspectorActive()
 	m.syncActiveTabToModel()
 	if m.activePane == 0 {
 		m.activePane = 1
@@ -568,6 +571,9 @@ func (m *Model) switchPaneFocus() {
 		m.activePane = 0
 	}
 	m.syncModelToActiveTab()
+	if m.isInspectorActive() != oldInsp {
+		m.recalcLayout()
+	}
 	m.clampScroll()
 
 	paneName := "Left"
@@ -707,6 +713,7 @@ func (m *Model) switchTab(newIdx int) {
 	if len(m.tabs) <= 1 || newIdx < 0 || newIdx >= len(m.tabs) {
 		return
 	}
+	oldInsp := m.isInspectorActive()
 	m.syncActiveTabToModel()
 	if m.splitMode != SplitNone {
 		if m.activePane == 0 {
@@ -728,6 +735,9 @@ func (m *Model) switchTab(newIdx int) {
 		m.activeTab = newIdx
 	}
 	m.syncModelToActiveTab()
+	if m.isInspectorActive() != oldInsp {
+		m.recalcLayout()
+	}
 	m.clampScroll()
 }
 
