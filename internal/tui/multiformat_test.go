@@ -204,3 +204,47 @@ func TestTabBarAndStatusBarBadge(t *testing.T) {
 		t.Errorf("expected status bar to show HEX indicator, got:\n%s", statusBar)
 	}
 }
+
+func TestColumnWidthsHexAndBinaryFlex(t *testing.T) {
+	m := newTestModel()
+	m.tsMode = TSModeOff
+
+	// 1. Hex Mode at width 140
+	m.displayFormat = FormatHex
+	m.tabs[0].DisplayFormat = FormatHex
+	colsHex := m.effectiveColumnsForTab(&m.tabs[0])
+	widthsHex140 := m.computeColWidthsForWidth(colsHex, 140)
+
+	// cols: LEN (6), HEX DUMP (flex), ASCII (24)
+	// used = 3 (prefix) + 4 (2 gaps of 2) + 6 (LEN) + 24 (ASCII) = 37
+	// flex = 140 - 37 = 103 columns!
+	if widthsHex140[1] != 103 {
+		t.Errorf("expected hex dump column width 103 at tableW=140, got %d", widthsHex140[1])
+	}
+	if widthsHex140[2] != 24 {
+		t.Errorf("expected ascii column width 24, got %d", widthsHex140[2])
+	}
+
+	// 2. Binary Mode at width 140
+	m.displayFormat = FormatBinary
+	m.tabs[0].DisplayFormat = FormatBinary
+	colsBin := m.effectiveColumnsForTab(&m.tabs[0])
+	widthsBin140 := m.computeColWidthsForWidth(colsBin, 140)
+
+	// cols: LEN (6), BINARY BITS (flex), ASCII (16)
+	// used = 3 + 4 + 6 + 16 = 29
+	// flex = 140 - 29 = 111 columns!
+	if widthsBin140[1] != 111 {
+		t.Errorf("expected binary bits column width 111 at tableW=140, got %d", widthsBin140[1])
+	}
+	if widthsBin140[2] != 16 {
+		t.Errorf("expected ascii column width 16, got %d", widthsBin140[2])
+	}
+
+	// 3. Narrow viewport at width 45: ASCII scales down to prevent flex starvation
+	widthsNarrow := m.computeColWidthsForWidth(colsHex, 45)
+	if widthsNarrow[1] < 20 {
+		t.Errorf("expected flex column to have at least 20 cols in narrow viewport, got %d", widthsNarrow[1])
+	}
+}
+
