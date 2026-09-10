@@ -32,6 +32,7 @@ func main() {
 		flagOut           = flag.String("out", "", "output file path for --export-profile")
 		flagInstall       = flag.Bool("install", false, "install oml binary into system/user PATH")
 		flagUninstall     = flag.Bool("uninstall", false, "uninstall oml binary from system/user PATH")
+		flagUpdate        = flag.Bool("update", false, "check for and install latest oml release")
 	)
 	flag.Parse()
 
@@ -69,6 +70,17 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Printf("✓ Successfully uninstalled oml from:\n  %s\n", dest)
+		os.Exit(0)
+	}
+
+	if *flagUpdate {
+		fmt.Printf("Checking for updates (current: v%s)...\n", version)
+		msg, err := config.UpdateBinary(appCfg, version)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error updating oml: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(msg)
 		os.Exit(0)
 	}
 
