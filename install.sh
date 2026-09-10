@@ -65,14 +65,28 @@ esac
 # Parse arguments
 DO_UNINSTALL=0
 NIGHTLY=0
+SPECIFIED_TAG="${VERSION:-${TAG:-}}"
 
-for arg in "$@"; do
-    case "$arg" in
+while [ $# -gt 0 ]; do
+    case "$1" in
         --uninstall|-u)
             DO_UNINSTALL=1
+            shift
             ;;
         --nightly|-n)
             NIGHTLY=1
+            shift
+            ;;
+        --version|-v|--tag)
+            SPECIFIED_TAG="$2"
+            shift 2
+            ;;
+        --version=*|--tag=*)
+            SPECIFIED_TAG="${1#*=}"
+            shift
+            ;;
+        *)
+            shift
             ;;
     esac
 done
@@ -101,6 +115,8 @@ fi
 
 if [ "$NIGHTLY" = "1" ]; then
     printf "${BOLD}oh-my-logs (oml) Installer [Nightly Channel] for %s (%s)${RESET}\n\n" "$OS_NAME" "$GOARCH"
+elif [ -n "$SPECIFIED_TAG" ]; then
+    printf "${BOLD}oh-my-logs (oml) Installer [%s] for %s (%s)${RESET}\n\n" "$SPECIFIED_TAG" "$OS_NAME" "$GOARCH"
 else
     printf "${BOLD}oh-my-logs (oml) Installer for %s (%s)${RESET}\n\n" "$OS_NAME" "$GOARCH"
 fi
@@ -141,6 +157,9 @@ else
     if [ "$NIGHTLY" = "1" ]; then
         RELEASE_NAME="nightly build"
         RELEASE_URL="https://api.github.com/repos/$REPO/releases/tags/nightly"
+    elif [ -n "$SPECIFIED_TAG" ]; then
+        RELEASE_NAME="release $SPECIFIED_TAG"
+        RELEASE_URL="https://api.github.com/repos/$REPO/releases/tags/$SPECIFIED_TAG"
     else
         RELEASE_NAME="latest stable release"
         RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
