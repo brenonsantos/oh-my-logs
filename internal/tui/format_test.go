@@ -2,6 +2,8 @@ package tui
 
 import (
 	"testing"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestDisplayFormatCycleAndParse(t *testing.T) {
@@ -167,3 +169,11 @@ func TestFormatCanonicalBinaryLines(t *testing.T) {
 	}
 }
 
+func TestAnsiCutBehavior(t *testing.T) {
+	styled := theme.Accent.Render("0123456789ABCDEF")
+	cut := ansiCut(styled, 4, 8)
+	t.Logf("original=%q cut=%q width=%d", styled, cut, lipgloss.Width(cut))
+	if lipgloss.Width(cut) != 8 {
+		t.Errorf("expected width 8, got %d", lipgloss.Width(cut))
+	}
+}

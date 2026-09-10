@@ -17,6 +17,86 @@ func (m Model) viewDivider() string {
 	return theme.Divider.Render(strings.Repeat("─", w))
 }
 
+// renderHScrollTrack renders a track with an accent-styled thumb indicating horizontal scroll offset.
+func renderHScrollTrack(scrollX int, maxContentW int, trackW int) string {
+	if trackW <= 0 {
+		return ""
+	}
+	if trackW < 10 || maxContentW <= trackW {
+		return theme.Divider.Render(strings.Repeat("─", trackW))
+	}
+
+	thumbW := trackW * trackW / maxContentW
+	if thumbW < 6 {
+		thumbW = 6
+	}
+	if thumbW > trackW {
+		thumbW = trackW
+	}
+
+	maxScroll := maxContentW - trackW
+	thumbLeft := 0
+	if maxScroll > 0 {
+		thumbLeft = scrollX * (trackW - thumbW) / maxScroll
+	}
+	if thumbLeft < 0 {
+		thumbLeft = 0
+	}
+	if thumbLeft+thumbW > trackW {
+		thumbLeft = trackW - thumbW
+	}
+
+	leftTrack := strings.Repeat("─", thumbLeft)
+	var thumb string
+	if thumbW >= 6 {
+		thumb = "◀" + strings.Repeat("━", thumbW-2) + "▶"
+	} else {
+		thumb = strings.Repeat("━", thumbW)
+	}
+	rightTrack := strings.Repeat("─", trackW-thumbLeft-thumbW)
+
+	return theme.Divider.Render(leftTrack) + theme.Accent.Bold(true).Render(thumb) + theme.Divider.Render(rightTrack)
+}
+
+// viewHorizontalScrollbarDivider renders the bottom divider with an interactive horizontal scrollbar.
+func (m Model) viewHorizontalScrollbarDivider() string {
+	w := m.tableWidth()
+	if w <= 0 {
+		return ""
+	}
+
+	if m.splitMode == SplitVertical {
+		splitX := (w - 1) / 2
+		leftW := splitX
+		rightW := w - splitX - 1
+
+		leftScroll := 0
+		var leftTab *Tab
+		if m.splitLeftTab >= 0 && m.splitLeftTab < len(m.tabs) {
+			leftTab = &m.tabs[m.splitLeftTab]
+			leftScroll = leftTab.ScrollX
+		}
+		rightScroll := 0
+		var rightTab *Tab
+		if m.splitRightTab >= 0 && m.splitRightTab < len(m.tabs) {
+			rightTab = &m.tabs[m.splitRightTab]
+			rightScroll = rightTab.ScrollX
+		}
+
+		leftMaxW := m.maxContentWidthForTab(leftTab, leftW)
+		rightMaxW := m.maxContentWidthForTab(rightTab, rightW)
+
+		leftPart := renderHScrollTrack(leftScroll, leftMaxW, leftW)
+		sep := theme.Divider.Render("┼")
+		rightPart := renderHScrollTrack(rightScroll, rightMaxW, rightW)
+		return leftPart + sep + rightPart
+	}
+
+	curTab := m.currentTab()
+	maxW := m.maxContentWidthForTab(curTab, w)
+	return renderHScrollTrack(m.scrollX, maxW, w)
+}
+
 // viewTabBar renders the pill-based virtual tab switcher bar.
 func (m Model) viewTabBar() string {
 	w := m.tableWidth()
@@ -252,6 +332,15 @@ func (m Model) viewStatusBar() string {
 			parts = append(parts, theme.Secondary.Bold(true).Render(fmt.Sprintf("%d selected", count)))
 		}
 	}
+	if m.charSelStart >= 0 && m.charSelEnd >= 0 && m.charSelStart != m.charSelEnd {
+		diff := m.charSelEnd - m.charSelStart
+		if diff < 0 {
+			diff = -diff
+		}
+		parts = append(parts, theme.Secondary.Bold(true).Render(fmt.Sprintf("%d chars selected", diff)))
+	} else if m.scrollX > 0 {
+		parts = append(parts, theme.Muted.Render(fmt.Sprintf("⇥ col %d", m.scrollX)))
+	}
 	if m.activeFilter != nil && !m.activeFilter.Empty() {
 		parts = append(parts, theme.Accent.Render(fmt.Sprintf("filter: %s", m.activeFilter.Raw)))
 	}
@@ -347,7 +436,13 @@ func (m Model) renderKeyBarContent() string {
 
 		// Context 1: Row Selection Active
 		if m.selectedRow >= 0 {
-			if m.selectionStart >= 0 && m.selectionEnd >= 0 && m.selectionStart != m.selectionEnd {
+			if m.charSelStart >= 0 && m.charSelEnd >= 0 && m.charSelStart != m.charSelEnd {
+				diff := m.charSelEnd - m.charSelStart
+				if diff < 0 {
+					diff = -diff
+				}
+				candidates = append(candidates, hint("y", fmt.Sprintf("copy (%d chars)", diff)), hint("Esc", "clear sel"))
+			} else if m.selectionStart >= 0 && m.selectionEnd >= 0 && m.selectionStart != m.selectionEnd {
 				start := m.selectionStart
 				end := m.selectionEnd
 				if start > end {
@@ -359,7 +454,8 @@ func (m Model) renderKeyBarContent() string {
 				candidates = append(candidates, hint("y", "copy"))
 			}
 			candidates = append(candidates,
-				hint("Y", "raw"),
+				hint("←/→", "char"),
+				hint("{/}", "pan"),
 				hint("b", "pin"),
 				hint("Esc", "unselect"),
 				hint("f", "filter"),
@@ -504,4 +600,3 @@ func renderInputWithCursor(text string, pos int, baseStyle lipgloss.Style) strin
 
 	return before + underCursor + after
 }
-

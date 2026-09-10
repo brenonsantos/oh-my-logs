@@ -76,8 +76,8 @@ func (m Model) View() string {
 
 	sb.WriteByte('\n')
 
-	// 4. Divider before status bar
-	sb.WriteString(m.viewDivider())
+	// 4. Divider before status bar (with horizontal scrollbar)
+	sb.WriteString(m.viewHorizontalScrollbarDivider())
 	sb.WriteByte('\n')
 
 	// 5. Status bar

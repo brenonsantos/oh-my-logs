@@ -107,7 +107,10 @@ type RecordMsg record.Record
 type ErrorMsg struct{ Err error }
 
 // ConnStateMsg signals a connection state change.
-type ConnStateMsg struct{ State ConnState; Detail string }
+type ConnStateMsg struct {
+	State  ConnState
+	Detail string
+}
 
 // SplitMode defines the dual-pane view state.
 type SplitMode int
@@ -121,18 +124,22 @@ const (
 // Tab represents an independent virtual tab with its own filter, visible records,
 // scroll position, follow state, and search state.
 type Tab struct {
-	Name          string
-	FilterRaw     string
-	Filter        *filter.Filter
-	Visible       []record.Record
-	ScrollOffset  int
-	Follow        bool
-	SearchInput   string
-	SearchMatches []int
-	SearchCursor  int
+	Name           string
+	FilterRaw      string
+	Filter         *filter.Filter
+	Visible        []record.Record
+	ScrollOffset   int
+	Follow         bool
+	SearchInput    string
+	SearchMatches  []int
+	SearchCursor   int
 	SelectedRow    int // selected row index into Visible (-1 if none)
-	BookmarkedOnly  bool
-	DisplayFormat   DisplayFormat
+	BookmarkedOnly bool
+	DisplayFormat  DisplayFormat
+	ScrollX        int // horizontal window scroll offset
+	CursorCol      int // character cursor column (-1 if none)
+	CharSelStart   int // character selection start (-1 if none)
+	CharSelEnd     int // character selection end (-1 if none)
 }
 
 // DisplayName returns a user-friendly label for the tab.
@@ -149,23 +156,23 @@ func (t Tab) DisplayName(defaultIndex int) string {
 // Model is the top-level Bubble Tea model.
 type Model struct {
 	// Configuration
-	keys    keyMap
-	width   int
-	height  int
+	keys   keyMap
+	width  int
+	height int
 
 	// Serial / source
-	source       serial.Source
-	serialCfg    serial.Config
-	connState    ConnState
-	connDetail   string
+	source           serial.Source
+	serialCfg        serial.Config
+	connState        ConnState
+	connDetail       string
 	reconnecting     bool
 	manualDisconnect bool
 	isFileSource     bool
 
 	// Profile & parser
-	profile  *parser.Profile
-	parser   parser.Parser
-	columns  []record.Column
+	profile *parser.Profile
+	parser  parser.Parser
+	columns []record.Column
 
 	// Data
 	buffer  *record.Buffer
@@ -178,9 +185,9 @@ type Model struct {
 
 	// Search
 	searchInput   string
-	searchPos     int // rune cursor position in searchInput
+	searchPos     int   // rune cursor position in searchInput
 	searchMatches []int // indices into visible
-	searchCursor  int // match navigation index into searchMatches
+	searchCursor  int   // match navigation index into searchMatches
 
 	// Scroll / follow
 	scrollOffset int // index of the top visible row
@@ -266,6 +273,12 @@ type Model struct {
 	// Multi-format representation (FormatParsed, FormatRaw, FormatHex, FormatBinary)
 	displayFormat   DisplayFormat
 	inspectorHeight int
+
+	// 2D Window scroll & character cursor
+	scrollX      int // horizontal window scroll offset
+	cursorCol    int // character cursor column (-1 if none)
+	charSelStart int // character selection start (-1 if none)
+	charSelEnd   int // character selection end (-1 if none)
 }
 
 // New creates a new Model with sensible defaults.
@@ -377,26 +390,26 @@ func New(
 	}
 
 	m := Model{
-		keys:          defaultKeyMap(),
-		serialCfg:     cfg,
-		source:        src,
-		connState:     initState,
-		reconnecting:  reconn,
-		isFileSource:  isFile,
-		profile:       profile,
-		parser:        p,
-		columns:       cols,
-		buffer:        buf,
-		follow:        initFollow,
-		sidebarWidth:  20,
-		showTimestamp: tsMode != TSModeOff,
-		tsMode:        tsMode,
-		deltaTracker:  tracker,
-		tsField:       tsField,
-		tsFormat:      tsFormat,
-		appConfig:     appCfg,
-		settings:      savedSettings,
-		baudList:      bauds,
+		keys:                defaultKeyMap(),
+		serialCfg:           cfg,
+		source:              src,
+		connState:           initState,
+		reconnecting:        reconn,
+		isFileSource:        isFile,
+		profile:             profile,
+		parser:              p,
+		columns:             cols,
+		buffer:              buf,
+		follow:              initFollow,
+		sidebarWidth:        20,
+		showTimestamp:       tsMode != TSModeOff,
+		tsMode:              tsMode,
+		deltaTracker:        tracker,
+		tsField:             tsField,
+		tsFormat:            tsFormat,
+		appConfig:           appCfg,
+		settings:            savedSettings,
+		baudList:            bauds,
 		baudCursor:          baudIdx,
 		bookmarks:           make(map[uint64]struct{}),
 		filterHistoryCursor: -1,
@@ -428,6 +441,9 @@ func New(
 		Follow:        true,
 		SelectedRow:   -1,
 		DisplayFormat: initFormat,
+		CursorCol:     -1,
+		CharSelStart:  -1,
+		CharSelEnd:    -1,
 	}
 	m.tabs = []Tab{initTab}
 	m.activeTab = 0
@@ -436,6 +452,9 @@ func New(
 	m.selectionStart = -1
 	m.selectionEnd = -1
 	m.lastClickRow = -1
+	m.cursorCol = -1
+	m.charSelStart = -1
+	m.charSelEnd = -1
 	return m
 }
 
@@ -682,6 +701,10 @@ func (m *Model) syncActiveTabToModel() {
 	cur.SelectedRow = m.selectedRow
 	cur.BookmarkedOnly = m.bookmarkedOnly
 	cur.DisplayFormat = m.displayFormat
+	cur.ScrollX = m.scrollX
+	cur.CursorCol = m.cursorCol
+	cur.CharSelStart = m.charSelStart
+	cur.CharSelEnd = m.charSelEnd
 }
 
 // syncModelToActiveTab updates the model's active view state from the current tab.
@@ -700,6 +723,10 @@ func (m *Model) syncModelToActiveTab() {
 	m.selectedRow = cur.SelectedRow
 	m.bookmarkedOnly = cur.BookmarkedOnly
 	m.displayFormat = cur.DisplayFormat
+	m.scrollX = cur.ScrollX
+	m.cursorCol = cur.CursorCol
+	m.charSelStart = cur.CharSelStart
+	m.charSelEnd = cur.CharSelEnd
 	m.selectionStart = -1
 	m.selectionEnd = -1
 }

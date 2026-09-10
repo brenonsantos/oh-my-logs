@@ -189,6 +189,33 @@ func (m *Model) clampScroll() {
 	}
 }
 
+func (m *Model) clampScrollX() {
+	if m.scrollX < 0 {
+		m.scrollX = 0
+	}
+	containerW := m.tableWidth()
+	curTab := m.currentTab()
+	if m.splitMode == SplitVertical {
+		splitX := (containerW - 1) / 2
+		if m.activePane == 0 {
+			containerW = splitX
+		} else {
+			containerW = containerW - splitX - 1
+		}
+	}
+	maxW := m.maxContentWidthForTab(curTab, containerW)
+	maxScroll := maxW - containerW
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if m.scrollX > maxScroll {
+		m.scrollX = maxScroll
+	}
+	if curTab != nil {
+		curTab.ScrollX = m.scrollX
+	}
+}
+
 func (m *Model) recalcLayout() {
 	if m.height <= 0 {
 		return

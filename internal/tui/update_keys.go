@@ -115,6 +115,8 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.ScrollUp):
 		m.selectionStart = -1
 		m.selectionEnd = -1
+		m.charSelStart = -1
+		m.charSelEnd = -1
 		wasFollow := m.follow
 		m.follow = false
 		h := m.activeDataHeight()
@@ -130,28 +132,36 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					if m.selectedRow >= len(m.visible) {
 						m.selectedRow = len(m.visible) - 1
 					}
-					if m.selectedRow > 0 {
-						m.selectedRow--
-					}
+				if m.selectedRow > 0 {
+					m.selectedRow--
 				}
-			} else if m.selectedRow > 0 {
-				m.selectedRow--
 			}
-			if m.selectedRow < m.scrollOffset {
-				m.scrollOffset = m.selectedRow
+		} else if m.selectedRow > 0 {
+			m.selectedRow--
+		}
+		if m.selectedRow >= 0 && m.selectedRow < len(m.visible) && m.cursorCol >= 0 {
+			rowLen := len([]rune(m.selectedRowPlainText(m.selectedRow)))
+			if rowLen > 0 && m.cursorCol >= rowLen {
+				m.cursorCol = rowLen - 1
 			}
-		} else {
-			m.scrollOffset--
 		}
-		m.clampScroll()
-		if m.splitMode != SplitNone && m.syncScroll {
-			m.syncOtherPaneChronologically()
+		if m.selectedRow < m.scrollOffset {
+			m.scrollOffset = m.selectedRow
 		}
-		return m, nil
+	} else {
+		m.scrollOffset--
+	}
+	m.clampScroll()
+	if m.splitMode != SplitNone && m.syncScroll {
+		m.syncOtherPaneChronologically()
+	}
+	return m, nil
 
 	case keyMatches(msg, m.keys.ScrollDown):
 		m.selectionStart = -1
 		m.selectionEnd = -1
+		m.charSelStart = -1
+		m.charSelEnd = -1
 		h := m.activeDataHeight()
 		if len(m.visible) > 0 {
 			if m.selectedRow < 0 {
@@ -161,6 +171,12 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			} else if m.selectedRow < len(m.visible)-1 {
 				m.selectedRow++
+			}
+			if m.selectedRow >= 0 && m.selectedRow < len(m.visible) && m.cursorCol >= 0 {
+				rowLen := len([]rune(m.selectedRowPlainText(m.selectedRow)))
+				if rowLen > 0 && m.cursorCol >= rowLen {
+					m.cursorCol = rowLen - 1
+				}
 			}
 			if m.selectedRow >= m.scrollOffset+h {
 				m.scrollOffset = m.selectedRow - h + 1
@@ -182,7 +198,137 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case keyMatches(msg, m.keys.ScrollLeft):
+		if m.scrollX > 0 {
+			m.scrollX -= 8
+			m.clampScrollX()
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollRight):
+		m.scrollX += 8
+		m.clampScrollX()
+		return m, nil
+
+	case keyMatches(msg, m.keys.CursorLeft):
+		if len(m.visible) == 0 {
+			return m, nil
+		}
+		if m.selectedRow < 0 {
+			m.selectedRow = m.scrollOffset
+			if m.selectedRow >= len(m.visible) {
+				m.selectedRow = len(m.visible) - 1
+			}
+			m.cursorCol = 0
+		} else if m.cursorCol > 0 {
+			m.cursorCol--
+		} else if m.cursorCol < 0 {
+			m.cursorCol = 0
+		}
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		if m.cursorCol < m.scrollX+2 {
+			m.scrollX = m.cursorCol - 2
+			m.clampScrollX()
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.CursorRight):
+		if len(m.visible) == 0 {
+			return m, nil
+		}
+		if m.selectedRow < 0 {
+			m.selectedRow = m.scrollOffset
+			if m.selectedRow >= len(m.visible) {
+				m.selectedRow = len(m.visible) - 1
+			}
+			m.cursorCol = 0
+		} else {
+			rowLen := len([]rune(m.selectedRowPlainText(m.selectedRow)))
+			if rowLen > 0 && m.cursorCol >= rowLen-1 {
+				m.cursorCol = rowLen - 1
+			} else if m.cursorCol < 0 {
+				m.cursorCol = 1
+			} else {
+				m.cursorCol++
+			}
+		}
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		availW := m.tableWidth() - 3
+		if m.splitMode == SplitVertical {
+			availW = (m.tableWidth() - 1) / 2 - 3
+		}
+		if availW > 4 && m.cursorCol >= m.scrollX+availW-2 {
+			m.scrollX = m.cursorCol - availW + 3
+			m.clampScrollX()
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.CharSelectLeft), msg.String() == "shift+left":
+		if len(m.visible) == 0 {
+			return m, nil
+		}
+		if m.selectedRow < 0 {
+			m.selectedRow = m.scrollOffset
+			if m.selectedRow >= len(m.visible) {
+				m.selectedRow = len(m.visible) - 1
+			}
+			m.cursorCol = 0
+		}
+		if m.cursorCol < 0 {
+			m.cursorCol = 0
+		}
+		if m.charSelStart < 0 {
+			m.charSelStart = m.cursorCol
+		}
+		if m.cursorCol > 0 {
+			m.cursorCol--
+		}
+		m.charSelEnd = m.cursorCol
+		if m.cursorCol < m.scrollX+2 {
+			m.scrollX = m.cursorCol - 2
+			m.clampScrollX()
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.CharSelectRight), msg.String() == "shift+right":
+		if len(m.visible) == 0 {
+			return m, nil
+		}
+		if m.selectedRow < 0 {
+			m.selectedRow = m.scrollOffset
+			if m.selectedRow >= len(m.visible) {
+				m.selectedRow = len(m.visible) - 1
+			}
+			m.cursorCol = 0
+		}
+		if m.cursorCol < 0 {
+			m.cursorCol = 0
+		}
+		if m.charSelStart < 0 {
+			m.charSelStart = m.cursorCol
+		}
+		rowLen := len([]rune(m.selectedRowPlainText(m.selectedRow)))
+		if rowLen > 0 && m.cursorCol >= rowLen {
+			m.cursorCol = rowLen
+		} else {
+			m.cursorCol++
+		}
+		m.charSelEnd = m.cursorCol
+		availW := m.tableWidth() - 3
+		if m.splitMode == SplitVertical {
+			availW = (m.tableWidth() - 1) / 2 - 3
+		}
+		if availW > 4 && m.cursorCol >= m.scrollX+availW-2 {
+			m.scrollX = m.cursorCol - availW + 3
+			m.clampScrollX()
+		}
+		return m, nil
+
 	case keyMatches(msg, m.keys.PageUp):
+		m.charSelStart = -1
+		m.charSelEnd = -1
 		h := m.activeDataHeight()
 		m.follow = false
 		m.scrollOffset -= h
@@ -199,6 +345,8 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case keyMatches(msg, m.keys.PageDown):
+		m.charSelStart = -1
+		m.charSelEnd = -1
 		h := m.activeDataHeight()
 		m.scrollOffset += h
 		if m.selectedRow >= 0 {
@@ -222,12 +370,20 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selectedRow = -1
 		m.selectionStart = -1
 		m.selectionEnd = -1
+		m.cursorCol = -1
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		m.scrollX = 0
 		if m.splitMode != SplitNone && m.syncScroll {
 			m.syncOtherPaneChronologically()
 		}
 		return m, nil
 
 	case keyMatches(msg, m.keys.GoToTop):
+		m.cursorCol = -1
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		m.scrollX = 0
 		if m.buffer.Len() == 0 {
 			m.activeGame = game.RandomMiniGame()
 			m.logsDuringGame = 0
@@ -428,9 +584,17 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleSelectDown()
 
 	case keyMatches(msg, m.keys.Cancel):
+		if m.charSelStart >= 0 && m.charSelEnd >= 0 && m.charSelStart != m.charSelEnd {
+			m.charSelStart = -1
+			m.charSelEnd = -1
+			return m, nil
+		}
 		m.selectedRow = -1
 		m.selectionStart = -1
 		m.selectionEnd = -1
+		m.cursorCol = -1
+		m.charSelStart = -1
+		m.charSelEnd = -1
 		m.searchInput = ""
 		m.searchPos = 0
 		m.searchMatches = nil
@@ -845,4 +1009,3 @@ func handleTextInputWithCursor(current string, pos int, msg tea.KeyMsg) (string,
 
 	return string(runes), pos
 }
-

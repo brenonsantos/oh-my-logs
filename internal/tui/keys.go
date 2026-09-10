@@ -4,51 +4,56 @@ import "github.com/charmbracelet/bubbles/key"
 
 // keyMap holds all keyboard bindings for the application.
 type keyMap struct {
-	Search          key.Binding
-	Filter          key.Binding
-	FilterPresets   key.Binding
-	Clear           key.Binding
-	Pause           key.Binding
-	ScrollUp        key.Binding
-	ScrollDown      key.Binding
-	PageUp          key.Binding
-	PageDown        key.Binding
-	GoToBottom      key.Binding
-	GoToTop         key.Binding
-	Port            key.Binding
-	Reconnect       key.Binding
-	Disconnect      key.Binding
-	Settings        key.Binding
-	SaveLog         key.Binding
-	NextMatch       key.Binding
-	PrevMatch       key.Binding
-	Confirm         key.Binding
-	Cancel          key.Binding
-	ToggleTimestamp key.Binding
-	ProfileSwitch   key.Binding
-	NextTab         key.Binding
-	PrevTab         key.Binding
-	NewTab          key.Binding
-	CloseTab        key.Binding
-	ToggleBookmark  key.Binding
-	NextBookmark    key.Binding
-	PrevBookmark    key.Binding
-	BookmarksOnly   key.Binding
-	SplitVertical   key.Binding
-	SplitHorizontal key.Binding
-	SwitchPane      key.Binding
+	Search           key.Binding
+	Filter           key.Binding
+	FilterPresets    key.Binding
+	Clear            key.Binding
+	Pause            key.Binding
+	ScrollUp         key.Binding
+	ScrollDown       key.Binding
+	PageUp           key.Binding
+	PageDown         key.Binding
+	GoToBottom       key.Binding
+	GoToTop          key.Binding
+	Port             key.Binding
+	Reconnect        key.Binding
+	Disconnect       key.Binding
+	Settings         key.Binding
+	SaveLog          key.Binding
+	NextMatch        key.Binding
+	PrevMatch        key.Binding
+	Confirm          key.Binding
+	Cancel           key.Binding
+	ToggleTimestamp  key.Binding
+	ProfileSwitch    key.Binding
+	NextTab          key.Binding
+	PrevTab          key.Binding
+	NewTab           key.Binding
+	CloseTab         key.Binding
+	ToggleBookmark   key.Binding
+	NextBookmark     key.Binding
+	PrevBookmark     key.Binding
+	BookmarksOnly    key.Binding
+	SplitVertical    key.Binding
+	SplitHorizontal  key.Binding
+	SwitchPane       key.Binding
 	ToggleSyncScroll key.Binding
-	ToggleFormat    key.Binding
-	CopyRow         key.Binding
-	CopyRaw         key.Binding
-	SelectUp        key.Binding
-	SelectDown      key.Binding
-	Help            key.Binding
-	Game            key.Binding
-	SendTX          key.Binding
-	Quit            key.Binding
+	ToggleFormat     key.Binding
+	ScrollLeft       key.Binding
+	ScrollRight      key.Binding
+	CursorLeft       key.Binding
+	CursorRight      key.Binding
+	CharSelectLeft   key.Binding
+	CharSelectRight  key.Binding
+	CopyRow          key.Binding
+	CopyRaw          key.Binding
+	SelectUp         key.Binding
+	SelectDown       key.Binding
+	Help             key.Binding
+	Game             key.Binding
+	SendTX           key.Binding
+	Quit             key.Binding
 }
-
 
 // defaultKeyMap returns the standard key bindings.
 func defaultKeyMap() keyMap {
@@ -96,6 +101,30 @@ func defaultKeyMap() keyMap {
 		ScrollDown: key.NewBinding(
 			key.WithKeys("down", "j"),
 			key.WithHelp("↓/j", "scroll down"),
+		),
+		ScrollLeft: key.NewBinding(
+			key.WithKeys("{"),
+			key.WithHelp("{", "pan left"),
+		),
+		ScrollRight: key.NewBinding(
+			key.WithKeys("}"),
+			key.WithHelp("}", "pan right"),
+		),
+		CursorLeft: key.NewBinding(
+			key.WithKeys("left", "h"),
+			key.WithHelp("←/h", "cursor left"),
+		),
+		CursorRight: key.NewBinding(
+			key.WithKeys("right", "l"),
+			key.WithHelp("→/l", "cursor right"),
+		),
+		CharSelectLeft: key.NewBinding(
+			key.WithKeys("shift+left"),
+			key.WithHelp("Shift+←", "select char left"),
+		),
+		CharSelectRight: key.NewBinding(
+			key.WithKeys("shift+right"),
+			key.WithHelp("Shift+→", "select char right"),
 		),
 		PageUp: key.NewBinding(
 			key.WithKeys("pgup", "ctrl+u"),
@@ -228,4 +257,3 @@ func defaultKeyMap() keyMap {
 		),
 	}
 }
-

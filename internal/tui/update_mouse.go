@@ -16,6 +16,34 @@ func (m Model) handleCopyKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// 0. If character selection active on a row, copy substring
+	if m.charSelStart >= 0 && m.charSelEnd >= 0 && m.charSelStart != m.charSelEnd {
+		targetIdx := m.selectedRow
+		if targetIdx < 0 || targetIdx >= len(m.visible) {
+			targetIdx = m.scrollOffset
+		}
+		if targetIdx >= 0 && targetIdx < len(m.visible) {
+			plainText := m.selectedRowPlainText(targetIdx)
+			runes := []rune(plainText)
+			minSel, maxSel := m.charSelStart, m.charSelEnd
+			if minSel > maxSel {
+				minSel, maxSel = maxSel, minSel
+			}
+			if minSel < 0 {
+				minSel = 0
+			}
+			if minSel < len(runes) {
+				if maxSel > len(runes) {
+					maxSel = len(runes)
+				}
+				sub := string(runes[minSel:maxSel])
+				_ = clipboard.Copy(sub)
+				m.message = fmt.Sprintf("✓ Copied %d chars to clipboard", len([]rune(sub)))
+				return m, nil
+			}
+		}
+	}
+
 	// 1. If multi-row selection active, copy range
 	if m.selectionStart >= 0 && m.selectionEnd >= 0 && m.selectionStart != m.selectionEnd {
 		start := m.selectionStart
@@ -74,6 +102,11 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Horizontal scrollbar divider click (Row m.height - 3)
+	if msg.Y == m.height-3 {
+		return m.handleHScrollbarClick(msg)
+	}
+
 	// Tab bar click (Row 2 when len(m.tabs) > 1)
 	if len(m.tabs) > 1 && msg.Y == 2 {
 		return m.handleTabBarMouseClick(msg)
@@ -102,6 +135,18 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	tableEndY := tableStartY + len(m.visibleRows())
 
 	if msg.Y >= tableStartY && msg.Y < tableEndY {
+		// Vertical scrollbar click at right edge
+		if msg.X >= m.tableWidth()-2 && len(m.visible) > m.tableHeight && m.tableHeight > 1 {
+			clickRow := msg.Y - tableStartY
+			maxOffset := len(m.visible) - m.tableHeight
+			if maxOffset > 0 {
+				m.follow = false
+				m.scrollOffset = clickRow * maxOffset / (m.tableHeight - 1)
+				m.clampScroll()
+			}
+			return m, nil
+		}
+
 		rowOffset := msg.Y - tableStartY
 		absIdx := m.scrollOffset + rowOffset
 		if absIdx >= 0 && absIdx < len(m.visible) {
@@ -109,6 +154,13 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.selectedRow = absIdx
 			m.selectionStart = absIdx
 			m.selectionEnd = absIdx
+			if msg.X >= 3 {
+				m.cursorCol = msg.X - 3 + m.scrollX
+			} else {
+				m.cursorCol = 0
+			}
+			m.charSelStart = -1
+			m.charSelEnd = -1
 
 			now := time.Now()
 			if m.lastClickRow == absIdx && now.Sub(m.lastClickTime) < 400*time.Millisecond {
@@ -126,6 +178,9 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	m.selectedRow = -1
 	m.selectionStart = -1
 	m.selectionEnd = -1
+	m.cursorCol = -1
+	m.charSelStart = -1
+	m.charSelEnd = -1
 	return m, nil
 }
 
@@ -165,6 +220,17 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 				m.selectedRow = absIdx
 				m.selectionStart = absIdx
 				m.selectionEnd = absIdx
+				paneStartX := 0
+				if clickedPane == 1 {
+					paneStartX = splitX + 1
+				}
+				col := msg.X - paneStartX - 3 + m.scrollX
+				if col < 0 {
+					col = 0
+				}
+				m.cursorCol = col
+				m.charSelStart = -1
+				m.charSelEnd = -1
 
 				now := time.Now()
 				if m.lastClickRow == absIdx && now.Sub(m.lastClickTime) < 400*time.Millisecond {
@@ -210,6 +276,13 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 			m.selectedRow = absIdx
 			m.selectionStart = absIdx
 			m.selectionEnd = absIdx
+			col := msg.X - 3 + m.scrollX
+			if col < 0 {
+				col = 0
+			}
+			m.cursorCol = col
+			m.charSelStart = -1
+			m.charSelEnd = -1
 
 			now := time.Now()
 			if m.lastClickRow == absIdx && now.Sub(m.lastClickTime) < 400*time.Millisecond {
@@ -287,6 +360,36 @@ func (m Model) handleStatusBarMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) 
 }
 
 func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	// Dragging vertical scrollbar
+	if msg.X >= m.tableWidth()-2 && len(m.visible) > m.tableHeight && m.tableHeight > 1 {
+		dataStartY := 4
+		if len(m.tabs) > 1 {
+			dataStartY = 6
+		}
+		if m.splitMode != SplitNone {
+			dataStartY = m.splitTableStartY() + 2
+		}
+		clickRow := msg.Y - dataStartY
+		if clickRow < 0 {
+			clickRow = 0
+		}
+		if clickRow >= m.tableHeight {
+			clickRow = m.tableHeight - 1
+		}
+		maxOffset := len(m.visible) - m.tableHeight
+		if maxOffset > 0 {
+			m.follow = false
+			m.scrollOffset = clickRow * maxOffset / (m.tableHeight - 1)
+			m.clampScroll()
+		}
+		return m, nil
+	}
+
+	// Dragging horizontal scrollbar
+	if msg.Y == m.height-3 {
+		return m.handleHScrollbarClick(msg)
+	}
+
 	if m.selectionStart < 0 || len(m.visible) == 0 {
 		return m, nil
 	}
@@ -440,5 +543,81 @@ func (m Model) handleSelectDown() (tea.Model, tea.Cmd) {
 		m.message = "1 row selected"
 	}
 
+	return m, nil
+}
+
+func (m Model) handleHScrollbarClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	w := m.tableWidth()
+	if w <= 0 {
+		return m, nil
+	}
+
+	if m.splitMode == SplitVertical {
+		splitX := (w - 1) / 2
+		if msg.X < splitX {
+			var leftTab *Tab
+			if m.splitLeftTab >= 0 && m.splitLeftTab < len(m.tabs) {
+				leftTab = &m.tabs[m.splitLeftTab]
+			}
+			maxW := m.maxContentWidthForTab(leftTab, splitX)
+			maxScroll := maxW - splitX
+			if maxScroll > 0 && splitX > 0 {
+				newScroll := msg.X * maxScroll / splitX
+				if newScroll < 0 {
+					newScroll = 0
+				}
+				if newScroll > maxScroll {
+					newScroll = maxScroll
+				}
+				if leftTab != nil {
+					leftTab.ScrollX = newScroll
+					if m.activePane == 0 {
+						m.scrollX = newScroll
+					}
+				}
+			}
+		} else if msg.X > splitX {
+			rightW := w - splitX - 1
+			clickX := msg.X - splitX - 1
+			var rightTab *Tab
+			if m.splitRightTab >= 0 && m.splitRightTab < len(m.tabs) {
+				rightTab = &m.tabs[m.splitRightTab]
+			}
+			maxW := m.maxContentWidthForTab(rightTab, rightW)
+			maxScroll := maxW - rightW
+			if maxScroll > 0 && rightW > 0 {
+				newScroll := clickX * maxScroll / rightW
+				if newScroll < 0 {
+					newScroll = 0
+				}
+				if newScroll > maxScroll {
+					newScroll = maxScroll
+				}
+				if rightTab != nil {
+					rightTab.ScrollX = newScroll
+					if m.activePane == 1 {
+						m.scrollX = newScroll
+					}
+				}
+			}
+		}
+		return m, nil
+	}
+
+	maxW := m.maxContentWidth()
+	maxScroll := maxW - w
+	if maxScroll > 0 {
+		newScroll := msg.X * maxScroll / w
+		if newScroll < 0 {
+			newScroll = 0
+		}
+		if newScroll > maxScroll {
+			newScroll = maxScroll
+		}
+		m.scrollX = newScroll
+		if len(m.tabs) > 0 {
+			m.currentTab().ScrollX = newScroll
+		}
+	}
 	return m, nil
 }
