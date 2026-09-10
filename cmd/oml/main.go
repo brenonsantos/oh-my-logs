@@ -198,7 +198,11 @@ func main() {
 	}
 
 	// ── Ring buffer ───────────────────────────────────────────────────────────
-	buf := record.NewBuffer(record.DefaultCapacity)
+	bufCap := record.DefaultCapacity
+	if savedSettings != nil && savedSettings.BufferCapacity > 0 {
+		bufCap = savedSettings.BufferCapacity
+	}
+	buf := record.NewBuffer(bufCap)
 
 	// ── TUI ───────────────────────────────────────────────────────────────────
 	model := tui.New(serialCfg, profile, p, buf, src, appCfg)

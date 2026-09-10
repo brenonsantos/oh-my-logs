@@ -112,3 +112,35 @@ func (b *Buffer) Transform(fn func(r Record) Record) {
 		b.data[idx] = transformed
 	}
 }
+
+// Resize adjusts the ring buffer capacity. Existing records are preserved
+// in insertion order. If newCap is smaller than the current number of records,
+// the oldest records are dropped and only the newest newCap records are retained.
+func (b *Buffer) Resize(newCap int) {
+	if newCap < 1 {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if newCap == b.cap {
+		return
+	}
+
+	all := make([]Record, b.size)
+	start := (b.head - b.size + b.cap) % b.cap
+	for i := 0; i < b.size; i++ {
+		all[i] = b.data[(start+i)%b.cap]
+	}
+
+	if len(all) > newCap {
+		all = all[len(all)-newCap:]
+	}
+
+	newData := make([]Record, newCap)
+	copy(newData, all)
+	b.data = newData
+	b.cap = newCap
+	b.size = len(all)
+	b.head = b.size % b.cap
+}

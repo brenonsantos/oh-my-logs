@@ -36,6 +36,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleGameKey(msg)
 	case modeTXInput:
 		return m.handleTXKey(msg)
+	case modeSettings:
+		return m.handleSettingsKey(msg)
 	default:
 		return m.handleNormalKey(msg)
 	}
@@ -304,6 +306,10 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.mode = modeProfilePicker
+		return m, nil
+
+	case keyMatches(msg, m.keys.Settings):
+		m.mode = modeSettings
 		return m, nil
 
 	case keyMatches(msg, m.keys.Disconnect):
