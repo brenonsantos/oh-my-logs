@@ -326,3 +326,67 @@ columns:
 	}
 }
 
+func TestSelectionBatchDelta(t *testing.T) {
+	m := newTestModel()
+	t0 := time.Date(2026, 9, 10, 10, 0, 0, 0, time.UTC)
+
+	// Ingest 4 records at 0ms, 50ms, 200ms, 1000ms
+	records := []record.Record{
+		{Raw: "line 0", Fields: map[string]string{"message": "line 0"}, Timestamp: t0},
+		{Raw: "line 1", Fields: map[string]string{"message": "line 1"}, Timestamp: t0.Add(50 * time.Millisecond)},
+		{Raw: "line 2", Fields: map[string]string{"message": "line 2"}, Timestamp: t0.Add(200 * time.Millisecond)},
+		{Raw: "line 3", Fields: map[string]string{"message": "line 3"}, Timestamp: t0.Add(1000 * time.Millisecond)},
+	}
+	for _, r := range records {
+		m.ingestRecord(r)
+	}
+
+	// 1. Multi-row selection from index 1 to 3 (3 records total, elapsed: 950ms)
+	m.selectionStart = 1
+	m.selectionEnd = 3
+
+	d, ok := m.selectionDelta()
+	if !ok {
+		t.Fatalf("expected selectionDelta to be available")
+	}
+	if d != 950*time.Millisecond {
+		t.Errorf("expected delta 950ms, got %v", d)
+	}
+
+	// 2. Status bar badge
+	statusBar := m.viewStatusBar()
+	if !strings.Contains(statusBar, "3 selected (Δt: +950.0ms)") {
+		t.Errorf("expected status bar to contain '3 selected (Δt: +950.0ms)', got:\n%s", statusBar)
+	}
+
+	// 3. Selection message format
+	msg := m.selectionMessage(3, "press y to copy")
+	if !strings.Contains(msg, "3 rows selected · Δt: +950.0ms (press y to copy)") {
+		t.Errorf("unexpected selection message: %q", msg)
+	}
+
+	// 4. Press 'y' to copy -> check message
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	if !strings.Contains(m.message, "✓ Copied 3 rows (Δt: +950.0ms) to clipboard") {
+		t.Errorf("expected copy message with delta, got %q", m.message)
+	}
+
+	// 5. Without timestamps: graceful fallback
+	m2 := newTestModel()
+	m2.visible = []record.Record{
+		{Raw: "raw1", Fields: map[string]string{"message": "raw1"}},
+		{Raw: "raw2", Fields: map[string]string{"message": "raw2"}},
+	}
+	m2.selectionStart = 0
+	m2.selectionEnd = 1
+	if _, ok := m2.selectionDelta(); ok {
+		t.Errorf("expected selectionDelta to be false without timestamps/deltas")
+	}
+	sb2 := m2.viewStatusBar()
+	if !strings.Contains(sb2, "2 selected") || strings.Contains(sb2, "Δt:") {
+		t.Errorf("expected status bar to contain '2 selected' without delta, got:\n%s", sb2)
+	}
+}
+
+

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/clipboard"
+	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -36,7 +37,11 @@ func (m Model) handleCopyKey() (tea.Model, tea.Cmd) {
 			count++
 		}
 		_ = clipboard.Copy(strings.TrimRight(b.String(), "\n"))
-		m.message = fmt.Sprintf("✓ Copied %d rows to clipboard", count)
+		if d, ok := m.selectionDelta(); ok {
+			m.message = fmt.Sprintf("✓ Copied %d rows (Δt: %s) to clipboard", count, timing.FormatDelta(d))
+		} else {
+			m.message = fmt.Sprintf("✓ Copied %d rows to clipboard", count)
+		}
 		return m, nil
 	}
 
@@ -318,25 +323,16 @@ func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.selectionEnd = absIdx
 		m.follow = false
 	}
+	if start, end := m.selectionRange(); start >= 0 && end >= 0 {
+		m.message = m.selectionMessage(end-start+1, "press y to copy")
+	}
 	return m, nil
 }
 
 func (m Model) handleMouseRelease(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if m.selectionStart >= 0 && m.selectionEnd >= 0 && m.selectionStart != m.selectionEnd {
-		start := m.selectionStart
-		end := m.selectionEnd
-		if start > end {
-			start, end = end, start
-		}
-		if start < 0 {
-			start = 0
-		}
-		if end >= len(m.visible) {
-			end = len(m.visible) - 1
-		}
-		count := end - start + 1
+	if start, end := m.selectionRange(); start >= 0 && end >= 0 {
 		m.selectedRow = m.selectionEnd
-		m.message = fmt.Sprintf("%d rows selected (press y to copy)", count)
+		m.message = m.selectionMessage(end-start+1, "press y to copy")
 	}
 	return m, nil
 }
@@ -377,7 +373,7 @@ func (m Model) handleSelectUp() (tea.Model, tea.Cmd) {
 	}
 	count := maxS - minS + 1
 	if count > 1 {
-		m.message = fmt.Sprintf("%d rows selected (press y to copy)", count)
+		m.message = m.selectionMessage(count, "press y to copy")
 	} else {
 		m.message = "1 row selected"
 	}
@@ -417,7 +413,7 @@ func (m Model) handleSelectDown() (tea.Model, tea.Cmd) {
 	}
 	count := maxS - minS + 1
 	if count > 1 {
-		m.message = fmt.Sprintf("%d rows selected (press y to copy)", count)
+		m.message = m.selectionMessage(count, "press y to copy")
 	} else {
 		m.message = "1 row selected"
 	}
