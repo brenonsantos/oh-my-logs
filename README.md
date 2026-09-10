@@ -26,7 +26,7 @@
 
 ## Quick Installation
 
-### Automated Install Script
+### Automated Install Script (Latest Stable Release)
 
 #### macOS & Linux
 ```bash
@@ -40,14 +40,47 @@ irm https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.ps1 |
 
 ---
 
+### Nightly Builds
+To install the latest rolling build built automatically from `main`:
+
+```bash
+# macOS & Linux
+curl -fsSL https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.sh | bash -s -- --nightly
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.ps1 | iex -Nightly
+```
+
+---
+
+### In-Place Self-Updating & Uninstall
+Once installed, you can update or remove `oml` directly from your terminal:
+
+```bash
+oml --update           # Check for and install the latest stable release
+oml --update --nightly # Update to the latest rolling nightly build
+oml --uninstall        # Remove oml binary from system PATH
+```
+
+---
+
 ### Alternative Installation Options
 
+#### Install Specific Release Tag
+```bash
+# macOS & Linux
+curl -fsSL https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.sh | bash -s -- --version v1.1.0
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.ps1 | iex -Version v1.1.0
+```
+
 #### Binary Self-Install (`--install`)
-If you downloaded or built the binary:
+If you downloaded or built the binary locally:
 ```bash
 ./oml --install
 ```
-Automatically detects your OS, installs `oml` into your `PATH`, and sets up the global profiles directory.
+Automatically detects your OS, installs `oml` into your `PATH`, and sets up default example profiles.
 
 #### Install via Go
 ```bash

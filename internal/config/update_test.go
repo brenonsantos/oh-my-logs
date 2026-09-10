@@ -35,7 +35,18 @@ func TestFindMatchingAsset(t *testing.T) {
 		t.Errorf("expected windows_amd64 asset, got %s", a.Name)
 	}
 
-	// 3. Unknown arch
+	// 3. Nightly naming pattern
+	nightlyAssets := []ReleaseAsset{
+		{Name: "oml_nightly_darwin_arm64.tar.gz", BrowserDownloadURL: "https://example.com/nightly_darwin_arm64"},
+		{Name: "oml_nightly_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.com/nightly_linux_amd64"},
+		{Name: "oml_nightly_windows_amd64.zip", BrowserDownloadURL: "https://example.com/nightly_windows_amd64"},
+	}
+	na, err := FindMatchingAsset(nightlyAssets, "darwin", "arm64")
+	if err != nil || na.Name != "oml_nightly_darwin_arm64.tar.gz" {
+		t.Fatalf("expected nightly match for darwin arm64, got %v, err: %v", na, err)
+	}
+
+	// 4. Unknown arch
 	_, err = FindMatchingAsset(assets, "freebsd", "riscv64")
 	if err == nil {
 		t.Errorf("expected error for unsupported os/arch, got nil")

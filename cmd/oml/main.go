@@ -13,7 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const (
+var (
 	version  = "1.1.0"
 	codename = "Jordanense"
 )
@@ -33,6 +33,7 @@ func main() {
 		flagInstall       = flag.Bool("install", false, "install oml binary into system/user PATH")
 		flagUninstall     = flag.Bool("uninstall", false, "uninstall oml binary from system/user PATH")
 		flagUpdate        = flag.Bool("update", false, "check for and install latest oml release")
+		flagNightly       = flag.Bool("nightly", false, "use nightly build channel")
 	)
 	flag.Parse()
 
@@ -74,8 +75,12 @@ func main() {
 	}
 
 	if *flagUpdate {
-		fmt.Printf("Checking for updates (current: v%s)...\n", version)
-		msg, err := config.UpdateBinary(appCfg, version)
+		channel := "latest stable release"
+		if *flagNightly {
+			channel = "nightly build"
+		}
+		fmt.Printf("Checking for updates (%s, current: v%s)...\n", channel, version)
+		msg, err := config.UpdateBinary(appCfg, version, *flagNightly)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error updating oml: %v\n", err)
 			os.Exit(1)

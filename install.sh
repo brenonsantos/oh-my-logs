@@ -62,8 +62,37 @@ case "$ARCH" in
         ;;
 esac
 
+# Parse arguments
+DO_UNINSTALL=0
+NIGHTLY=0
+SPECIFIED_TAG="${VERSION:-${TAG:-}}"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --uninstall|-u)
+            DO_UNINSTALL=1
+            shift
+            ;;
+        --nightly|-n)
+            NIGHTLY=1
+            shift
+            ;;
+        --version|-v|--tag)
+            SPECIFIED_TAG="$2"
+            shift 2
+            ;;
+        --version=*|--tag=*)
+            SPECIFIED_TAG="${1#*=}"
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
 # Handle --uninstall
-if [ "$1" = "--uninstall" ] || [ "$1" = "-u" ]; then
+if [ "$DO_UNINSTALL" = "1" ]; then
     print_step "Uninstalling oh-my-logs (oml)..."
     REMOVED=0
     for DIR in "/usr/local/bin" "$HOME/.local/bin" "$HOME/bin"; do
@@ -84,7 +113,13 @@ if [ "$1" = "--uninstall" ] || [ "$1" = "-u" ]; then
     exit 0
 fi
 
-printf "${BOLD}oh-my-logs (oml) Installer for %s (%s)${RESET}\n\n" "$OS_NAME" "$GOARCH"
+if [ "$NIGHTLY" = "1" ]; then
+    printf "${BOLD}oh-my-logs (oml) Installer [Nightly Channel] for %s (%s)${RESET}\n\n" "$OS_NAME" "$GOARCH"
+elif [ -n "$SPECIFIED_TAG" ]; then
+    printf "${BOLD}oh-my-logs (oml) Installer [%s] for %s (%s)${RESET}\n\n" "$SPECIFIED_TAG" "$OS_NAME" "$GOARCH"
+else
+    printf "${BOLD}oh-my-logs (oml) Installer for %s (%s)${RESET}\n\n" "$OS_NAME" "$GOARCH"
+fi
 
 # Determine target directory
 if [ -w "/usr/local/bin" ]; then
@@ -116,14 +151,24 @@ elif [ -n "$SCRIPT_DIR" ] && [ -d "$SCRIPT_DIR/cmd/oml" ] && command -v go >/dev
 else
     # Download prebuilt binary from GitHub Releases
     REPO="brenonsantos/oh-my-logs"
-    print_step "Fetching prebuilt release for $OS_NAME ($GOARCH) from GitHub..."
     TMP_DIR="$(mktemp -d -t oml-install-XXXXXX)"
     trap 'rm -rf "$TMP_DIR"' EXIT
 
-    LATEST_URL="https://api.github.com/repos/$REPO/releases/latest"
+    if [ "$NIGHTLY" = "1" ]; then
+        RELEASE_NAME="nightly build"
+        RELEASE_URL="https://api.github.com/repos/$REPO/releases/tags/nightly"
+    elif [ -n "$SPECIFIED_TAG" ]; then
+        RELEASE_NAME="release $SPECIFIED_TAG"
+        RELEASE_URL="https://api.github.com/repos/$REPO/releases/tags/$SPECIFIED_TAG"
+    else
+        RELEASE_NAME="latest stable release"
+        RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
+    fi
+
+    print_step "Fetching $RELEASE_NAME for $OS_NAME ($GOARCH) from GitHub..."
     ASSET_URL=""
     if command -v curl >/dev/null 2>&1; then
-        JSON="$(curl -fsSL -H "User-Agent: oh-my-logs-installer" "$LATEST_URL" 2>/dev/null || true)"
+        JSON="$(curl -fsSL -H "User-Agent: oh-my-logs-installer" "$RELEASE_URL" 2>/dev/null || true)"
         ASSET_URL="$(printf "%s" "$JSON" | grep -o "https://[^\"]*_${GOOS}_${GOARCH}\.tar\.gz" | head -n 1 || true)"
     fi
 
@@ -165,6 +210,7 @@ else
     mkdir -p "$TARGET_DIR"
     cp "$BIN_PATH" "$TARGET_DIR/oml"
     chmod 755 "$TARGET_DIR/oml"
+fi
 print_success "Installed binary at $TARGET_DIR/oml"
 
 if [ "$TARGET_DIR" != "/usr/local/bin" ] && [ -f "/usr/local/bin/oml" ]; then
