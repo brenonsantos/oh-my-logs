@@ -248,3 +248,83 @@ func TestColumnWidthsHexAndBinaryFlex(t *testing.T) {
 	}
 }
 
+func TestWiresharkInspectorDrawer(t *testing.T) {
+	records := []record.Record{
+		{ID: 1, Raw: "Hello World! This is a long serial log message that will exceed normal line limits.", Timestamp: time.Now(), Fields: map[string]string{"message": "Hello World!"}},
+		{ID: 2, Raw: "Booting MCU with 126 bytes of payload testing...", Timestamp: time.Now(), Fields: map[string]string{"message": "Booting MCU..."}},
+	}
+	m := newTestModelWithRecords(records)
+	m.width = 120
+	m.height = 30
+	m.selectedRow = 0
+
+	// Initially FormatParsed: inspector is inactive
+	m.recalcLayout()
+	if m.isInspectorActive() {
+		t.Errorf("expected inspector to be inactive in FormatParsed")
+	}
+	if m.inspectorHeight != 0 {
+		t.Errorf("expected inspectorHeight 0 in FormatParsed, got %d", m.inspectorHeight)
+	}
+
+	// 1. Switch to FormatHex: inspector automatically activates
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}) // -> Raw
+	newM, _ = newM.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}) // -> Hex
+	m = newM.(Model)
+
+	if !m.isInspectorActive() {
+		t.Fatalf("expected inspector to be active in FormatHex")
+	}
+	if m.inspectorHeight < 4 {
+		t.Errorf("expected inspectorHeight >= 4, got %d", m.inspectorHeight)
+	}
+
+	view := m.View()
+	if !strings.Contains(view, "HEX DUMP (16B/line)") {
+		t.Errorf("expected view to contain inspector divider 'HEX DUMP (16B/line)', got:\n%s", view)
+	}
+	if !strings.Contains(view, "0000: ") {
+		t.Errorf("expected view to contain offset '0000: ', got:\n%s", view)
+	}
+	if !strings.Contains(view, " │ ") {
+		t.Errorf("expected view to contain canonical ASCII gutter ' │ ', got:\n%s", view)
+	}
+
+	// 2. Alt+j scrolls inspector
+	m.inspectorScroll = 0
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}, Alt: true})
+	m = newM.(Model)
+	if m.inspectorScroll != 1 {
+		t.Errorf("expected inspectorScroll 1 after Alt+j, got %d", m.inspectorScroll)
+	}
+
+	// 3. Moving selected row (j) resets inspectorScroll to 0
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m = newM.(Model)
+	if m.inspectorScroll != 0 {
+		t.Errorf("expected inspectorScroll reset to 0 after moving rows, got %d", m.inspectorScroll)
+	}
+
+	// 4. Switch to Binary: inspector displays binary bits
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}) // -> Binary
+	m = newM.(Model)
+	if !m.isInspectorActive() {
+		t.Fatalf("expected inspector active in FormatBinary")
+	}
+	viewBin := m.View()
+	if !strings.Contains(viewBin, "BINARY BITS (8B/line)") {
+		t.Errorf("expected view to contain 'BINARY BITS (8B/line)', got:\n%s", viewBin)
+	}
+
+	// 5. Switch back to Parsed: inspector auto closes
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}) // -> Parsed
+	m = newM.(Model)
+	if m.isInspectorActive() {
+		t.Errorf("expected inspector inactive in FormatParsed")
+	}
+	if m.inspectorHeight != 0 {
+		t.Errorf("expected inspectorHeight 0 in FormatParsed, got %d", m.inspectorHeight)
+	}
+}
+
+

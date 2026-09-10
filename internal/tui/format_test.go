@@ -98,3 +98,72 @@ func TestFormatByteLen(t *testing.T) {
 		t.Errorf("expected '2.0KB', got %s", got)
 	}
 }
+
+func TestFormatCanonicalHexLines(t *testing.T) {
+	if got := FormatCanonicalHexLines(""); got != nil {
+		t.Errorf("expected nil for empty input, got %v", got)
+	}
+
+	// 20 bytes: should produce 2 lines (16 bytes on line 0, 4 bytes on line 1)
+	input := "1234567890abcdefghij"
+	lines := FormatCanonicalHexLines(input)
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %d", len(lines))
+	}
+
+	// Line 0
+	if lines[0].Offset != "0000: " {
+		t.Errorf("expected offset '0000: ', got %q", lines[0].Offset)
+	}
+	if len(lines[0].Hex) != 48 {
+		t.Errorf("expected padded hex string length 48, got %d (%q)", len(lines[0].Hex), lines[0].Hex)
+	}
+	if lines[0].ASCII != "1234567890abcdef" {
+		t.Errorf("expected ASCII '1234567890abcdef', got %q", lines[0].ASCII)
+	}
+
+	// Line 1: 4 bytes (ghij), offset 0010:
+	if lines[1].Offset != "0010: " {
+		t.Errorf("expected offset '0010: ', got %q", lines[1].Offset)
+	}
+	if len(lines[1].Hex) != 48 {
+		t.Errorf("expected padded hex string length 48, got %d (%q)", len(lines[1].Hex), lines[1].Hex)
+	}
+	if lines[1].ASCII != "ghij" {
+		t.Errorf("expected ASCII 'ghij', got %q", lines[1].ASCII)
+	}
+}
+
+func TestFormatCanonicalBinaryLines(t *testing.T) {
+	if got := FormatCanonicalBinaryLines(""); got != nil {
+		t.Errorf("expected nil for empty input, got %v", got)
+	}
+
+	// 10 bytes: should produce 2 lines (8 bytes on line 0, 2 bytes on line 1)
+	input := "0123456789"
+	lines := FormatCanonicalBinaryLines(input)
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %d", len(lines))
+	}
+
+	if lines[0].Offset != "0000: " {
+		t.Errorf("expected offset '0000: ', got %q", lines[0].Offset)
+	}
+	if len(lines[0].Binary) != 72 {
+		t.Errorf("expected padded binary string length 72, got %d (%q)", len(lines[0].Binary), lines[0].Binary)
+	}
+	if lines[0].ASCII != "01234567" {
+		t.Errorf("expected ASCII '01234567', got %q", lines[0].ASCII)
+	}
+
+	if lines[1].Offset != "0008: " {
+		t.Errorf("expected offset '0008: ', got %q", lines[1].Offset)
+	}
+	if len(lines[1].Binary) != 72 {
+		t.Errorf("expected padded binary string length 72, got %d (%q)", len(lines[1].Binary), lines[1].Binary)
+	}
+	if lines[1].ASCII != "89" {
+		t.Errorf("expected ASCII '89', got %q", lines[1].ASCII)
+	}
+}
+

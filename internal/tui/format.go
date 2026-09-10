@@ -161,3 +161,110 @@ func FormatByteLen(n int) string {
 	}
 	return fmt.Sprintf("%.1fKB", float64(n)/1024.0)
 }
+
+// CanonicalHexLine represents one formatted line in a canonical 16-byte hex dump.
+type CanonicalHexLine struct {
+	Offset string // e.g. "0000: "
+	Hex    string // e.g. "5b 20 20 20 20 20 20 36  2e 32 34 31 5d 20 3c 69" (padded to 48 chars)
+	ASCII  string // e.g. "[      6.241] <i"
+}
+
+// FormatCanonicalHexLines splits raw into 16-byte chunks and formats them as canonical lines.
+func FormatCanonicalHexLines(raw string) []CanonicalHexLine {
+	if len(raw) == 0 {
+		return nil
+	}
+	b := []byte(raw)
+	var lines []CanonicalHexLine
+	for i := 0; i < len(b); i += 16 {
+		chunkEnd := i + 16
+		if chunkEnd > len(b) {
+			chunkEnd = len(b)
+		}
+		chunk := b[i:chunkEnd]
+
+		offsetStr := fmt.Sprintf("%04x: ", i)
+
+		var hexSb strings.Builder
+		for j := 0; j < len(chunk); j++ {
+			if j > 0 {
+				if j == 8 {
+					hexSb.WriteString("  ")
+				} else {
+					hexSb.WriteByte(' ')
+				}
+			}
+			fmt.Fprintf(&hexSb, "%02x", chunk[j])
+		}
+		hexStr := hexSb.String()
+		if len(chunk) < 16 {
+			padLen := 48 - len(hexStr)
+			if padLen > 0 {
+				hexStr += strings.Repeat(" ", padLen)
+			}
+		}
+
+		asciiStr := FormatASCII(string(chunk))
+
+		lines = append(lines, CanonicalHexLine{
+			Offset: offsetStr,
+			Hex:    hexStr,
+			ASCII:  asciiStr,
+		})
+	}
+	return lines
+}
+
+// CanonicalBinaryLine represents one formatted line in a canonical binary dump.
+type CanonicalBinaryLine struct {
+	Offset string // e.g. "0000: "
+	Binary string // e.g. "01011011 00100000 00100000 00100000  00100000 00100000 00100000 00110110" (8 bytes)
+	ASCII  string // e.g. "[      6" (8 chars)
+}
+
+// FormatCanonicalBinaryLines splits raw into 8-byte chunks and formats them as binary lines.
+func FormatCanonicalBinaryLines(raw string) []CanonicalBinaryLine {
+	if len(raw) == 0 {
+		return nil
+	}
+	b := []byte(raw)
+	var lines []CanonicalBinaryLine
+	for i := 0; i < len(b); i += 8 {
+		chunkEnd := i + 8
+		if chunkEnd > len(b) {
+			chunkEnd = len(b)
+		}
+		chunk := b[i:chunkEnd]
+
+		offsetStr := fmt.Sprintf("%04x: ", i)
+
+		var binSb strings.Builder
+		for j := 0; j < len(chunk); j++ {
+			if j > 0 {
+				if j == 4 {
+					binSb.WriteString("  ")
+				} else {
+					binSb.WriteByte(' ')
+				}
+			}
+			fmt.Fprintf(&binSb, "%08b", chunk[j])
+		}
+		binStr := binSb.String()
+		if len(chunk) < 8 {
+			padLen := 72 - len(binStr)
+			if padLen > 0 {
+				binStr += strings.Repeat(" ", padLen)
+			}
+		}
+
+		asciiStr := FormatASCII(string(chunk))
+
+		lines = append(lines, CanonicalBinaryLine{
+			Offset: offsetStr,
+			Binary: binStr,
+			ASCII:  asciiStr,
+		})
+	}
+	return lines
+}
+

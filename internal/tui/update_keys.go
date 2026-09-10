@@ -115,6 +115,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.ScrollUp):
 		m.selectionStart = -1
 		m.selectionEnd = -1
+		m.inspectorScroll = 0
 		wasFollow := m.follow
 		m.follow = false
 		h := m.activeDataHeight()
@@ -152,6 +153,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.ScrollDown):
 		m.selectionStart = -1
 		m.selectionEnd = -1
+		m.inspectorScroll = 0
 		h := m.activeDataHeight()
 		if len(m.visible) > 0 {
 			if m.selectedRow < 0 {
@@ -355,7 +357,27 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		curTab := m.currentTab()
 		curTab.DisplayFormat = curTab.DisplayFormat.Next()
 		m.displayFormat = curTab.DisplayFormat
+		m.inspectorScroll = 0
+		curTab.InspectorScroll = 0
+		m.recalcLayout()
+		m.clampScroll()
 		m.message = fmt.Sprintf("Display format: %s", curTab.DisplayFormat.Label())
+		return m, nil
+
+	case msg.String() == "alt+down" || msg.String() == "alt+j" || msg.String() == "alt+d":
+		if m.isInspectorActive() {
+			m.inspectorScroll++
+			return m, nil
+		}
+		return m, nil
+
+	case msg.String() == "alt+up" || msg.String() == "alt+k" || msg.String() == "alt+u":
+		if m.isInspectorActive() {
+			if m.inspectorScroll > 0 {
+				m.inspectorScroll--
+			}
+			return m, nil
+		}
 		return m, nil
 
 	case keyMatches(msg, m.keys.Help):

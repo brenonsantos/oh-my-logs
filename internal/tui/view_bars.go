@@ -354,6 +354,11 @@ func (m Model) viewKeyBar() string {
 				hint("c", "clear"),
 				hint(",", "⚙ cfg"),
 				hint("x", "hex"),
+			)
+			if m.isInspectorActive() {
+				candidates = append(candidates, hint("Alt+j/k", "drawer"))
+			}
+			candidates = append(candidates,
 				hint("i", "send"),
 			)
 			if m.connState == ConnConnected && !m.isFileSource {
@@ -413,6 +418,11 @@ func (m Model) viewKeyBar() string {
 			candidates = append(candidates,
 				hint("t", "⏱ ts"),
 				hint("x", "hex"),
+			)
+			if m.isInspectorActive() {
+				candidates = append(candidates, hint("Alt+j/k", "drawer"))
+			}
+			candidates = append(candidates,
 				hint("P", "profile"),
 				hint("F", "presets"),
 				hint(",", "⚙ cfg"),

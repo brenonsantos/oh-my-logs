@@ -196,9 +196,27 @@ func (m *Model) recalcLayout() {
 	if len(m.tabs) > 1 {
 		fixed += 2
 	}
-	m.tableHeight = m.height - fixed
-	if m.tableHeight < 1 {
-		m.tableHeight = 1
+	avail := m.height - fixed
+	if avail < 1 {
+		avail = 1
+	}
+
+	if m.isInspectorActive() && avail >= 10 {
+		// Allocate drawer: ~35% of avail height (min 4 rows, max 10 rows)
+		drawerH := avail * 35 / 100
+		if drawerH < 4 {
+			drawerH = 4
+		} else if drawerH > 10 {
+			drawerH = 10
+		}
+		m.inspectorHeight = drawerH
+		m.tableHeight = avail - drawerH - 1 // 1 row for inspector header divider
+		if m.tableHeight < 3 {
+			m.tableHeight = 3
+		}
+	} else {
+		m.inspectorHeight = 0
+		m.tableHeight = avail
 	}
 }
 

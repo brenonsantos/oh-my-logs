@@ -58,6 +58,14 @@ func (m Model) View() string {
 
 		// Table Rows
 		sb.WriteString(m.viewTable())
+
+		// Wireshark-style Bottom Inspector Drawer
+		if m.isInspectorActive() && m.inspectorHeight > 0 {
+			sb.WriteByte('\n')
+			sb.WriteString(m.viewInspectorDivider())
+			sb.WriteByte('\n')
+			sb.WriteString(m.viewInspectorDrawer())
+		}
 	}
 
 	sb.WriteByte('\n')
