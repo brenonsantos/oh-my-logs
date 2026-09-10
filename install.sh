@@ -32,15 +32,32 @@ OS="$(uname -s)"
 case "$OS" in
     Darwin)
         OS_NAME="macOS"
+        GOOS="darwin"
         PROFILES_DIR="$HOME/Library/Application Support/oh-my-logs/profiles"
         ;;
     Linux)
         OS_NAME="Linux"
+        GOOS="linux"
         PROFILES_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/oh-my-logs/profiles"
         ;;
     *)
         print_error "Unsupported operating system: $OS"
         printf "For Windows, please run install.ps1 in PowerShell.\n"
+        exit 1
+        ;;
+esac
+
+# Determine architecture
+ARCH="$(uname -m)"
+case "$ARCH" in
+    x86_64|amd64)
+        GOARCH="amd64"
+        ;;
+    arm64|aarch64)
+        GOARCH="arm64"
+        ;;
+    *)
+        print_error "Unsupported architecture: $ARCH"
         exit 1
         ;;
 esac
@@ -67,13 +84,12 @@ if [ "$1" = "--uninstall" ] || [ "$1" = "-u" ]; then
     exit 0
 fi
 
-printf "${BOLD}oh-my-logs (oml) Installer for %s${RESET}\n\n" "$OS_NAME"
+printf "${BOLD}oh-my-logs (oml) Installer for %s (%s)${RESET}\n\n" "$OS_NAME" "$GOARCH"
 
 # Determine target directory
 if [ -w "/usr/local/bin" ]; then
     TARGET_DIR="/usr/local/bin"
 elif command -v sudo >/dev/null 2>&1 && [ -t 0 ]; then
-    # Interactive session with sudo available
     TARGET_DIR="/usr/local/bin"
     USE_SUDO=1
 else
@@ -81,20 +97,50 @@ else
     mkdir -p "$TARGET_DIR"
 fi
 
-# Build or locate binary
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Locate, build, or download binary
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
 BIN_PATH=""
+EXTRACTED_PROFILES=""
 
-if [ -f "$SCRIPT_DIR/oml" ]; then
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/oml" ]; then
+    print_step "Using local binary at $SCRIPT_DIR/oml..."
     BIN_PATH="$SCRIPT_DIR/oml"
-elif command -v go >/dev/null 2>&1; then
+elif [ -n "$SCRIPT_DIR" ] && [ -d "$SCRIPT_DIR/cmd/oml" ] && command -v go >/dev/null 2>&1; then
     print_step "Building oml binary from source..."
-    (cd "$SCRIPT_DIR" && go build -o oml ./cmd/oml)
+    (cd "$SCRIPT_DIR" && go build -ldflags="-s -w" -o oml ./cmd/oml)
     BIN_PATH="$SCRIPT_DIR/oml"
 else
-    print_error "Neither prebuilt 'oml' binary nor 'go' compiler found."
-    printf "Please install Go (https://go.dev) or build the binary first.\n"
-    exit 1
+    # Download prebuilt binary from GitHub Releases
+    REPO="brenonsantos/oh-my-logs"
+    print_step "Fetching prebuilt release for $OS_NAME ($GOARCH) from GitHub..."
+    TMP_DIR="$(mktemp -d -t oml-install-XXXXXX)"
+    trap 'rm -rf "$TMP_DIR"' EXIT
+
+    LATEST_URL="https://api.github.com/repos/$REPO/releases/latest"
+    ASSET_URL=""
+    if command -v curl >/dev/null 2>&1; then
+        ASSET_URL="$(curl -fsSL -H "User-Agent: oh-my-logs-installer" "$LATEST_URL" 2>/dev/null | grep -E "browser_download_url.*_${GOOS}_${GOARCH}\.tar\.gz" | cut -d '"' -f 4 || true)"
+    fi
+
+    if [ -z "$ASSET_URL" ]; then
+        print_error "Could not find prebuilt release for ${GOOS}_${GOARCH} on GitHub."
+        printf "Please install Go (https://go.dev) to build from source.\n"
+        exit 1
+    fi
+
+    print_step "Downloading $(basename "$ASSET_URL")..."
+    curl -fsSL -o "$TMP_DIR/oml.tar.gz" "$ASSET_URL"
+
+    print_step "Extracting archive..."
+    tar -xzf "$TMP_DIR/oml.tar.gz" -C "$TMP_DIR"
+
+    BIN_PATH="$(find "$TMP_DIR" -name "oml" -type f | head -n 1)"
+    if [ ! -f "$BIN_PATH" ]; then
+        print_error "Extracted archive did not contain 'oml' binary."
+        exit 1
+    fi
+
+    EXTRACTED_PROFILES="$(find "$TMP_DIR" -type d -name "examples" | head -n 1 || true)"
 fi
 
 # Install binary
@@ -111,9 +157,16 @@ print_success "Installed binary at $TARGET_DIR/oml"
 
 # Install default example profiles
 mkdir -p "$PROFILES_DIR"
-if [ -d "$SCRIPT_DIR/profiles/examples" ]; then
+SRC_EXAMPLES=""
+if [ -n "$EXTRACTED_PROFILES" ] && [ -d "$EXTRACTED_PROFILES" ]; then
+    SRC_EXAMPLES="$EXTRACTED_PROFILES"
+elif [ -n "$SCRIPT_DIR" ] && [ -d "$SCRIPT_DIR/profiles/examples" ]; then
+    SRC_EXAMPLES="$SCRIPT_DIR/profiles/examples"
+fi
+
+if [ -n "$SRC_EXAMPLES" ] && [ -d "$SRC_EXAMPLES" ]; then
     COPIED=0
-    for f in "$SCRIPT_DIR/profiles/examples"/*.yaml; do
+    for f in "$SRC_EXAMPLES"/*.yaml; do
         [ -e "$f" ] || continue
         base="$(basename "$f")"
         if [ ! -f "$PROFILES_DIR/$base" ]; then
