@@ -30,11 +30,14 @@ func (m Model) viewTabBar() string {
 		displayName := t.DisplayName(i + 1)
 		countStr := fmt.Sprintf("%d", len(t.Visible))
 		tag := ""
+		if t.DisplayFormat != FormatParsed {
+			tag += fmt.Sprintf(" [%s]", t.DisplayFormat.Tag())
+		}
 		if m.splitMode != SplitNone {
 			if i == m.paneTabIdx(0) {
-				tag = " [P1]"
+				tag += " [P1]"
 			} else if i == m.paneTabIdx(1) {
-				tag = " [P2]"
+				tag += " [P2]"
 			}
 		}
 		label := fmt.Sprintf("%d: %s (%s)%s", i+1, displayName, countStr, tag)
@@ -263,6 +266,14 @@ func (m Model) viewStatusBar() string {
 		parts = append(parts, theme.Warning.Render(fmt.Sprintf("★ %d pinned", len(m.bookmarks))))
 	}
 
+	curFormat := m.displayFormat
+	if cur := m.currentTab(); cur != nil {
+		curFormat = cur.DisplayFormat
+	}
+	if curFormat != FormatParsed {
+		parts = append(parts, theme.Accent.Bold(true).Render(fmt.Sprintf("▤ %s", curFormat.Tag())))
+	}
+
 	parts = append(parts, tsStr)
 	parts = append(parts, followStr)
 
@@ -342,6 +353,7 @@ func (m Model) viewKeyBar() string {
 				hint("Space", "resume"),
 				hint("c", "clear"),
 				hint(",", "⚙ cfg"),
+				hint("x", "hex"),
 				hint("i", "send"),
 			)
 			if m.connState == ConnConnected && !m.isFileSource {
@@ -364,6 +376,7 @@ func (m Model) viewKeyBar() string {
 				hint("Space", "pause"),
 				hint("c", "clear"),
 				hint(",", "⚙ cfg"),
+				hint("x", "hex"),
 				hint("i", "send"),
 			)
 			if m.connState == ConnConnected && !m.isFileSource {
@@ -399,6 +412,7 @@ func (m Model) viewKeyBar() string {
 			}
 			candidates = append(candidates,
 				hint("t", "⏱ ts"),
+				hint("x", "hex"),
 				hint("P", "profile"),
 				hint("F", "presets"),
 				hint(",", "⚙ cfg"),

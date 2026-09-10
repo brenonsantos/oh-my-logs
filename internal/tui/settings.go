@@ -16,6 +16,7 @@ const (
 	settingRowBaud
 	settingRowTXEnding
 	settingRowTimestamp
+	settingRowFormat
 	settingRowFollow
 	settingRowDirectToDisk
 	settingRowTheme
@@ -27,6 +28,7 @@ var (
 	baudOptions      = []int{9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600}
 	txEndingOptions  = []serial.LineEnding{serial.EndingCRLF, serial.EndingLF, serial.EndingCR, serial.EndingNone}
 	timestampOptions = []TimestampMode{TSModeClock, TSModeDelta, TSModeBoth, TSModeOff}
+	formatOptions    = []DisplayFormat{FormatParsed, FormatRaw, FormatHex, FormatBinary}
 )
 
 func (m Model) ensureSettings() *config.Settings {
@@ -57,6 +59,8 @@ func (m Model) settingRowName(row settingRow) string {
 		return "TX Line Ending"
 	case settingRowTimestamp:
 		return "Timestamp Mode"
+	case settingRowFormat:
+		return "Display Format"
 	case settingRowFollow:
 		return "Auto-Follow on Launch"
 	case settingRowDirectToDisk:
@@ -78,6 +82,8 @@ func (m Model) settingRowDescription(row settingRow) string {
 		return "Line terminator appended when transmitting commands"
 	case settingRowTimestamp:
 		return "Display format for arrival timing and inter-log latency (Δt)"
+	case settingRowFormat:
+		return "Log data representation: parsed columns, raw text, hex, or binary"
 	case settingRowFollow:
 		return "Automatically follow newest incoming logs upon startup"
 	case settingRowDirectToDisk:
@@ -145,6 +151,9 @@ func (m Model) settingValueLabel(row settingRow) string {
 		default:
 			return "Clock Time"
 		}
+
+	case settingRowFormat:
+		return m.displayFormat.Label()
 
 	case settingRowFollow:
 		if s.DefaultFollow {
@@ -242,6 +251,23 @@ func (m Model) adjustSetting(row settingRow, delta int) Model {
 		m.settings.TimestampMode = newTS.String()
 		m.settings.ShowTimestamp = m.showTimestamp
 		m.message = fmt.Sprintf("Timestamp mode set to %s", m.settingValueLabel(settingRowTimestamp))
+
+	case settingRowFormat:
+		curIdx := 0
+		for i, f := range formatOptions {
+			if f == m.displayFormat {
+				curIdx = i
+				break
+			}
+		}
+		nextIdx := (curIdx + delta + len(formatOptions)) % len(formatOptions)
+		newFmt := formatOptions[nextIdx]
+		m.displayFormat = newFmt
+		if cur := m.currentTab(); cur != nil {
+			cur.DisplayFormat = newFmt
+		}
+		m.settings.DisplayFormat = newFmt.String()
+		m.message = fmt.Sprintf("Display format set to %s", newFmt.Label())
 
 	case settingRowFollow:
 		m.settings.DefaultFollow = !m.settings.DefaultFollow

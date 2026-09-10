@@ -110,6 +110,18 @@ func (m Model) viewTable() string {
 		var cellParts []string
 		for colIdx, col := range cols {
 			val := r.Fields[col.Field]
+			switch col.Field {
+			case "raw":
+				val = r.Raw
+			case "_len":
+				val = FormatByteLen(len(r.Raw))
+			case "_hex":
+				val = FormatHexBytes(r.Raw)
+			case "_bin":
+				val = FormatBinaryBits(r.Raw)
+			case "_ascii":
+				val = FormatASCII(r.Raw)
+			}
 			var rowDelta time.Duration
 			if col.Field == "_delta" || col.Style == "delta" {
 				if i > 0 && !rows[i-1].Timestamp.IsZero() && !r.Timestamp.IsZero() {
@@ -270,7 +282,7 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 		return lines
 	}
 
-	cols := m.effectiveColumns()
+	cols := m.effectiveColumnsForTab(tab)
 	colWidths := m.computeColWidthsForWidth(cols, paneW)
 
 	// Line 0: Header
@@ -475,6 +487,18 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 		var cellParts []string
 		for colIdx, col := range cols {
 			val := r.Fields[col.Field]
+			switch col.Field {
+			case "raw":
+				val = r.Raw
+			case "_len":
+				val = FormatByteLen(len(r.Raw))
+			case "_hex":
+				val = FormatHexBytes(r.Raw)
+			case "_bin":
+				val = FormatBinaryBits(r.Raw)
+			case "_ascii":
+				val = FormatASCII(r.Raw)
+			}
 			var rowDelta time.Duration
 			if col.Field == "_delta" || col.Style == "delta" {
 				if i > 0 && !paneRows[i-1].Timestamp.IsZero() && !r.Timestamp.IsZero() {
@@ -639,23 +663,46 @@ func isDeltaCol(col record.Column) bool {
 	return col.Field == "_delta" || col.Style == "delta"
 }
 
-// effectiveColumns returns the columns to render, respecting timestamp and delta mode.
+// effectiveColumns returns the columns to render, respecting timestamp and delta mode for the current tab.
 func (m Model) effectiveColumns() []record.Column {
-	if m.tsMode == TSModeOff {
-		var cols []record.Column
-		for _, col := range m.columns {
-			if !isTimestampCol(col, m.tsField) && !isDeltaCol(col) {
-				cols = append(cols, col)
-			}
-		}
-		return cols
+	return m.effectiveColumnsForTab(m.currentTab())
+}
+
+// effectiveColumnsForTab returns the columns to render for a specific tab based on its DisplayFormat and timestamp mode.
+func (m Model) effectiveColumnsForTab(tab *Tab) []record.Column {
+	fmtMode := m.displayFormat
+	if tab != nil {
+		fmtMode = tab.DisplayFormat
 	}
 
 	var baseCols []record.Column
-	for _, col := range m.columns {
-		if !isTimestampCol(col, m.tsField) && !isDeltaCol(col) {
-			baseCols = append(baseCols, col)
+	switch fmtMode {
+	case FormatRaw:
+		baseCols = []record.Column{
+			{Field: "raw", Title: "RAW LOG", Width: 0, Style: "primary"},
 		}
+	case FormatHex:
+		baseCols = []record.Column{
+			{Field: "_len", Title: "LEN", Width: 6, Style: "identifier"},
+			{Field: "_hex", Title: "HEX DUMP", Width: 48, Style: "primary"},
+			{Field: "_ascii", Title: "ASCII", Width: 0, Style: "muted"},
+		}
+	case FormatBinary:
+		baseCols = []record.Column{
+			{Field: "_len", Title: "LEN", Width: 6, Style: "identifier"},
+			{Field: "_bin", Title: "BINARY BITS", Width: 72, Style: "primary"},
+			{Field: "_ascii", Title: "ASCII", Width: 0, Style: "muted"},
+		}
+	default: // FormatParsed
+		for _, col := range m.columns {
+			if !isTimestampCol(col, m.tsField) && !isDeltaCol(col) {
+				baseCols = append(baseCols, col)
+			}
+		}
+	}
+
+	if m.tsMode == TSModeOff {
+		return baseCols
 	}
 
 	tsCol := record.Column{

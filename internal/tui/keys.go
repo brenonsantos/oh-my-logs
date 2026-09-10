@@ -38,6 +38,7 @@ type keyMap struct {
 	SplitHorizontal key.Binding
 	SwitchPane      key.Binding
 	ToggleSyncScroll key.Binding
+	ToggleFormat    key.Binding
 	CopyRow         key.Binding
 	CopyRaw         key.Binding
 	SelectUp        key.Binding
@@ -204,6 +205,10 @@ func defaultKeyMap() keyMap {
 		ToggleSyncScroll: key.NewBinding(
 			key.WithKeys("S"),
 			key.WithHelp("S", "toggle sync scroll"),
+		),
+		ToggleFormat: key.NewBinding(
+			key.WithKeys("x", "X"),
+			key.WithHelp("x", "toggle format"),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
