@@ -239,8 +239,8 @@ func TestMouseDragSelection_MultiRowCopy(t *testing.T) {
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
 
-	if !strings.Contains(m.message, "Copied 3 rows to clipboard") {
-		t.Errorf("expected message to contain 'Copied 3 rows to clipboard', got %q", m.message)
+	if !strings.Contains(m.message, "Copied 3 rows") || !strings.Contains(m.message, "to clipboard") {
+		t.Errorf("expected message to contain 'Copied 3 rows' and 'to clipboard', got %q", m.message)
 	}
 
 	clipText, err := clipboard.Read()
@@ -307,8 +307,8 @@ func TestShiftUpDownMultiRowSelection(t *testing.T) {
 	// 5. Press 'y' to copy the 2 selected rows ("two", "three")
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
-	if !strings.Contains(m.message, "Copied 2 rows to clipboard") {
-		t.Errorf("expected 'Copied 2 rows to clipboard', got %q", m.message)
+	if !strings.Contains(m.message, "Copied 2 rows") || !strings.Contains(m.message, "to clipboard") {
+		t.Errorf("expected 'Copied 2 rows' and 'to clipboard', got %q", m.message)
 	}
 
 	clipText, err := clipboard.Read()

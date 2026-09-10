@@ -172,11 +172,24 @@ func TestTimestampPersistentAndToggle(t *testing.T) {
 		t.Errorf("expected view to display the older record's timestamp %q, got:\n%s", rec.Fields["_ts"], vOn)
 	}
 
-	// 4. Press 't' again to toggle timestamp OFF
+	// 4. Press 't' repeatedly to cycle through Delta -> Both -> Off
+	// Press 't' -> TSModeDelta
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = updated.(Model)
+	if m.tsMode != TSModeDelta {
+		t.Fatalf("expected tsMode to be TSModeDelta, got %v", m.tsMode)
+	}
+	// Press 't' -> TSModeBoth
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = updated.(Model)
+	if m.tsMode != TSModeBoth {
+		t.Fatalf("expected tsMode to be TSModeBoth, got %v", m.tsMode)
+	}
+	// Press 't' -> TSModeOff
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	m = updated.(Model)
 	if m.showTimestamp {
-		t.Fatalf("expected showTimestamp to be false after second 't'")
+		t.Fatalf("expected showTimestamp to be false after cycling back to OFF")
 	}
 
 	if strings.Contains(m.viewTableHeader(), "Time") {
@@ -412,11 +425,13 @@ func TestUptimeAndTimestampDistinct(t *testing.T) {
 		t.Errorf("expected view to render uptime 5.182 alongside arrival timestamp")
 	}
 
-	// 3. Press 't' again to toggle timestamp OFF
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
-	m = updated.(Model)
+	// 3. Cycle timestamp until OFF (Delta -> Both -> Off)
+	for m.showTimestamp {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+		m = updated.(Model)
+	}
 	if m.showTimestamp {
-		t.Fatalf("expected showTimestamp to be false after second 't'")
+		t.Fatalf("expected showTimestamp to be false after cycling back to OFF")
 	}
 	if len(m.effectiveColumns()) != 3 {
 		t.Fatalf("expected 3 columns when toggled back OFF, got %d", len(m.effectiveColumns()))

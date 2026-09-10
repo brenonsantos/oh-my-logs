@@ -472,7 +472,7 @@ func (m Model) viewHelpModal() string {
 		renderItem("i, :", "Send serial cmd (TX)", colWidth),
 		renderItem("Space", "Pause / resume follow", colWidth),
 		renderItem("c", "Clear buffer", colWidth),
-		renderItem("t", "Toggle timestamp", colWidth),
+		renderItem("t", "Toggle timestamp / Δt", colWidth),
 		renderItem("s", "Save log to file", colWidth),
 		renderItem("p, P, r", "Port / Profile / Reconnect", colWidth),
 		renderItem("?, q", "Toggle help / Quit", colWidth),

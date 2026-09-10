@@ -8,6 +8,7 @@ import (
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
+	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -154,8 +155,13 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			newRec, _ := m.parser.Parse(old.Raw)
 			newRec.ID = old.ID
+			newRec.Timestamp = old.Timestamp
+			newRec.Delta = old.Delta
 			if newRec.Fields == nil {
 				newRec.Fields = make(map[string]string)
+			}
+			if old.Fields["_delta"] != "" {
+				newRec.Fields["_delta"] = old.Fields["_delta"]
 			}
 			// Preserve earlier recorded arrival timestamp
 			prevTS := old.Fields[m.tsField]
@@ -175,6 +181,12 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return newRec
 		})
+
+		if m.profile != nil {
+			m.deltaTracker = timing.NewTracker(m.profile.TimingParameters())
+		} else {
+			m.deltaTracker = timing.NewTracker(timing.DefaultConfig())
+		}
 
 		m.rebuildAllTabs()
 		m.mode = modeNormal

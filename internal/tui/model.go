@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
@@ -10,6 +11,7 @@ import (
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
+	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -28,6 +30,59 @@ const (
 	modeGame
 	modeTXInput
 )
+
+// TimestampMode defines whether to render arrival clock time, relative delta (Δt), or both.
+type TimestampMode int
+
+const (
+	TSModeClock TimestampMode = iota // clock arrival time (e.g. 15:04:05.000)
+	TSModeDelta                      // relative elapsed time since previous log (e.g. +14.2ms)
+	TSModeBoth                       // both clock and delta columns
+	TSModeOff                        // hidden
+)
+
+func (m TimestampMode) String() string {
+	switch m {
+	case TSModeClock:
+		return "clock"
+	case TSModeDelta:
+		return "delta"
+	case TSModeBoth:
+		return "both"
+	case TSModeOff:
+		return "off"
+	default:
+		return "clock"
+	}
+}
+
+func (m TimestampMode) Next() TimestampMode {
+	switch m {
+	case TSModeClock:
+		return TSModeDelta
+	case TSModeDelta:
+		return TSModeBoth
+	case TSModeBoth:
+		return TSModeOff
+	case TSModeOff:
+		return TSModeClock
+	default:
+		return TSModeClock
+	}
+}
+
+func ParseTimestampMode(s string) TimestampMode {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "delta", "dt":
+		return TSModeDelta
+	case "both":
+		return TSModeBoth
+	case "off", "none", "false":
+		return TSModeOff
+	default:
+		return TSModeClock
+	}
+}
 
 // ProfileItem represents an entry in the profile switcher list.
 type ProfileItem struct {
@@ -163,10 +218,13 @@ type Model struct {
 	activeGame     game.MiniGame
 	logsDuringGame int
 
-	// Timestamp display & settings (toggle visibility at runtime with 't')
-	showTimestamp bool   // whether the timestamp column is displayed in the UI
-	tsField       string // field name for the arrival timestamp (e.g. "_ts" or "time")
-	tsFormat      string // Go time layout for the timestamp
+	// Timestamp & Delta-Time (Δt) display & settings (cycle mode with 't')
+	showTimestamp  bool            // whether timestamp column is displayed (true if tsMode != TSModeOff)
+	tsMode         TimestampMode   // clock, delta, both, or off
+	tsField        string          // field name for the arrival timestamp (e.g. "_ts" or "time")
+	tsFormat       string          // Go time layout for the timestamp
+	deltaTracker   *timing.Tracker // dynamic EMA latency tracker
+	lastRecordTime time.Time       // arrival time of previous stream record
 
 	// Viewport dimensions (computed on resize)
 	tableHeight  int
@@ -272,6 +330,25 @@ func New(
 		}
 	}
 
+	tsMode := TSModeClock
+	if savedSettings != nil {
+		if savedSettings.TimestampMode != "" {
+			tsMode = ParseTimestampMode(savedSettings.TimestampMode)
+		} else if !savedSettings.ShowTimestamp {
+			tsMode = TSModeOff
+		}
+	} else if !initTS {
+		tsMode = TSModeOff
+	}
+
+	var timingCfg timing.Config
+	if profile != nil {
+		timingCfg = profile.TimingParameters()
+	} else {
+		timingCfg = timing.DefaultConfig()
+	}
+	tracker := timing.NewTracker(timingCfg)
+
 	m := Model{
 		keys:          defaultKeyMap(),
 		serialCfg:     cfg,
@@ -285,7 +362,9 @@ func New(
 		buffer:        buf,
 		follow:        true,
 		sidebarWidth:  20,
-		showTimestamp: initTS,
+		showTimestamp: tsMode != TSModeOff,
+		tsMode:        tsMode,
+		deltaTracker:  tracker,
 		tsField:       tsField,
 		tsFormat:      tsFormat,
 		appConfig:     appCfg,
@@ -626,7 +705,8 @@ func (m Model) saveSettings() {
 	} else {
 		s.Profile = ""
 	}
-	s.ShowTimestamp = m.showTimestamp
+	s.ShowTimestamp = (m.tsMode != TSModeOff)
+	s.TimestampMode = m.tsMode.String()
 	s.TXEnding = m.txEnding.String()
 	s.TXHistory = m.txHistory
 	_ = m.appConfig.SaveSettings(s)
@@ -661,4 +741,87 @@ func (m Model) Init() tea.Cmd {
 		return scheduleReconnectTick()
 	}
 	return nil
+}
+
+// selectionRange returns the normalized [start, end] (inclusive) bounds of the
+// active multi-row selection, or (-1, -1) if no multi-row selection is active.
+func (m Model) selectionRange() (int, int) {
+	if m.selectionStart < 0 || m.selectionEnd < 0 || m.selectionStart == m.selectionEnd {
+		return -1, -1
+	}
+	start, end := m.selectionStart, m.selectionEnd
+	if start > end {
+		start, end = end, start
+	}
+	if start < 0 {
+		start = 0
+	}
+	if end >= len(m.visible) {
+		end = len(m.visible) - 1
+	}
+	if start >= end || len(m.visible) == 0 {
+		return -1, -1
+	}
+	return start, end
+}
+
+// selectionDelta calculates the elapsed time between the first and last
+// record in the currently active multi-row selection, if timestamps/deltas are available.
+func (m Model) selectionDelta() (time.Duration, bool) {
+	start, end := m.selectionRange()
+	if start < 0 || end < 0 {
+		return 0, false
+	}
+
+	firstRec := m.visible[start]
+	lastRec := m.visible[end]
+
+	t0 := firstRec.Timestamp
+	if t0.IsZero() {
+		t0 = tryParseRecordTimestamp(firstRec, m.tsField)
+	}
+	t1 := lastRec.Timestamp
+	if t1.IsZero() {
+		t1 = tryParseRecordTimestamp(lastRec, m.tsField)
+	}
+
+	// 1. Both endpoints have valid timestamps
+	if !t0.IsZero() && !t1.IsZero() {
+		d := t1.Sub(t0)
+		if d < 0 && d > -24*time.Hour && t0.Year() == 0 {
+			d += 24 * time.Hour
+		} else if d < 0 {
+			d = -d
+		}
+		return d, true
+	}
+
+	// 2. Fallback: sum inter-record deltas across the selected range
+	var sum time.Duration
+	hasDelta := false
+	for i := start + 1; i <= end; i++ {
+		r := m.visible[i]
+		if r.Delta > 0 {
+			sum += r.Delta
+			hasDelta = true
+		}
+	}
+	if hasDelta {
+		return sum, true
+	}
+
+	return 0, false
+}
+
+// selectionMessage formats a user-friendly selection summary with elapsed delta if available.
+func (m Model) selectionMessage(count int, baseMsg string) string {
+	d, ok := m.selectionDelta()
+	suffix := ""
+	if baseMsg != "" {
+		suffix = fmt.Sprintf(" (%s)", baseMsg)
+	}
+	if ok {
+		return fmt.Sprintf("%d rows selected · Δt: %s%s", count, timing.FormatDelta(d), suffix)
+	}
+	return fmt.Sprintf("%d rows selected%s", count, suffix)
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -188,9 +189,16 @@ func (m Model) viewStatusBar() string {
 		followStr = theme.FollowOff.Render("PAUSED")
 	}
 
-	tsStr := theme.Muted.Render("⏱ OFF")
-	if m.showTimestamp {
-		tsStr = theme.Success.Render("⏱ ON")
+	var tsStr string
+	switch m.tsMode {
+	case TSModeClock:
+		tsStr = theme.Success.Render("⏱ CLOCK")
+	case TSModeDelta:
+		tsStr = theme.Success.Render("⏱ Δt")
+	case TSModeBoth:
+		tsStr = theme.Success.Render("⏱ BOTH")
+	default:
+		tsStr = theme.Muted.Render("⏱ OFF")
 	}
 
 	var parts []string
@@ -225,6 +233,14 @@ func (m Model) viewStatusBar() string {
 	parts = append(parts, theme.Muted.Render(fmt.Sprintf("%d records", total)))
 	if shown != total {
 		parts = append(parts, theme.Secondary.Render(fmt.Sprintf("%d shown", shown)))
+	}
+	if start, end := m.selectionRange(); start >= 0 && end >= 0 {
+		count := end - start + 1
+		if d, ok := m.selectionDelta(); ok {
+			parts = append(parts, theme.Secondary.Bold(true).Render(fmt.Sprintf("%d selected (Δt: %s)", count, timing.FormatDelta(d))))
+		} else {
+			parts = append(parts, theme.Secondary.Bold(true).Render(fmt.Sprintf("%d selected", count)))
+		}
 	}
 	if m.activeFilter != nil && !m.activeFilter.Empty() {
 		parts = append(parts, theme.Accent.Render(fmt.Sprintf("filter: %s", m.activeFilter.Raw)))
