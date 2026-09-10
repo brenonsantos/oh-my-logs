@@ -129,15 +129,20 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	tableStartY := 4
+// splitTableStartY returns the terminal Y row where viewSplitTable() begins.
+func (m Model) splitTableStartY() int {
 	if len(m.tabs) > 1 {
-		tableStartY = 6
+		return 4
 	}
-	totalH := m.tableHeight + 2
-	tableEndY := tableStartY + totalH
+	return 2
+}
 
-	if msg.Y < tableStartY || msg.Y >= tableEndY {
+func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	splitStartY := m.splitTableStartY()
+	totalH := m.tableHeight + 2
+	splitEndY := splitStartY + totalH
+
+	if msg.Y < splitStartY || msg.Y >= splitEndY {
 		return m, nil
 	}
 
@@ -151,8 +156,8 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 			m.switchPaneFocus()
 		}
 
-		dataStartY := tableStartY + 2
-		if msg.Y >= dataStartY && msg.Y < tableEndY {
+		dataStartY := splitStartY + 2
+		if msg.Y >= dataStartY && msg.Y < splitEndY {
 			rowOffset := msg.Y - dataStartY
 			absIdx := m.scrollOffset + rowOffset
 			if absIdx >= 0 && absIdx < len(m.visible) {
@@ -180,7 +185,7 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 	// SplitHorizontal
 	availH := totalH - 1
 	topH := availH / 2
-	dividerY := tableStartY + topH
+	dividerY := splitStartY + topH
 	clickedPane := 0
 	if msg.Y > dividerY {
 		clickedPane = 1
@@ -191,11 +196,11 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 
 	var dataStartY, dataEndY int
 	if clickedPane == 0 {
-		dataStartY = tableStartY + 2
-		dataEndY = tableStartY + topH
+		dataStartY = splitStartY + 2
+		dataEndY = splitStartY + topH
 	} else {
 		dataStartY = dividerY + 1 + 2
-		dataEndY = tableEndY
+		dataEndY = splitEndY
 	}
 	if msg.Y >= dataStartY && msg.Y < dataEndY {
 		rowOffset := msg.Y - dataStartY
@@ -286,13 +291,30 @@ func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	tableStartY := 4
+	dataStartY := 4
 	if len(m.tabs) > 1 {
-		tableStartY = 6
+		dataStartY = 6
 	}
-	tableEndY := tableStartY + m.tableHeight
+	dataEndY := dataStartY + m.tableHeight
+	if m.splitMode == SplitVertical {
+		dataStartY = m.splitTableStartY() + 2
+		dataEndY = m.splitTableStartY() + m.tableHeight + 2
+	} else if m.splitMode == SplitHorizontal {
+		splitStartY := m.splitTableStartY()
+		totalH := m.tableHeight + 2
+		availH := totalH - 1
+		topH := availH / 2
+		dividerY := splitStartY + topH
+		if m.activePane == 0 {
+			dataStartY = splitStartY + 2
+			dataEndY = splitStartY + topH
+		} else {
+			dataStartY = dividerY + 3
+			dataEndY = splitStartY + totalH
+		}
+	}
 
-	if msg.Y < tableStartY {
+	if msg.Y < dataStartY {
 		// Dragging above table viewport: auto-scroll up
 		if m.scrollOffset > 0 {
 			m.scrollOffset--
@@ -300,7 +322,7 @@ func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 		m.selectionEnd = m.scrollOffset
 		m.follow = false
-	} else if msg.Y >= tableEndY {
+	} else if msg.Y >= dataEndY {
 		// Dragging below table viewport: auto-scroll down
 		m.scrollOffset++
 		m.clampScroll()
@@ -312,7 +334,7 @@ func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.selectionEnd = endIdx
 		m.follow = false
 	} else {
-		rowOffset := msg.Y - tableStartY
+		rowOffset := msg.Y - dataStartY
 		absIdx := m.scrollOffset + rowOffset
 		if absIdx >= len(m.visible) {
 			absIdx = len(m.visible) - 1

@@ -15,7 +15,12 @@ func (m Model) viewTableHeader() string {
 	renderedHeaders := m.renderRow(func(col record.Column, w int) string {
 		return theme.Header.Render(padOrTrunc(col.Title, w))
 	})
-	return "   " + renderedHeaders
+	headerLine := "   " + renderedHeaders
+	tw := m.tableWidth()
+	if lipgloss.Width(headerLine) > tw {
+		return lipgloss.NewStyle().MaxWidth(tw).Render(headerLine)
+	}
+	return headerLine
 }
 
 // viewTable renders the scrollable table body with search match and focus highlights.
@@ -182,6 +187,8 @@ func (m Model) viewTable() string {
 			} else {
 				fullRow += strings.Repeat(" ", rem)
 			}
+		} else if curW > tableWidth {
+			fullRow = lipgloss.NewStyle().MaxWidth(tableWidth).Render(fullRow)
 		}
 
 		lines = append(lines, fullRow)
@@ -189,7 +196,7 @@ func (m Model) viewTable() string {
 
 	// Pad remaining vertical space to keep layout stable
 	for len(lines) < m.tableHeight {
-		lines = append(lines, theme.RowNormal.Width(tableWidth).Render(""))
+		lines = append(lines, strings.Repeat(" ", tableWidth))
 	}
 
 	return strings.Join(lines, "\n")
@@ -625,7 +632,11 @@ func (m Model) viewSplitTable() string {
 			if i == 1 && (m.activePane == 0 || m.activePane == 1) {
 				sepStyle = theme.Accent
 			}
-			joined = append(joined, l+sepStyle.Render(sep)+r)
+			row := l + sepStyle.Render(sep) + r
+			if lipgloss.Width(row) > m.width {
+				row = lipgloss.NewStyle().MaxWidth(m.width).Render(row)
+			}
+			joined = append(joined, row)
 		}
 		return strings.Join(joined, "\n")
 	}
@@ -647,6 +658,9 @@ func (m Model) viewSplitTable() string {
 	divLine := theme.Divider.Render(strings.Repeat("─", m.width))
 	if m.activePane == 0 {
 		divLine = theme.Accent.Render(strings.Repeat("━", m.width))
+	}
+	if lipgloss.Width(divLine) > m.width {
+		divLine = lipgloss.NewStyle().MaxWidth(m.width).Render(divLine)
 	}
 
 	var all []string

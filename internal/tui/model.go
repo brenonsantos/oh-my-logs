@@ -133,7 +133,6 @@ type Tab struct {
 	SelectedRow    int // selected row index into Visible (-1 if none)
 	BookmarkedOnly  bool
 	DisplayFormat   DisplayFormat
-	InspectorScroll int
 }
 
 // DisplayName returns a user-friendly label for the tab.
@@ -266,7 +265,6 @@ type Model struct {
 
 	// Multi-format representation (FormatParsed, FormatRaw, FormatHex, FormatBinary)
 	displayFormat   DisplayFormat
-	inspectorScroll int
 	inspectorHeight int
 }
 
@@ -684,7 +682,6 @@ func (m *Model) syncActiveTabToModel() {
 	cur.SelectedRow = m.selectedRow
 	cur.BookmarkedOnly = m.bookmarkedOnly
 	cur.DisplayFormat = m.displayFormat
-	cur.InspectorScroll = m.inspectorScroll
 }
 
 // syncModelToActiveTab updates the model's active view state from the current tab.
@@ -703,7 +700,6 @@ func (m *Model) syncModelToActiveTab() {
 	m.selectedRow = cur.SelectedRow
 	m.bookmarkedOnly = cur.BookmarkedOnly
 	m.displayFormat = cur.DisplayFormat
-	m.inspectorScroll = cur.InspectorScroll
 	m.selectionStart = -1
 	m.selectionEnd = -1
 }

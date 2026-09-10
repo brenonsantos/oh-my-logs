@@ -102,17 +102,17 @@ func (m Model) viewInspectorDivider() string {
 	leftRendered := theme.Accent.Bold(true).Render(leftTitle)
 	leftW := lipgloss.Width(leftRendered)
 
-	rightHints := " [Alt+j/k scroll] ───"
-	rightRendered := theme.Muted.Render(rightHints)
-	rightW := lipgloss.Width(rightRendered)
-
-	rem := w - leftW - rightW
+	rem := w - leftW
 	if rem < 0 {
 		rem = 0
 	}
 
 	middle := theme.Divider.Render(strings.Repeat("─", rem))
-	return leftRendered + middle + rightRendered
+	fullDivider := leftRendered + middle
+	if lipgloss.Width(fullDivider) > w {
+		return lipgloss.NewStyle().MaxWidth(w).Render(fullDivider)
+	}
+	return fullDivider
 }
 
 // viewInspectorDrawer renders the canonical multi-line hex or binary byte dump.
@@ -136,10 +136,12 @@ func (m Model) viewInspectorDrawer() string {
 				curW := lipgloss.Width(msg)
 				if curW < w {
 					msg += strings.Repeat(" ", w-curW)
+				} else if curW > w {
+					msg = lipgloss.NewStyle().MaxWidth(w).Render(msg)
 				}
 				emptyLines = append(emptyLines, msg)
 			} else {
-				emptyLines = append(emptyLines, theme.RowNormal.Width(w).Render(""))
+				emptyLines = append(emptyLines, strings.Repeat(" ", w))
 			}
 		}
 		return strings.Join(emptyLines, "\n")
@@ -157,6 +159,8 @@ func (m Model) viewInspectorDrawer() string {
 			curW := lipgloss.Width(lineStr)
 			if curW < w {
 				lineStr += strings.Repeat(" ", w-curW)
+			} else if curW > w {
+				lineStr = lipgloss.NewStyle().MaxWidth(w).Render(lineStr)
 			}
 			formattedLines = append(formattedLines, lineStr)
 		}
@@ -170,34 +174,23 @@ func (m Model) viewInspectorDrawer() string {
 			curW := lipgloss.Width(lineStr)
 			if curW < w {
 				lineStr += strings.Repeat(" ", w-curW)
+			} else if curW > w {
+				lineStr = lipgloss.NewStyle().MaxWidth(w).Render(lineStr)
 			}
 			formattedLines = append(formattedLines, lineStr)
 		}
 	}
 
-	// Clamp inspector scroll
-	maxScroll := len(formattedLines) - h
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	scroll := m.inspectorScroll
-	if scroll > maxScroll {
-		scroll = maxScroll
-	}
-	if scroll < 0 {
-		scroll = 0
-	}
-
-	end := scroll + h
+	end := h
 	if end > len(formattedLines) {
 		end = len(formattedLines)
 	}
 
-	visibleLines := formattedLines[scroll:end]
+	visibleLines := formattedLines[:end]
 
 	// Pad with empty lines if record dump is shorter than inspector height
 	for len(visibleLines) < h {
-		visibleLines = append(visibleLines, theme.RowNormal.Width(w).Render(""))
+		visibleLines = append(visibleLines, strings.Repeat(" ", w))
 	}
 
 	return strings.Join(visibleLines, "\n")

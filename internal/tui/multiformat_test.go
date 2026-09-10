@@ -8,6 +8,7 @@ import (
 
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestFormatCyclingWithKeyX(t *testing.T) {
@@ -291,22 +292,7 @@ func TestWiresharkInspectorDrawer(t *testing.T) {
 		t.Errorf("expected view to contain canonical ASCII gutter ' │ ', got:\n%s", view)
 	}
 
-	// 2. Alt+j scrolls inspector
-	m.inspectorScroll = 0
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}, Alt: true})
-	m = newM.(Model)
-	if m.inspectorScroll != 1 {
-		t.Errorf("expected inspectorScroll 1 after Alt+j, got %d", m.inspectorScroll)
-	}
-
-	// 3. Moving selected row (j) resets inspectorScroll to 0
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
-	m = newM.(Model)
-	if m.inspectorScroll != 0 {
-		t.Errorf("expected inspectorScroll reset to 0 after moving rows, got %d", m.inspectorScroll)
-	}
-
-	// 4. Switch to Binary: inspector displays binary bits
+	// 2. Switch to Binary: inspector displays binary bits
 	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}) // -> Binary
 	m = newM.(Model)
 	if !m.isInspectorActive() {
@@ -471,5 +457,44 @@ func TestUserBugSequence(t *testing.T) {
 	}
 }
 
+func TestLineWidthSafety(t *testing.T) {
+	records := make([]record.Record, 50)
+	for i := 0; i < 50; i++ {
+		records[i] = record.Record{
+			ID:        uint64(i + 1),
+			Raw:       fmt.Sprintf("[%d] 1234567890 0x%04x ValidateProfileFromCapability(): Profile[ K          ] very long payload exceeding normal widths with extra characters to test boundaries!", i+1, i*16),
+			Timestamp: time.Now(),
+			Fields:    map[string]string{"message": fmt.Sprintf("msg %d", i+1), "level": "INFO"},
+		}
+	}
 
+	widths := []int{80, 120, 241}
+	formats := []DisplayFormat{FormatParsed, FormatRaw, FormatHex, FormatBinary}
 
+	for _, w := range widths {
+		for _, fmtMode := range formats {
+			m := newTestModelWithRecords(records)
+			m.width = w
+			m.height = 40
+			m.displayFormat = fmtMode
+			m.currentTab().DisplayFormat = fmtMode
+			// Enable multi-row selection
+			m.selectionStart = 2
+			m.selectionEnd = 7
+			m.bookmarks[3] = struct{}{}
+			m.recalcLayout()
+
+			v := m.View()
+			lines := strings.Split(v, "\n")
+			if len(lines) != m.height {
+				t.Errorf("w=%d fmt=%s: expected %d lines, got %d", w, fmtMode.Label(), m.height, len(lines))
+			}
+			for lineIdx, line := range lines {
+				lw := lipgloss.Width(line)
+				if lw > w {
+					t.Errorf("w=%d fmt=%s line %d: width %d exceeds terminal width %d:\n%q", w, fmtMode.Label(), lineIdx, lw, w, line)
+				}
+			}
+		}
+	}
+}

@@ -256,12 +256,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case modeHelp, modeGame, modeSavePresetPrompt:
 				// ignore scrolling while modal or game is active
 			default:
-				if m.isInspectorActive() && msg.Y >= m.height-3-m.inspectorHeight {
-					if m.inspectorScroll > 0 {
-						m.inspectorScroll--
-					}
-					return m, nil
-				}
 				m.follow = false
 				m.scrollOffset -= 3
 				m.clampScroll()
@@ -288,10 +282,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case modeHelp, modeGame, modeSavePresetPrompt:
 				// ignore scrolling while modal or game is active
 			default:
-				if m.isInspectorActive() && msg.Y >= m.height-3-m.inspectorHeight {
-					m.inspectorScroll++
-					return m, nil
-				}
 				m.scrollOffset += 3
 				m.clampScroll()
 				h := m.activeDataHeight()

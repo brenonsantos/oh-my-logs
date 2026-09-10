@@ -107,6 +107,8 @@ func (m Model) viewTitleBar() string {
 	rem := m.width - contentWidth
 	if rem > 0 {
 		content += lipgloss.NewStyle().Background(theme.TitleBg).Render(strings.Repeat(" ", rem))
+	} else if contentWidth > m.width {
+		content = lipgloss.NewStyle().MaxWidth(m.width).Render(content)
 	}
 
 	return content
@@ -288,11 +290,23 @@ func (m Model) viewStatusBar() string {
 	}
 
 	sep := theme.Muted.Render("  │  ")
-	return "  " + strings.Join(parts, sep)
+	res := "  " + strings.Join(parts, sep)
+	if m.width > 0 && lipgloss.Width(res) > m.width {
+		return lipgloss.NewStyle().MaxWidth(m.width).Render(res)
+	}
+	return res
 }
 
 // viewKeyBar renders context-sensitive key hints or input prompt.
 func (m Model) viewKeyBar() string {
+	res := m.renderKeyBarContent()
+	if m.width > 0 && lipgloss.Width(res) > m.width {
+		return lipgloss.NewStyle().MaxWidth(m.width).Render(res)
+	}
+	return res
+}
+
+func (m Model) renderKeyBarContent() string {
 	switch m.mode {
 	case modeSearch:
 		prompt := theme.Primary.Render("Search: ")
@@ -355,9 +369,6 @@ func (m Model) viewKeyBar() string {
 				hint(",", "⚙ cfg"),
 				hint("x", "hex"),
 			)
-			if m.isInspectorActive() {
-				candidates = append(candidates, hint("Alt+j/k", "drawer"))
-			}
 			candidates = append(candidates,
 				hint("i", "send"),
 			)
@@ -419,9 +430,6 @@ func (m Model) viewKeyBar() string {
 				hint("t", "⏱ ts"),
 				hint("x", "hex"),
 			)
-			if m.isInspectorActive() {
-				candidates = append(candidates, hint("Alt+j/k", "drawer"))
-			}
 			candidates = append(candidates,
 				hint("P", "profile"),
 				hint("F", "presets"),

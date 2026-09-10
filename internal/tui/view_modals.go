@@ -506,7 +506,6 @@ func (m Model) viewHelpModal() string {
 		renderItem("c", "Clear buffer", colWidth),
 		renderItem("t", "Toggle timestamp / Δt", colWidth),
 		renderItem("x, X", "Format (Hex/Bin/Raw)", colWidth),
-		renderItem("Alt+j/k", "Scroll inspector drawer", colWidth),
 		renderItem(", , C", "Settings & preferences", colWidth),
 		renderItem("s", "Save log to file", colWidth),
 		renderItem("D, r", "Disconnect / Reconnect", colWidth),
