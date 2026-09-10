@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	version  = "1.0.0"
-	codename = "Joseense"
+	version  = "1.1.0"
+	codename = "Jordanense"
 )
 
 func main() {

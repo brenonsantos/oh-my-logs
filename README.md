@@ -1,6 +1,6 @@
 # oh-my-logs (`oml`)
 
-> **Release v1.0.0 — Joseense**
+> **Release v1.1.0 — Jordanense**
 > A cross-platform terminal UI for monitoring, filtering, searching, and recording serial output from embedded systems.
 
 <img width="926" height="676" alt="Screenshot 2026-09-08 at 18 10 32" src="https://github.com/user-attachments/assets/beaa2cf3-4b70-4240-a166-a40532f9edb1" />
