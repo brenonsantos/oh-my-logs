@@ -94,6 +94,35 @@ func connectCmd(cfg serial.Config) tea.Cmd {
 	}
 }
 
+// disconnect explicitly closes the active serial port and halts auto-reconnect,
+// disconnect explicitly closes the active serial port and halts auto-reconnect,
+// freeing the hardware port for external flashing tools without quitting the app.
+func (m Model) disconnect() (Model, tea.Cmd) {
+	if m.isFileSource {
+		m.message = "Replay of offline log file — cannot disconnect"
+		return m, nil
+	}
+	if m.connState == ConnDisconnected && m.source == nil && !m.reconnecting {
+		m.manualDisconnect = true
+		m.message = "Already disconnected"
+		return m, nil
+	}
+	m.manualDisconnect = true
+	m.reconnecting = false
+	if m.source != nil {
+		m.source.Stop()
+		m.source = nil
+	}
+	m.connState = ConnDisconnected
+	m.connDetail = "Disconnected manually"
+	if m.serialCfg.Port != "" {
+		m.message = fmt.Sprintf("Disconnected from %s — port released (r to reconnect)", m.serialCfg.Port)
+	} else {
+		m.message = "Disconnected — port released (r to reconnect)"
+	}
+	return m, nil
+}
+
 // Update is the Bubble Tea update function.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -114,7 +143,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── Source error ─────────────────────────────────────────────────────────
 	case ErrorMsg:
-		m.message = msg.Err.Error()
+		if !m.manualDisconnect {
+			m.message = msg.Err.Error()
+		}
 		if m.connState == ConnConnected {
 			// A fatal read error occurred on active connection (e.g. cable unplugged)
 			m.connState = ConnDisconnected
@@ -123,7 +154,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.source.Stop()
 				m.source = nil
 			}
-			if m.serialCfg.Port != "" && !m.isFileSource {
+			if !m.manualDisconnect && m.serialCfg.Port != "" && !m.isFileSource {
 				m.reconnecting = true
 				m.message = "Device disconnected — auto-reconnecting…"
 				return m, scheduleReconnectTick()
@@ -137,14 +168,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── Connection state ─────────────────────────────────────────────────────
 	case ConnStateMsg:
-		m.connState = msg.State
-		m.connDetail = msg.Detail
+		if !m.manualDisconnect {
+			m.connState = msg.State
+			m.connDetail = msg.Detail
+		}
 		if msg.State == ConnDisconnected {
 			if m.source != nil {
 				m.source.Stop()
 				m.source = nil
 			}
-			if m.serialCfg.Port != "" && !m.isFileSource {
+			if !m.manualDisconnect && m.serialCfg.Port != "" && !m.isFileSource {
 				if !m.reconnecting {
 					m.reconnecting = true
 					m.message = "Device disconnected — auto-reconnecting…"
@@ -156,7 +189,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── Auto-reconnect polling ───────────────────────────────────────────────
 	case reconnectTickMsg:
-		if m.connState == ConnConnected || m.serialCfg.Port == "" || m.isFileSource {
+		if m.manualDisconnect || m.connState == ConnConnected || m.serialCfg.Port == "" || m.isFileSource {
 			m.reconnecting = false
 			return m, nil
 		}
@@ -164,6 +197,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tryReconnectCmd(m.serialCfg)
 
 	case reconnectFailedMsg:
+		if m.manualDisconnect {
+			m.reconnecting = false
+			return m, nil
+		}
 		if msg.reason != "" {
 			m.message = msg.reason
 		}
@@ -184,6 +221,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.connState = ConnConnected
 		m.connDetail = ""
 		m.reconnecting = false
+		m.manualDisconnect = false
 		m.mode = modeNormal
 		m.message = fmt.Sprintf("Connected to %s", msg.port)
 		m.saveSettings()

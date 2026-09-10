@@ -307,8 +307,8 @@ func TestHelpModalWidthAndNoTruncation(t *testing.T) {
 	}
 
 	view := m.viewHelpModal()
-	if !strings.Contains(view, "Port / Profile / Reconnect") {
-		t.Errorf("expected full description 'Port / Profile / Reconnect' in help modal, got:\n%s", view)
+	if !strings.Contains(view, "Disconnect / Reconnect") || !strings.Contains(view, "Port / Profile select") {
+		t.Errorf("expected descriptions for Disconnect / Reconnect and Port / Profile in help modal, got:\n%s", view)
 	}
 	if strings.Contains(view, "select\n") || strings.Contains(view, "\nselect") {
 		t.Errorf("detected wrapped footer in help modal")

@@ -306,17 +306,28 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeProfilePicker
 		return m, nil
 
+	case keyMatches(msg, m.keys.Disconnect):
+		return m.disconnect()
+
 	case keyMatches(msg, m.keys.Reconnect):
 		if m.serialCfg.Port == "" {
 			m.message = "No port configured — press p to pick one"
+			return m, nil
+		}
+		if m.isFileSource {
+			m.message = "Replay of offline log file — cannot reconnect"
 			return m, nil
 		}
 		if m.source != nil {
 			m.source.Stop()
 			m.source = nil
 		}
+		m.manualDisconnect = false
 		m.connState = ConnDisconnected
-		return m, connectCmd(m.serialCfg)
+		m.connDetail = ""
+		m.reconnecting = true
+		m.message = fmt.Sprintf("Reconnecting to %s…", m.serialCfg.Port)
+		return m, tryReconnectCmd(m.serialCfg)
 
 	case keyMatches(msg, m.keys.ToggleTimestamp):
 		m.tsMode = m.tsMode.Next()

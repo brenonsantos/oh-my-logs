@@ -156,8 +156,9 @@ type Model struct {
 	serialCfg    serial.Config
 	connState    ConnState
 	connDetail   string
-	reconnecting bool
-	isFileSource bool
+	reconnecting     bool
+	manualDisconnect bool
+	isFileSource     bool
 
 	// Profile & parser
 	profile  *parser.Profile

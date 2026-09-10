@@ -117,11 +117,16 @@ func (m Model) viewEmptyState() string {
 	switch {
 	case m.connState != ConnConnected:
 		title = theme.Secondary.Bold(true).Render("No serial device connected")
-		if m.serialCfg.Port != "" && !m.isFileSource {
+		if m.reconnecting && m.serialCfg.Port != "" && !m.isFileSource {
 			subtitle = theme.Muted.Render("Auto-reconnecting to ") + theme.Accent.Render(m.serialCfg.Port) +
 				theme.Muted.Render("   ·   Press ") + theme.KeyName.Render("p") +
 				theme.Muted.Render(" to select a port   ·   Press ") +
 				theme.KeyName.Render("?") + theme.Muted.Render(" for shortcuts")
+		} else if m.serialCfg.Port != "" && !m.isFileSource {
+			subtitle = theme.Muted.Render("Port released (") + theme.Accent.Render(m.serialCfg.Port) +
+				theme.Muted.Render(")   ·   Press ") + theme.KeyName.Render("r") +
+				theme.Muted.Render(" to reconnect   ·   Press ") +
+				theme.KeyName.Render("p") + theme.Muted.Render(" to select port")
 		} else {
 			subtitle = theme.Muted.Render("Press ") + theme.KeyName.Render("p") +
 				theme.Muted.Render(" to select a port   ·   Press ") +
@@ -335,6 +340,13 @@ func (m Model) viewKeyBar() string {
 			theme.KeyName.Render("Space")+" "+theme.Muted.Render("pause"),
 			theme.KeyName.Render("c")+" "+theme.Muted.Render("clear"),
 			theme.KeyName.Render("t")+" "+theme.Muted.Render("⏱ ts"),
+		)
+		if m.connState == ConnConnected && !m.isFileSource {
+			hints = append(hints, theme.KeyName.Render("D")+" "+theme.Muted.Render("disconnect"))
+		} else if m.serialCfg.Port != "" && !m.isFileSource {
+			hints = append(hints, theme.KeyName.Render("r")+" "+theme.Muted.Render("reconnect"))
+		}
+		hints = append(hints,
 			theme.KeyName.Render("p")+" "+theme.Muted.Render("port"),
 			theme.KeyName.Render("P")+" "+theme.Muted.Render("profile"),
 			theme.KeyName.Render("?")+" "+theme.Muted.Render("help"),
