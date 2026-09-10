@@ -17,6 +17,7 @@ type keyMap struct {
 	GoToTop         key.Binding
 	Port            key.Binding
 	Reconnect       key.Binding
+	Disconnect      key.Binding
 	SaveLog         key.Binding
 	NextMatch       key.Binding
 	PrevMatch       key.Binding
@@ -118,6 +119,10 @@ func defaultKeyMap() keyMap {
 		Reconnect: key.NewBinding(
 			key.WithKeys("r"),
 			key.WithHelp("r", "reconnect"),
+		),
+		Disconnect: key.NewBinding(
+			key.WithKeys("D"),
+			key.WithHelp("D", "disconnect"),
 		),
 		SaveLog: key.NewBinding(
 			key.WithKeys("s"),

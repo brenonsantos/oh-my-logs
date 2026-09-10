@@ -20,6 +20,10 @@ func (m Model) handlePortPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeNormal
 		return m, nil
 
+	case msg.String() == "d" || msg.String() == "D" || msg.String() == "x":
+		m.mode = modeNormal
+		return m.disconnect()
+
 	case msg.String() == "left" || msg.String() == "h":
 		if len(m.baudList) > 0 {
 			if m.baudCursor > 0 {
@@ -75,6 +79,8 @@ func (m Model) handlePortPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.source = nil
 		}
 		m.connState = ConnDisconnected
+		m.manualDisconnect = false
+		m.reconnecting = false
 		cfg := m.serialCfg
 		cfg.Port = port
 		cfg.Baud = baud

@@ -465,7 +465,7 @@ func TestPortPickerModalRendering(t *testing.T) {
 	if !strings.Contains(v, "/dev/ttyUSB0") {
 		t.Errorf("expected view to contain '/dev/ttyUSB0', got:\n%s", v)
 	}
-	if !strings.Contains(v, "Enter select · ↑/↓ port · ←/→ baud · Esc cancel") {
+	if !strings.Contains(v, "Enter select · d disconnect · ↑/↓ port · ←/→ baud · Esc cancel") {
 		t.Errorf("expected footer hints for port and baud navigation, got:\n%s", v)
 	}
 

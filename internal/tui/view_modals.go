@@ -11,7 +11,7 @@ import (
 // viewPortPickerModal renders the centered rounded modal for Port & Baud Rate.
 // Up/Down selects the port directly, Left/Right adjusts baud rate directly.
 func (m Model) viewPortPickerModal() string {
-	modalWidth := 54
+	modalWidth := 68
 	for _, p := range m.portList {
 		if len(p)+10 > modalWidth {
 			modalWidth = len(p) + 10
@@ -71,7 +71,7 @@ func (m Model) viewPortPickerModal() string {
 	sb.WriteString(fmt.Sprintf("    %s  %s  %s\n\n", theme.Muted.Render("←"), theme.ModalSelected.Render(baudStr), theme.Muted.Render("→")))
 
 	// Footer
-	sb.WriteString(theme.ModalFooter.Render("Enter select · ↑/↓ port · ←/→ baud · Esc cancel"))
+	sb.WriteString(theme.ModalFooter.Render("Enter select · d disconnect · ↑/↓ port · ←/→ baud · Esc cancel"))
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+2, modalBox)
@@ -506,7 +506,8 @@ func (m Model) viewHelpModal() string {
 		renderItem("c", "Clear buffer", colWidth),
 		renderItem("t", "Toggle timestamp / Δt", colWidth),
 		renderItem("s", "Save log to file", colWidth),
-		renderItem("p, P, r", "Port / Profile / Reconnect", colWidth),
+		renderItem("D, r", "Disconnect / Reconnect", colWidth),
+		renderItem("p, P", "Port / Profile select", colWidth),
 		renderItem("?, q", "Toggle help / Quit", colWidth),
 	}
 
