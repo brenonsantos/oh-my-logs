@@ -133,6 +133,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.recalcLayout()
 		m.clampScroll()
+		m.clampScrollX()
 		return m, nil
 
 	// ── New line from source ─────────────────────────────────────────────────
@@ -240,6 +241,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		switch msg.Button {
 		case tea.MouseButtonWheelUp:
+			if msg.Shift {
+				if m.scrollX > 0 {
+					m.scrollX -= 6
+					m.clampScrollX()
+				}
+				if m.splitMode != SplitNone {
+					m.syncActiveTabToModel()
+				}
+				return m, nil
+			}
 			switch m.mode {
 			case modePortPicker:
 				if m.portCursor > 0 {
@@ -266,6 +277,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case tea.MouseButtonWheelDown:
+			if msg.Shift {
+				m.scrollX += 6
+				m.clampScrollX()
+				if m.splitMode != SplitNone {
+					m.syncActiveTabToModel()
+				}
+				return m, nil
+			}
 			switch m.mode {
 			case modePortPicker:
 				if m.portCursor < len(m.portList)-1 {
@@ -293,6 +312,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.splitMode != SplitNone && m.syncScroll {
 					m.syncOtherPaneChronologically()
 				}
+			}
+			return m, nil
+
+		case tea.MouseButtonWheelLeft:
+			if m.scrollX > 0 {
+				m.scrollX -= 6
+				m.clampScrollX()
+			}
+			if m.splitMode != SplitNone {
+				m.syncActiveTabToModel()
+			}
+			return m, nil
+
+		case tea.MouseButtonWheelRight:
+			m.scrollX += 6
+			m.clampScrollX()
+			if m.splitMode != SplitNone {
+				m.syncActiveTabToModel()
 			}
 			return m, nil
 
