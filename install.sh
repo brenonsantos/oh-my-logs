@@ -89,6 +89,10 @@ printf "${BOLD}oh-my-logs (oml) Installer for %s (%s)${RESET}\n\n" "$OS_NAME" "$
 # Determine target directory
 if [ -w "/usr/local/bin" ]; then
     TARGET_DIR="/usr/local/bin"
+elif [ -f "/usr/local/bin/oml" ] && command -v sudo >/dev/null 2>&1; then
+    # An existing binary in /usr/local/bin should be updated directly with sudo
+    TARGET_DIR="/usr/local/bin"
+    USE_SUDO=1
 elif command -v sudo >/dev/null 2>&1 && [ -t 0 ]; then
     TARGET_DIR="/usr/local/bin"
     USE_SUDO=1
@@ -161,8 +165,12 @@ else
     mkdir -p "$TARGET_DIR"
     cp "$BIN_PATH" "$TARGET_DIR/oml"
     chmod 755 "$TARGET_DIR/oml"
-fi
 print_success "Installed binary at $TARGET_DIR/oml"
+
+if [ "$TARGET_DIR" != "/usr/local/bin" ] && [ -f "/usr/local/bin/oml" ]; then
+    print_warn "An existing binary at /usr/local/bin/oml may take precedence over $TARGET_DIR/oml in your PATH."
+    printf "To update /usr/local/bin/oml, run: sudo cp \"%s/oml\" /usr/local/bin/oml\n\n" "$TARGET_DIR"
+fi
 
 # Install default example profiles
 mkdir -p "$PROFILES_DIR"

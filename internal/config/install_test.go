@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
@@ -73,3 +74,12 @@ func TestCopyDefaultProfiles(t *testing.T) {
 		}
 	}
 }
+
+func TestUninstallBinary_CustomTargetNotFound(t *testing.T) {
+	emptyDir := t.TempDir()
+	_, err := config.UninstallBinary(emptyDir)
+	if err == nil || !strings.Contains(err.Error(), "binary not found") {
+		t.Errorf("expected binary not found error, got: %v", err)
+	}
+}
+

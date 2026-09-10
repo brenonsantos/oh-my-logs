@@ -151,29 +151,119 @@ func CopyDefaultProfiles(targetDir string) int {
 	return copied
 }
 
-// UninstallBinary removes the installed binary from targetDir.
+// UninstallBinary removes the installed binary from targetDir, or scans standard
+// locations and the currently running executable if targetDir is empty.
 func UninstallBinary(targetDir string) (string, error) {
-	if targetDir == "" {
-		var err error
-		targetDir, err = DefaultInstallDir()
-		if err != nil {
-			return "", err
-		}
-	}
-
 	binaryName := "oml"
 	if runtime.GOOS == "windows" {
 		binaryName = "oml.exe"
 	}
-	destPath := filepath.Join(targetDir, binaryName)
 
-	if _, err := os.Stat(destPath); os.IsNotExist(err) {
-		return "", fmt.Errorf("binary not found at %q", destPath)
+	if targetDir != "" {
+		destPath := filepath.Join(targetDir, binaryName)
+		if _, err := os.Stat(destPath); os.IsNotExist(err) {
+			return "", fmt.Errorf("binary not found at %q", destPath)
+		}
+		if err := os.Remove(destPath); err != nil {
+			if os.IsPermission(err) {
+				if runtime.GOOS == "windows" {
+					return "", fmt.Errorf("permission denied removing %q (please run PowerShell as Administrator)", destPath)
+				}
+				return "", fmt.Errorf("permission denied removing %q (please run: sudo oml --uninstall)", destPath)
+			}
+			return "", fmt.Errorf("cannot remove %q: %w", destPath, err)
+		}
+		return destPath, nil
 	}
 
-	if err := os.Remove(destPath); err != nil {
-		return "", fmt.Errorf("cannot remove %q: %w", destPath, err)
+	// targetDir == "": Collect candidate locations to remove
+	seen := make(map[string]bool)
+	var candidates []string
+
+	// 1. Current executable
+	if selfPath, err := os.Executable(); err == nil {
+		if realPath, err := filepath.EvalSymlinks(selfPath); err == nil {
+			clean := filepath.Clean(realPath)
+			base := filepath.Base(clean)
+			if strings.EqualFold(base, binaryName) && !seen[clean] {
+				seen[clean] = true
+				candidates = append(candidates, clean)
+			}
+		}
 	}
 
-	return destPath, nil
+	// 2. Default install directory
+	if defDir, err := DefaultInstallDir(); err == nil {
+		p := filepath.Clean(filepath.Join(defDir, binaryName))
+		if !seen[p] {
+			seen[p] = true
+			candidates = append(candidates, p)
+		}
+	}
+
+	// 3. Known standard system and user directories
+	if home, err := os.UserHomeDir(); err == nil {
+		switch runtime.GOOS {
+		case "windows":
+			localAppData := os.Getenv("LOCALAPPDATA")
+			if localAppData == "" {
+				localAppData = filepath.Join(home, "AppData", "Local")
+			}
+			p := filepath.Clean(filepath.Join(localAppData, "Programs", "oh-my-logs", binaryName))
+			if !seen[p] {
+				seen[p] = true
+				candidates = append(candidates, p)
+			}
+		default: // darwin / linux
+			standardDirs := []string{
+				"/usr/local/bin",
+				filepath.Join(home, ".local", "bin"),
+				filepath.Join(home, "bin"),
+			}
+			for _, d := range standardDirs {
+				p := filepath.Clean(filepath.Join(d, binaryName))
+				if !seen[p] {
+					seen[p] = true
+					candidates = append(candidates, p)
+				}
+			}
+		}
+	}
+
+	var removed []string
+	var permDenied []string
+	var otherErrors []string
+	foundAny := false
+
+	for _, cand := range candidates {
+		if _, err := os.Stat(cand); err == nil {
+			foundAny = true
+			if err := os.Remove(cand); err != nil {
+				if os.IsPermission(err) {
+					permDenied = append(permDenied, cand)
+				} else {
+					otherErrors = append(otherErrors, fmt.Sprintf("%s (%v)", cand, err))
+				}
+			} else {
+				removed = append(removed, cand)
+			}
+		}
+	}
+
+	if !foundAny {
+		return "", fmt.Errorf("no oml binary found in standard install locations")
+	}
+
+	if len(permDenied) > 0 {
+		if runtime.GOOS == "windows" {
+			return strings.Join(removed, ", "), fmt.Errorf("permission denied removing %s (please run PowerShell as Administrator)", strings.Join(permDenied, ", "))
+		}
+		return strings.Join(removed, ", "), fmt.Errorf("permission denied removing %s (please run: sudo oml --uninstall)", strings.Join(permDenied, ", "))
+	}
+
+	if len(otherErrors) > 0 {
+		return strings.Join(removed, ", "), fmt.Errorf("errors during uninstall: %s", strings.Join(otherErrors, "; "))
+	}
+
+	return strings.Join(removed, ", "), nil
 }
