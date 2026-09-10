@@ -15,7 +15,12 @@ func (m Model) viewTableHeader() string {
 	renderedHeaders := m.renderRow(func(col record.Column, w int) string {
 		return theme.Header.Render(padOrTrunc(col.Title, w))
 	})
-	return "   " + renderedHeaders
+	headerLine := "   " + renderedHeaders
+	tw := m.tableWidth()
+	if lipgloss.Width(headerLine) > tw {
+		return lipgloss.NewStyle().MaxWidth(tw).Render(headerLine)
+	}
+	return headerLine
 }
 
 // viewTable renders the scrollable table body with search match and focus highlights.
@@ -110,6 +115,18 @@ func (m Model) viewTable() string {
 		var cellParts []string
 		for colIdx, col := range cols {
 			val := r.Fields[col.Field]
+			switch col.Field {
+			case "raw":
+				val = r.Raw
+			case "_len":
+				val = FormatByteLen(len(r.Raw))
+			case "_hex":
+				val = FormatHexBytes(r.Raw)
+			case "_bin":
+				val = FormatBinaryBits(r.Raw)
+			case "_ascii":
+				val = FormatASCII(r.Raw)
+			}
 			var rowDelta time.Duration
 			if col.Field == "_delta" || col.Style == "delta" {
 				if i > 0 && !rows[i-1].Timestamp.IsZero() && !r.Timestamp.IsZero() {
@@ -170,6 +187,8 @@ func (m Model) viewTable() string {
 			} else {
 				fullRow += strings.Repeat(" ", rem)
 			}
+		} else if curW > tableWidth {
+			fullRow = lipgloss.NewStyle().MaxWidth(tableWidth).Render(fullRow)
 		}
 
 		lines = append(lines, fullRow)
@@ -177,7 +196,7 @@ func (m Model) viewTable() string {
 
 	// Pad remaining vertical space to keep layout stable
 	for len(lines) < m.tableHeight {
-		lines = append(lines, theme.RowNormal.Width(tableWidth).Render(""))
+		lines = append(lines, strings.Repeat(" ", tableWidth))
 	}
 
 	return strings.Join(lines, "\n")
@@ -242,10 +261,26 @@ func (m Model) computeColWidthsForWidth(cols []record.Column, tableW int) []int 
 		}
 	}
 
+	// In narrow viewports, shrink hex or bin column if present to ensure flex column (e.g. ascii) has room
+	if flexIdx >= 0 && (tableW-used) < 15 {
+		for i, col := range cols {
+			if (col.Field == "_hex" || col.Field == "_bin") && widths[i] > 18 {
+				deficit := 15 - (tableW - used)
+				shrink := widths[i] - 18
+				if shrink > deficit {
+					shrink = deficit
+				}
+				widths[i] -= shrink
+				used -= shrink
+				break
+			}
+		}
+	}
+
 	if flexIdx >= 0 {
 		flex := tableW - used
-		if flex < 0 {
-			flex = 0
+		if flex < 8 {
+			flex = 8
 		}
 		widths[flexIdx] = flex
 	}
@@ -270,7 +305,7 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 		return lines
 	}
 
-	cols := m.effectiveColumns()
+	cols := m.effectiveColumnsForTab(tab)
 	colWidths := m.computeColWidthsForWidth(cols, paneW)
 
 	// Line 0: Header
@@ -475,6 +510,18 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 		var cellParts []string
 		for colIdx, col := range cols {
 			val := r.Fields[col.Field]
+			switch col.Field {
+			case "raw":
+				val = r.Raw
+			case "_len":
+				val = FormatByteLen(len(r.Raw))
+			case "_hex":
+				val = FormatHexBytes(r.Raw)
+			case "_bin":
+				val = FormatBinaryBits(r.Raw)
+			case "_ascii":
+				val = FormatASCII(r.Raw)
+			}
 			var rowDelta time.Duration
 			if col.Field == "_delta" || col.Style == "delta" {
 				if i > 0 && !paneRows[i-1].Timestamp.IsZero() && !r.Timestamp.IsZero() {
@@ -585,7 +632,11 @@ func (m Model) viewSplitTable() string {
 			if i == 1 && (m.activePane == 0 || m.activePane == 1) {
 				sepStyle = theme.Accent
 			}
-			joined = append(joined, l+sepStyle.Render(sep)+r)
+			row := l + sepStyle.Render(sep) + r
+			if lipgloss.Width(row) > m.width {
+				row = lipgloss.NewStyle().MaxWidth(m.width).Render(row)
+			}
+			joined = append(joined, row)
 		}
 		return strings.Join(joined, "\n")
 	}
@@ -607,6 +658,9 @@ func (m Model) viewSplitTable() string {
 	divLine := theme.Divider.Render(strings.Repeat("─", m.width))
 	if m.activePane == 0 {
 		divLine = theme.Accent.Render(strings.Repeat("━", m.width))
+	}
+	if lipgloss.Width(divLine) > m.width {
+		divLine = lipgloss.NewStyle().MaxWidth(m.width).Render(divLine)
 	}
 
 	var all []string
@@ -639,23 +693,46 @@ func isDeltaCol(col record.Column) bool {
 	return col.Field == "_delta" || col.Style == "delta"
 }
 
-// effectiveColumns returns the columns to render, respecting timestamp and delta mode.
+// effectiveColumns returns the columns to render, respecting timestamp and delta mode for the current tab.
 func (m Model) effectiveColumns() []record.Column {
-	if m.tsMode == TSModeOff {
-		var cols []record.Column
-		for _, col := range m.columns {
-			if !isTimestampCol(col, m.tsField) && !isDeltaCol(col) {
-				cols = append(cols, col)
-			}
-		}
-		return cols
+	return m.effectiveColumnsForTab(m.currentTab())
+}
+
+// effectiveColumnsForTab returns the columns to render for a specific tab based on its DisplayFormat and timestamp mode.
+func (m Model) effectiveColumnsForTab(tab *Tab) []record.Column {
+	fmtMode := m.displayFormat
+	if tab != nil {
+		fmtMode = tab.DisplayFormat
 	}
 
 	var baseCols []record.Column
-	for _, col := range m.columns {
-		if !isTimestampCol(col, m.tsField) && !isDeltaCol(col) {
-			baseCols = append(baseCols, col)
+	switch fmtMode {
+	case FormatRaw:
+		baseCols = []record.Column{
+			{Field: "raw", Title: "RAW LOG", Width: 0, Style: "primary"},
 		}
+	case FormatHex:
+		baseCols = []record.Column{
+			{Field: "_len", Title: "LEN", Width: 6, Style: "identifier"},
+			{Field: "_hex", Title: "HEX DUMP", Width: 48, Style: "muted"},
+			{Field: "_ascii", Title: "ASCII", Width: 0, Style: "primary"},
+		}
+	case FormatBinary:
+		baseCols = []record.Column{
+			{Field: "_len", Title: "LEN", Width: 6, Style: "identifier"},
+			{Field: "_bin", Title: "BINARY BITS", Width: 36, Style: "muted"},
+			{Field: "_ascii", Title: "ASCII", Width: 0, Style: "primary"},
+		}
+	default: // FormatParsed
+		for _, col := range m.columns {
+			if !isTimestampCol(col, m.tsField) && !isDeltaCol(col) {
+				baseCols = append(baseCols, col)
+			}
+		}
+	}
+
+	if m.tsMode == TSModeOff {
+		return baseCols
 	}
 
 	tsCol := record.Column{

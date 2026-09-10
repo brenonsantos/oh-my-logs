@@ -351,6 +351,15 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case keyMatches(msg, m.keys.ToggleFormat):
+		curTab := m.currentTab()
+		curTab.DisplayFormat = curTab.DisplayFormat.Next()
+		m.displayFormat = curTab.DisplayFormat
+		m.recalcLayout()
+		m.clampScroll()
+		m.message = fmt.Sprintf("Display format: %s", curTab.DisplayFormat.Label())
+		return m, nil
+
 	case keyMatches(msg, m.keys.Help):
 		m.mode = modeHelp
 		return m, nil

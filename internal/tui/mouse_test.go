@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -595,3 +597,69 @@ func TestSelectionRenderingZephyrColumns(t *testing.T) {
 		t.Errorf("expected background color to be applied across all columns and separators, got count %d", bgCount)
 	}
 }
+
+func TestMouseClickInSplitMode(t *testing.T) {
+	records := make([]record.Record, 10)
+	for i := 0; i < 10; i++ {
+		records[i] = record.Record{
+			ID:        uint64(i + 1),
+			Raw:       fmt.Sprintf("log line %d", i),
+			Timestamp: time.Now(),
+			Fields:    map[string]string{"message": fmt.Sprintf("msg %d", i)},
+		}
+	}
+
+	m := newTestModelWithRecords(records)
+	m.width = 100
+	m.height = 30
+	m.recalcLayout()
+
+	// 1. Add a second tab (so len(m.tabs) == 2)
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	m = newM.(Model)
+	if len(m.tabs) != 2 {
+		t.Fatalf("expected 2 tabs, got %d", len(m.tabs))
+	}
+
+	// 2. Toggle vertical split
+	m.toggleSplit(SplitVertical)
+	if m.splitMode != SplitVertical {
+		t.Fatalf("expected SplitVertical")
+	}
+
+	// With 2 tabs in SplitVertical:
+	// Row 0: Title bar
+	// Row 1: Title divider
+	// Row 2: Tab bar
+	// Row 3: Tab divider
+	// Row 4: Pane header
+	// Row 5: Pane divider
+	// Row 6: Data row 0
+	// Row 7: Data row 1
+	// Row 8: Data row 2
+	updated, _ := m.Update(tea.MouseMsg{
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+		X:      10, // left pane
+		Y:      6,  // data row 0
+	})
+	m = updated.(Model)
+
+	if m.selectedRow != 0 {
+		t.Errorf("clicking Y=6 with 2 tabs in split view: expected selectedRow=0, got %d", m.selectedRow)
+	}
+
+	// Click row 2 at Y=8
+	updated, _ = m.Update(tea.MouseMsg{
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+		X:      10, // left pane
+		Y:      8,  // data row 2
+	})
+	m = updated.(Model)
+
+	if m.selectedRow != 2 {
+		t.Errorf("clicking Y=8 with 2 tabs in split view: expected selectedRow=2, got %d", m.selectedRow)
+	}
+}
+

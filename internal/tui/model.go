@@ -131,7 +131,8 @@ type Tab struct {
 	SearchMatches []int
 	SearchCursor  int
 	SelectedRow    int // selected row index into Visible (-1 if none)
-	BookmarkedOnly bool
+	BookmarkedOnly  bool
+	DisplayFormat   DisplayFormat
 }
 
 // DisplayName returns a user-friendly label for the tab.
@@ -261,6 +262,10 @@ type Model struct {
 	splitRightTab int  // index into m.tabs for pane 1 (right / bottom)
 	activePane    int  // 0 for pane 0 (splitLeftTab), 1 for pane 1 (splitRightTab)
 	syncScroll    bool // when true, scrolling one pane time-locks the other
+
+	// Multi-format representation (FormatParsed, FormatRaw, FormatHex, FormatBinary)
+	displayFormat   DisplayFormat
+	inspectorHeight int
 }
 
 // New creates a new Model with sensible defaults.
@@ -411,15 +416,22 @@ func New(
 	initFilter, _ := filter.New("")
 	m.activeFilter = initFilter
 
+	initFormat := FormatParsed
+	if savedSettings != nil && savedSettings.DisplayFormat != "" {
+		initFormat = ParseDisplayFormat(savedSettings.DisplayFormat)
+	}
+
 	initTab := Tab{
-		Name:        "All",
-		FilterRaw:   "",
-		Filter:      initFilter,
-		Follow:      true,
-		SelectedRow: -1,
+		Name:          "All",
+		FilterRaw:     "",
+		Filter:        initFilter,
+		Follow:        true,
+		SelectedRow:   -1,
+		DisplayFormat: initFormat,
 	}
 	m.tabs = []Tab{initTab}
 	m.activeTab = 0
+	m.displayFormat = initFormat
 	m.selectedRow = -1
 	m.selectionStart = -1
 	m.selectionEnd = -1
@@ -483,6 +495,7 @@ func (m *Model) toggleSplit(mode SplitMode) {
 		m.splitMode = SplitNone
 		m.activePane = 0
 		m.syncModelToActiveTab()
+		m.recalcLayout()
 		m.clampScroll()
 		m.message = "Split view closed (single tab)"
 		return
@@ -512,6 +525,7 @@ func (m *Model) toggleSplit(mode SplitMode) {
 	m.splitMode = mode
 	m.activePane = 0
 	m.syncScroll = true // default to chronological sync on split
+	m.recalcLayout()
 
 	// Ensure viewports and follow offsets match the split pane heights
 	for p := 0; p < 2; p++ {
@@ -547,6 +561,7 @@ func (m *Model) switchPaneFocus() {
 	if m.splitMode == SplitNone {
 		return
 	}
+	oldInsp := m.isInspectorActive()
 	m.syncActiveTabToModel()
 	if m.activePane == 0 {
 		m.activePane = 1
@@ -554,6 +569,9 @@ func (m *Model) switchPaneFocus() {
 		m.activePane = 0
 	}
 	m.syncModelToActiveTab()
+	if m.isInspectorActive() != oldInsp {
+		m.recalcLayout()
+	}
 	m.clampScroll()
 
 	paneName := "Left"
@@ -663,6 +681,7 @@ func (m *Model) syncActiveTabToModel() {
 	cur.SearchCursor = m.searchCursor
 	cur.SelectedRow = m.selectedRow
 	cur.BookmarkedOnly = m.bookmarkedOnly
+	cur.DisplayFormat = m.displayFormat
 }
 
 // syncModelToActiveTab updates the model's active view state from the current tab.
@@ -680,6 +699,7 @@ func (m *Model) syncModelToActiveTab() {
 	m.searchCursor = cur.SearchCursor
 	m.selectedRow = cur.SelectedRow
 	m.bookmarkedOnly = cur.BookmarkedOnly
+	m.displayFormat = cur.DisplayFormat
 	m.selectionStart = -1
 	m.selectionEnd = -1
 }
@@ -689,6 +709,7 @@ func (m *Model) switchTab(newIdx int) {
 	if len(m.tabs) <= 1 || newIdx < 0 || newIdx >= len(m.tabs) {
 		return
 	}
+	oldInsp := m.isInspectorActive()
 	m.syncActiveTabToModel()
 	if m.splitMode != SplitNone {
 		if m.activePane == 0 {
@@ -710,6 +731,9 @@ func (m *Model) switchTab(newIdx int) {
 		m.activeTab = newIdx
 	}
 	m.syncModelToActiveTab()
+	if m.isInspectorActive() != oldInsp {
+		m.recalcLayout()
+	}
 	m.clampScroll()
 }
 

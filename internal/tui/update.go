@@ -283,11 +283,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// ignore scrolling while modal or game is active
 			default:
 				m.scrollOffset += 3
+				m.clampScroll()
 				h := m.activeDataHeight()
 				if m.scrollOffset >= len(m.visible)-h {
 					m.follow = true
+				} else {
+					m.follow = false
 				}
-				m.clampScroll()
 				if m.splitMode != SplitNone && m.syncScroll {
 					m.syncOtherPaneChronologically()
 				}
