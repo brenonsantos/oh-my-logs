@@ -254,7 +254,49 @@ func TestSettingsModal_Rendering(t *testing.T) {
 	if !strings.Contains(view, "Direct-to-Disk Stream") {
 		t.Errorf("expected view to contain 'Direct-to-Disk Stream', got:\n%s", view)
 	}
+	if !strings.Contains(view, "Theme Palette") {
+		t.Errorf("expected view to contain 'Theme Palette', got:\n%s", view)
+	}
 	if !strings.Contains(view, "Enter/Esc close") {
 		t.Errorf("expected view to contain footer hints, got:\n%s", view)
+	}
+}
+
+func TestSettingsModal_ThemeSelection(t *testing.T) {
+	m, tempDir := createTestModelWithConfig(t)
+	defer os.RemoveAll(tempDir)
+	defer SetCurrentTheme("Dark Slate")
+
+	m.mode = modeSettings
+	m.settingsCursor = int(settingRowTheme)
+
+	// Verify initial theme
+	initialTheme := m.settingValueLabel(settingRowTheme)
+	if initialTheme != "Dark Slate" && initialTheme != "dark-slate" {
+		t.Fatalf("expected initial theme 'Dark Slate', got %s", initialTheme)
+	}
+
+	// Press right -> Monokai
+	mMod, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = mMod.(Model)
+	if m.settings.Theme != "Monokai" {
+		t.Fatalf("expected theme 'Monokai', got %s", m.settings.Theme)
+	}
+	if CurrentThemeName() != "Monokai" {
+		t.Fatalf("expected CurrentThemeName 'Monokai', got %s", CurrentThemeName())
+	}
+
+	// Press right -> Nord
+	mMod, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = mMod.(Model)
+	if m.settings.Theme != "Nord" {
+		t.Fatalf("expected theme 'Nord', got %s", m.settings.Theme)
+	}
+
+	// Press left -> Monokai
+	mMod, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = mMod.(Model)
+	if m.settings.Theme != "Monokai" {
+		t.Fatalf("expected theme 'Monokai' after left arrow, got %s", m.settings.Theme)
 	}
 }

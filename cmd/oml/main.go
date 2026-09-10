@@ -217,6 +217,9 @@ func main() {
 	buf := record.NewBuffer(bufCap)
 
 	// ── TUI ───────────────────────────────────────────────────────────────────
+	if savedSettings != nil && savedSettings.Theme != "" {
+		tui.SetCurrentTheme(savedSettings.Theme)
+	}
 	model := tui.New(serialCfg, profile, p, buf, src, appCfg)
 
 	prog := tea.NewProgram(
