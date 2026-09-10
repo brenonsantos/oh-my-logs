@@ -1,0 +1,158 @@
+name: Rolling Nightly Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+            archive: tar.gz
+          - goos: darwin
+            goarch: amd64
+            archive: tar.gz
+          - goos: linux
+            goarch: amd64
+            archive: tar.gz
+          - goos: linux
+            goarch: arm64
+            archive: tar.gz
+          - goos: windows
+            goarch: amd64
+            archive: zip
+          - goos: windows
+            goarch: arm64
+            archive: zip
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Build binary
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          BIN_NAME="oml"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BIN_NAME="oml.exe"
+          fi
+          
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          go build -ldflags="-s -w -X main.version=nightly-${COMMIT_SHA}" -o "dist/${BIN_NAME}" ./cmd/oml
+
+      - name: Package archive
+        run: |
+          ARCHIVE_NAME="oml_nightly_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.archive }}"
+          STAGE_DIR="stage_${{ matrix.goos }}_${{ matrix.goarch }}"
+          mkdir -p "${STAGE_DIR}/profiles"
+          
+          # Copy binary
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            cp dist/oml.exe "${STAGE_DIR}/"
+          else
+            cp dist/oml "${STAGE_DIR}/"
+            chmod 755 "${STAGE_DIR}/oml"
+          fi
+          
+          # Copy docs and profiles
+          cp README.md LICENSE "${STAGE_DIR}/"
+          cp -r profiles/examples "${STAGE_DIR}/profiles/"
+          
+          mkdir -p out
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            (cd "${STAGE_DIR}" && zip -r "../out/${ARCHIVE_NAME}" .)
+          else
+            (cd "${STAGE_DIR}" && tar -czf "../out/${ARCHIVE_NAME}" .)
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oml-nightly-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: out/*
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: Publish Rolling Nightly Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: oml-nightly-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Generate Checksums
+        run: |
+          cd release-assets
+          sha256sum * > checksums.txt
+
+      - name: Update nightly tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -fa nightly -m "Rolling nightly release from commit ${{ github.sha }}"
+          git push -f origin nightly
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: "Nightly Build"
+          prerelease: true
+          make_latest: false
+          files: release-assets/*
+          body: |
+            ## Nightly Rolling Build
+            
+            This release is automatically built from the latest commit on `main` (`${{ github.sha }}`).
+            
+            ### Quick Install
+            
+            **macOS / Linux:**
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.sh | bash -s -- --nightly
+            ```
+            
+            **Windows (PowerShell):**
+            ```powershell
+            irm https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.ps1 | iex -Nightly
+            ```
+            
+            ### In-Place Self-Update
+            If you already have `oml` installed:
+            ```bash
+            oml --update --nightly
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

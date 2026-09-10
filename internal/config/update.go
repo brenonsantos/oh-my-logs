@@ -17,7 +17,10 @@ import (
 )
 
 // DefaultLatestReleaseURL is the GitHub API endpoint for the latest release.
-var DefaultLatestReleaseURL = "https://api.github.com/repos/brenonsantos/oh-my-logs/releases/latest"
+var (
+	DefaultLatestReleaseURL  = "https://api.github.com/repos/brenonsantos/oh-my-logs/releases/latest"
+	DefaultNightlyReleaseURL = "https://api.github.com/repos/brenonsantos/oh-my-logs/releases/tags/nightly"
+)
 
 // ReleaseAsset represents an artifact asset attached to a GitHub release.
 type ReleaseAsset struct {
@@ -126,17 +129,27 @@ func ExtractBinaryFromArchive(archiveData []byte, goos string) ([]byte, error) {
 }
 
 // UpdateBinary checks for a newer release on GitHub and in-place updates the current executable.
-func UpdateBinary(appCfg *AppConfig, currentVersion string) (string, error) {
+// If nightly is true, it fetches the latest rolling nightly build.
+func UpdateBinary(appCfg *AppConfig, currentVersion string, nightly bool) (string, error) {
 	userAgent := fmt.Sprintf("oh-my-logs/%s (%s; %s)", currentVersion, runtime.GOOS, runtime.GOARCH)
-	release, err := FetchLatestRelease(DefaultLatestReleaseURL, userAgent)
+
+	apiURL := DefaultLatestReleaseURL
+	if nightly {
+		apiURL = DefaultNightlyReleaseURL
+	}
+
+	release, err := FetchLatestRelease(apiURL, userAgent)
 	if err != nil {
+		if nightly {
+			return "", fmt.Errorf("nightly release not found or not published yet (%w)", err)
+		}
 		return "", fmt.Errorf("failed checking for updates: %w", err)
 	}
 
 	cleanCurrent := strings.TrimPrefix(strings.TrimSpace(currentVersion), "v")
 	cleanLatest := strings.TrimPrefix(strings.TrimSpace(release.TagName), "v")
 
-	if cleanCurrent == cleanLatest && cleanCurrent != "" {
+	if !nightly && cleanCurrent == cleanLatest && cleanCurrent != "" {
 		return fmt.Sprintf("oml is already up to date (%s)", release.TagName), nil
 	}
 
@@ -228,5 +241,8 @@ func UpdateBinary(appCfg *AppConfig, currentVersion string) (string, error) {
 		CopyDefaultProfiles(appCfg.ProfilesDir)
 	}
 
+	if nightly {
+		return fmt.Sprintf("✓ Successfully installed nightly build to:\n  %s", destPath), nil
+	}
 	return fmt.Sprintf("✓ Successfully updated oml from v%s to %s at:\n  %s", cleanCurrent, release.TagName, destPath), nil
 }

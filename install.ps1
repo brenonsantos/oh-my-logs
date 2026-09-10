@@ -4,9 +4,14 @@
 [CmdletBinding()]
 param(
     [switch]$Uninstall,
+    [switch]$Nightly,
     [string]$InstallDir = "$env:LOCALAPPDATA\Programs\oh-my-logs",
     [string]$Version = "latest"
 )
+
+if ($Nightly) {
+    $Version = "nightly"
+}
 
 $ErrorActionPreference = "Stop"
 
