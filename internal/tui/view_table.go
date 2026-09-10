@@ -254,12 +254,12 @@ func (m Model) computeColWidthsForWidth(cols []record.Column, tableW int) []int 
 		}
 	}
 
-	// In narrow viewports, adjust ascii column if present to ensure flex column has room
-	if flexIdx >= 0 && (tableW-used) < 20 {
+	// In narrow viewports, shrink hex or bin column if present to ensure flex column (e.g. ascii) has room
+	if flexIdx >= 0 && (tableW-used) < 15 {
 		for i, col := range cols {
-			if col.Field == "_ascii" && widths[i] > 8 {
-				deficit := 20 - (tableW - used)
-				shrink := widths[i] - 8
+			if (col.Field == "_hex" || col.Field == "_bin") && widths[i] > 18 {
+				deficit := 15 - (tableW - used)
+				shrink := widths[i] - 18
 				if shrink > deficit {
 					shrink = deficit
 				}
@@ -700,14 +700,14 @@ func (m Model) effectiveColumnsForTab(tab *Tab) []record.Column {
 	case FormatHex:
 		baseCols = []record.Column{
 			{Field: "_len", Title: "LEN", Width: 6, Style: "identifier"},
-			{Field: "_hex", Title: "HEX DUMP", Width: 0, Style: "primary"},
-			{Field: "_ascii", Title: "ASCII", Width: 24, Style: "muted"},
+			{Field: "_hex", Title: "HEX DUMP", Width: 48, Style: "muted"},
+			{Field: "_ascii", Title: "ASCII", Width: 0, Style: "primary"},
 		}
 	case FormatBinary:
 		baseCols = []record.Column{
 			{Field: "_len", Title: "LEN", Width: 6, Style: "identifier"},
-			{Field: "_bin", Title: "BINARY BITS", Width: 0, Style: "primary"},
-			{Field: "_ascii", Title: "ASCII", Width: 16, Style: "muted"},
+			{Field: "_bin", Title: "BINARY BITS", Width: 36, Style: "muted"},
+			{Field: "_ascii", Title: "ASCII", Width: 0, Style: "primary"},
 		}
 	default: // FormatParsed
 		for _, col := range m.columns {
