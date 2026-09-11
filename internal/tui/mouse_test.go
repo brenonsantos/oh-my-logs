@@ -410,8 +410,8 @@ func TestCtrlVPasteInSearchAndFilter(t *testing.T) {
 	// Send Ctrl+V
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlV})
 	m = updated.(Model)
-	if m.searchInput != "sensor_timeout" {
-		t.Errorf("expected searchInput to be 'sensor_timeout', got %q", m.searchInput)
+	if m.searchInput.Value != "sensor_timeout" {
+		t.Errorf("expected searchInput to be 'sensor_timeout', got %q", m.searchInput.Value)
 	}
 
 	// Cancel search
@@ -434,8 +434,8 @@ func TestCtrlVPasteInSearchAndFilter(t *testing.T) {
 	// Send Ctrl+V
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlV})
 	m = updated.(Model)
-	if m.filterInput != "level:err -timeout" {
-		t.Errorf("expected filterInput to be 'level:err -timeout', got %q", m.filterInput)
+	if m.filterInput.Value != "level:err -timeout" {
+		t.Errorf("expected filterInput to be 'level:err -timeout', got %q", m.filterInput.Value)
 	}
 }
 

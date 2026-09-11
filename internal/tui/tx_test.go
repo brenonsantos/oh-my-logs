@@ -104,71 +104,71 @@ func TestTXLineEndingCycling(t *testing.T) {
 func TestTXHistoryNavigationAndDraftPreservation(t *testing.T) {
 	m := newTestModel()
 	m.mode = modeTXInput
-	m.txHistory = []string{"AT", "AT+VERSION", "AT+RST"}
-	m.txHistoryCursor = -1
+	m.txInput.History = []string{"AT", "AT+VERSION", "AT+RST"}
+	m.txInput.ResetHistoryCursor()
 
 	// User types draft: "AT+TEST"
 	for _, r := range "AT+TEST" {
 		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 		m = updated.(Model)
 	}
-	if m.txInput != "AT+TEST" {
-		t.Fatalf("expected txInput 'AT+TEST', got %q", m.txInput)
+	if m.txInput.Value != "AT+TEST" {
+		t.Fatalf("expected txInput 'AT+TEST', got %q", m.txInput.Value)
 	}
 
 	// Press Up -> should load last history entry "AT+RST"
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	m = updated.(Model)
-	if m.txInput != "AT+RST" {
-		t.Errorf("expected 'AT+RST', got %q", m.txInput)
+	if m.txInput.Value != "AT+RST" {
+		t.Errorf("expected 'AT+RST', got %q", m.txInput.Value)
 	}
-	if m.txDraft != "AT+TEST" {
-		t.Errorf("expected draft preserved as 'AT+TEST', got %q", m.txDraft)
+	if m.txInput.Draft != "AT+TEST" {
+		t.Errorf("expected draft preserved as 'AT+TEST', got %q", m.txInput.Draft)
 	}
 
 	// Press Up -> should load "AT+VERSION"
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	m = updated.(Model)
-	if m.txInput != "AT+VERSION" {
-		t.Errorf("expected 'AT+VERSION', got %q", m.txInput)
+	if m.txInput.Value != "AT+VERSION" {
+		t.Errorf("expected 'AT+VERSION', got %q", m.txInput.Value)
 	}
 
 	// Press Up -> should load "AT"
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	m = updated.(Model)
-	if m.txInput != "AT" {
-		t.Errorf("expected 'AT', got %q", m.txInput)
+	if m.txInput.Value != "AT" {
+		t.Errorf("expected 'AT', got %q", m.txInput.Value)
 	}
 
 	// Press Up at boundary -> remains "AT"
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	m = updated.(Model)
-	if m.txInput != "AT" {
-		t.Errorf("expected boundary 'AT', got %q", m.txInput)
+	if m.txInput.Value != "AT" {
+		t.Errorf("expected boundary 'AT', got %q", m.txInput.Value)
 	}
 
 	// Press Down -> moves back to "AT+VERSION"
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
-	if m.txInput != "AT+VERSION" {
-		t.Errorf("expected 'AT+VERSION', got %q", m.txInput)
+	if m.txInput.Value != "AT+VERSION" {
+		t.Errorf("expected 'AT+VERSION', got %q", m.txInput.Value)
 	}
 
 	// Press Down -> moves to "AT+RST"
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
-	if m.txInput != "AT+RST" {
-		t.Errorf("expected 'AT+RST', got %q", m.txInput)
+	if m.txInput.Value != "AT+RST" {
+		t.Errorf("expected 'AT+RST', got %q", m.txInput.Value)
 	}
 
 	// Press Down past history -> draft "AT+TEST" is restored
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
-	if m.txInput != "AT+TEST" {
-		t.Errorf("expected draft 'AT+TEST' restored, got %q", m.txInput)
+	if m.txInput.Value != "AT+TEST" {
+		t.Errorf("expected draft 'AT+TEST' restored, got %q", m.txInput.Value)
 	}
-	if m.txHistoryCursor != -1 {
-		t.Errorf("expected txHistoryCursor reset to -1, got %d", m.txHistoryCursor)
+	if m.txInput.HistoryCursor != -1 {
+		t.Errorf("expected txHistoryCursor reset to -1, got %d", m.txInput.HistoryCursor)
 	}
 }
 
@@ -178,7 +178,7 @@ func TestTXSendExecution(t *testing.T) {
 	m.source = mock
 	m.mode = modeTXInput
 	m.txEnding = serial.EndingCRLF
-	m.txInput = `STATUS\x02\r`
+	m.txInput.SetText(`STATUS\x02\r`)
 
 	// Press Enter to transmit
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -201,8 +201,8 @@ func TestTXSendExecution(t *testing.T) {
 		t.Errorf("expected success message with byte count, got %q", m.message)
 	}
 
-	if len(m.txHistory) != 1 || m.txHistory[0] != `STATUS\x02\r` {
-		t.Errorf("expected command recorded in txHistory, got %v", m.txHistory)
+	if len(m.txInput.History) != 1 || m.txInput.History[0] != `STATUS\x02\r` {
+		t.Errorf("expected command recorded in txHistory, got %v", m.txInput.History)
 	}
 
 	// Verify local echo record was added to buffer and visible rows
@@ -234,7 +234,7 @@ func TestTXSendEmptyPingEcho(t *testing.T) {
 	m.source = mock
 	m.mode = modeTXInput
 	m.txEnding = serial.EndingCRLF
-	m.txInput = ""
+	m.txInput.Reset()
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
@@ -259,7 +259,7 @@ func TestTXSendFailureStates(t *testing.T) {
 	m := newTestModel()
 	m.source = nil
 	m.mode = modeTXInput
-	m.txInput = "AT"
+	m.txInput.SetText("AT")
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if m.mode != modeNormal {
@@ -274,7 +274,7 @@ func TestTXSendFailureStates(t *testing.T) {
 	m = newTestModel()
 	m.source = mock
 	m.mode = modeTXInput
-	m.txInput = `PING\xZZ`
+	m.txInput.SetText(`PING\xZZ`)
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if !strings.Contains(m.message, "TX format error") {
@@ -289,7 +289,7 @@ func TestTXSendFailureStates(t *testing.T) {
 	m = newTestModel()
 	m.source = mock
 	m.mode = modeTXInput
-	m.txInput = "PING"
+	m.txInput.SetText("PING")
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if !strings.Contains(m.message, "TX error") {
@@ -303,7 +303,7 @@ func TestTXEmptyInputWithEndingNone(t *testing.T) {
 	m.source = mock
 	m.mode = modeTXInput
 	m.txEnding = serial.EndingNone
-	m.txInput = ""
+	m.txInput.Reset()
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
@@ -319,7 +319,7 @@ func TestTXViewKeyBarAndHelpModal(t *testing.T) {
 	m := newTestModel()
 	m.mode = modeTXInput
 	m.txEnding = serial.EndingCRLF
-	m.txInput = "HELLO"
+	m.txInput.SetText("HELLO")
 
 	bar := m.viewKeyBar()
 	if !strings.Contains(bar, "TX [CRLF] ›") {
@@ -346,7 +346,7 @@ func TestTXEchoProfileTransformAndFilter(t *testing.T) {
 	m.source = mock
 	m.mode = modeTXInput
 	m.txEnding = serial.EndingCRLF
-	m.txInput = "AT+TEST"
+	m.txInput.SetText("AT+TEST")
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)

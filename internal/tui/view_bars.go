@@ -342,7 +342,7 @@ func (m Model) viewStatusBar() string {
 	if len(m.searchMatches) > 0 {
 		matchInfo := fmt.Sprintf("match %d of %d", m.searchCursor+1, len(m.searchMatches))
 		parts = append(parts, theme.Warning.Render(matchInfo))
-	} else if m.searchInput != "" {
+	} else if m.searchInput.Value != "" {
 		parts = append(parts, theme.Muted.Render("no matches"))
 	}
 
@@ -394,13 +394,13 @@ func (m Model) renderKeyBarContent() string {
 	switch m.mode {
 	case modeSearch:
 		prompt := theme.Primary.Render("Search: ")
-		text := renderInputWithCursor(m.searchInput, m.searchPos, theme.Content)
+		text := m.searchInput.Render(theme.Content)
 		help := theme.Muted.Render("  [Enter: next · ↑/↓: matches · ←/→: cursor · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
 
 	case modeFilter:
 		prompt := theme.Primary.Render("Filter: ")
-		text := renderInputWithCursor(m.filterInput, m.filterCursor, theme.Content)
+		text := m.filterInput.Render(theme.Content)
 		help := theme.Muted.Render("  [Enter: apply · ↑/↓: history · ←/→: cursor · ^P: presets · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
 
@@ -412,7 +412,7 @@ func (m Model) renderKeyBarContent() string {
 
 	case modeTXInput:
 		prompt := lipgloss.NewStyle().Foreground(colorMaple).Bold(true).Render(fmt.Sprintf("TX [%s] › ", m.txEnding.String()))
-		text := renderInputWithCursor(m.txInput, m.txCursor, theme.Content)
+		text := m.txInput.Render(theme.Content)
 		help := theme.Muted.Render("  [Enter: send · Tab: line ending · ↑/↓: history · ←/→: cursor · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
 

@@ -101,8 +101,7 @@ func (m Model) handleCreateNewTab() (tea.Model, tea.Cmd) {
 	m.syncModelToActiveTab()
 	m.recalcLayout()
 	m.mode = modeFilter
-	m.filterInput = ""
-	m.filterCursor = 0
+	m.filterInput.Clear()
 	m.message = fmt.Sprintf("Created %s — enter filter (or Enter/Esc for all)", name)
 	return m, nil
 }
@@ -134,7 +133,7 @@ func (m *Model) scrollToMatch(idx int) {
 // runSearch finds all visible rows matching the search string.
 func (m *Model) runSearch() {
 	m.searchMatches = nil
-	q := strings.ToLower(m.searchInput)
+	q := strings.ToLower(m.searchInput.Value)
 	if q == "" {
 		return
 	}

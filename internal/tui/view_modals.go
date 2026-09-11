@@ -335,8 +335,7 @@ func (m Model) viewSavePresetModal() string {
 	if availInputW < minSavePresetInputWidth {
 		availInputW = minSavePresetInputWidth
 	}
-	dispInput, relCursor := sliceInputForWindow(m.savePresetNameInput, m.savePresetNameCursor, availInputW)
-	input := renderInputWithCursor(dispInput, relCursor, theme.ModalSelected)
+	input := m.savePresetNameInput.RenderWindow(availInputW, theme.ModalSelected)
 	sb.WriteString("  " + prompt + input)
 	sb.WriteString("\n\n")
 

@@ -186,12 +186,10 @@ type Model struct {
 
 	// Filter
 	activeFilter *filter.Filter
-	filterInput  string
-	filterCursor int // rune cursor position in filterInput
+	filterInput  TextInput
 
 	// Search
-	searchInput   string
-	searchPos     int   // rune cursor position in searchInput
+	searchInput   TextInput
 	searchMatches []int // indices into visible
 	searchCursor  int   // match navigation index into searchMatches
 
@@ -217,22 +215,14 @@ type Model struct {
 	appConfig     *config.AppConfig
 	settings      *config.Settings
 
-	// Filter history & presets
-	filterHistory        []string
-	filterHistoryCursor  int
-	filterDraft          string
-	filtersCfg           *config.FiltersConfig
-	presetCursor         int
-	savePresetNameInput  string
-	savePresetNameCursor int // rune cursor position in savePresetNameInput
+	// Filter presets
+	filtersCfg          *config.FiltersConfig
+	presetCursor        int
+	savePresetNameInput TextInput
 
 	// Serial TX transmission prompt
-	txInput         string
-	txCursor        int // rune cursor position in txInput
-	txHistory       []string
-	txHistoryCursor int
-	txDraft         string
-	txEnding        serial.LineEnding
+	txInput  TextInput
+	txEnding serial.LineEnding
 
 	// Easter egg mini-game
 	activeGame     game.MiniGame
@@ -418,10 +408,11 @@ func New(
 		baudList:            bauds,
 		baudCursor:          baudIdx,
 		bookmarks:           make(map[uint64]struct{}),
-		filterHistoryCursor: -1,
+		filterInput:         NewTextInput(true),
+		searchInput:         NewTextInput(false),
+		savePresetNameInput: NewTextInput(false),
+		txInput:             NewTextInput(true),
 		txEnding:            txEnd,
-		txHistory:           txHist,
-		txHistoryCursor:     -1,
 		splitMode:           SplitNone,
 		splitLeftTab:        0,
 		splitRightTab:       1,
@@ -429,6 +420,7 @@ func New(
 		syncScroll:          true,
 	}
 
+	m.txInput.History = txHist
 	m.loadFilters()
 
 	// Start with an empty permissive filter.
@@ -708,7 +700,7 @@ func (m *Model) exportViewport() ViewportState {
 		Visible:        m.visible,
 		ScrollOffset:   m.scrollOffset,
 		Follow:         m.follow,
-		SearchInput:    m.searchInput,
+		SearchInput:    m.searchInput.Value,
 		SearchMatches:  m.searchMatches,
 		SearchCursor:   m.searchCursor,
 		SelectedRow:    m.selectedRow,
@@ -726,8 +718,7 @@ func (m *Model) importViewport(vs ViewportState) {
 	m.visible = vs.Visible
 	m.scrollOffset = vs.ScrollOffset
 	m.follow = vs.Follow
-	m.searchInput = vs.SearchInput
-	m.searchPos = len([]rune(vs.SearchInput))
+	m.searchInput.SetText(vs.SearchInput)
 	m.searchMatches = vs.SearchMatches
 	m.searchCursor = vs.SearchCursor
 	m.selectedRow = vs.SelectedRow
@@ -748,7 +739,7 @@ func (m *Model) syncActiveTabToModel() {
 	}
 	cur := m.currentTab()
 	cur.Filter = m.activeFilter
-	cur.FilterRaw = m.filterInput
+	cur.FilterRaw = m.filterInput.Value
 	cur.ViewportState = m.exportViewport()
 }
 
@@ -756,8 +747,7 @@ func (m *Model) syncActiveTabToModel() {
 func (m *Model) syncModelToActiveTab() {
 	cur := m.currentTab()
 	m.activeFilter = cur.Filter
-	m.filterInput = cur.FilterRaw
-	m.filterCursor = len([]rune(m.filterInput))
+	m.filterInput.SetText(cur.FilterRaw)
 	m.importViewport(cur.ViewportState)
 }
 
@@ -813,7 +803,7 @@ func (m Model) saveSettings() {
 	s.ShowTimestamp = (m.tsMode != TSModeOff)
 	s.TimestampMode = m.tsMode.String()
 	s.TXEnding = m.txEnding.String()
-	s.TXHistory = m.txHistory
+	s.TXHistory = m.txInput.History
 	if m.buffer != nil {
 		s.BufferCapacity = m.buffer.Cap()
 	}
@@ -833,8 +823,8 @@ func (m *Model) loadFilters() {
 	if m.appConfig != nil {
 		if fc, err := m.appConfig.LoadFilters(); err == nil && fc != nil {
 			m.filtersCfg = fc
-			if len(m.filterHistory) == 0 {
-				m.filterHistory = fc.History
+			if len(m.filterInput.History) == 0 {
+				m.filterInput.History = fc.History
 			}
 			return
 		}

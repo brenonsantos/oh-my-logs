@@ -194,8 +194,8 @@ func (m Model) viewTable() string {
 			}
 
 			var renderedCell string
-			if isMatch && m.searchInput != "" {
-				renderedCell = highlightSubstring(cellText, m.searchInput, cellStyle)
+			if isMatch && m.searchInput.Value != "" {
+				renderedCell = highlightSubstring(cellText, m.searchInput.Value, cellStyle)
 			} else {
 				renderedCell = cellStyle.Render(cellText)
 			}
