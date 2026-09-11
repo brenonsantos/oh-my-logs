@@ -632,12 +632,28 @@ func (m Model) handleActionKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 		return resM, cmd, true
 
 	case keyMatches(msg, m.keys.Reconnect):
-		if m.serialCfg.Port == "" {
-			m.message = "No port configured — press p to pick one"
-			return m, nil, true
-		}
 		if m.isFileSource {
 			m.message = "Replay of offline log file — cannot reconnect"
+			return m, nil, true
+		}
+		if m.isPipeSource {
+			m.message = "Standard input stream — cannot reconnect"
+			return m, nil, true
+		}
+		if m.isProcessSource || m.processCmd != "" {
+			if m.source != nil {
+				m.source.Stop()
+				m.source = nil
+			}
+			m.manualDisconnect = false
+			m.connState = ConnDisconnected
+			m.connDetail = ""
+			m.reconnecting = true
+			m.message = fmt.Sprintf("Restarting %s…", m.processCmd)
+			return m, tryRestartProcessCmd(m.processCmd), true
+		}
+		if m.serialCfg.Port == "" {
+			m.message = "No port configured — press p to pick one"
 			return m, nil, true
 		}
 		if m.source != nil {

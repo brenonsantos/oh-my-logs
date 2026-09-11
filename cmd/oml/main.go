@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -24,6 +25,9 @@ func main() {
 		flagBaud          = flag.Int("baud", 115200, "baud rate")
 		flagProfile       = flag.String("profile", "", "profile name or path (.yaml)")
 		flagFile          = flag.String("file", "", "replay a saved log file instead of a serial port")
+		flagCmd           = flag.String("cmd", "", "run external shell command as live log stream (alias: --exec)")
+		flagExec          = flag.String("exec", "", "run external shell command as live log stream (alias: --cmd)")
+		flagStdin         = flag.Bool("stdin", false, "read log stream from standard input")
 		flagVersion       = flag.Bool("version", false, "print version and exit")
 		flagImportProfile = flag.String("import-profile", "", "import a YAML profile into the user profiles directory")
 		flagExportProfile = flag.String("export-profile", "", "export a profile by name (prints YAML to stdout or saves to --out)")
@@ -45,8 +49,25 @@ func main() {
 		os.Exit(0)
 	}
 
-	if *flagPort != "" && *flagFile != "" {
-		fmt.Fprintln(os.Stderr, "error: --port and --file are mutually exclusive")
+	if *flagCmd == "" && *flagExec != "" {
+		*flagCmd = *flagExec
+	}
+
+	sourceCount := 0
+	if *flagPort != "" {
+		sourceCount++
+	}
+	if *flagFile != "" {
+		sourceCount++
+	}
+	if *flagCmd != "" {
+		sourceCount++
+	}
+	if *flagStdin {
+		sourceCount++
+	}
+	if sourceCount > 1 {
+		fmt.Fprintln(os.Stderr, "error: --port, --file, --cmd, and --stdin are mutually exclusive")
 		os.Exit(1)
 	}
 
@@ -197,12 +218,28 @@ func main() {
 		serialCfg.Baud = *flagBaud
 	}
 
+	var usingStdin bool
+
+	// Auto-detect piped standard input if no other source flag is explicitly provided
+	if sourceCount == 0 && isStdinPiped() {
+		*flagStdin = true
+	}
+
 	if *flagFile != "" {
 		src, err = serial.NewFileSource(*flagFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
+	} else if *flagCmd != "" {
+		src, err = serial.NewProcessSource(*flagCmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+	} else if *flagStdin {
+		src = serial.NewPipeSource(os.Stdin)
+		usingStdin = true
 	} else if *flagPort != "" {
 		serialCfg.Port = *flagPort
 		src, err = serial.NewSerialSource(serialCfg)
@@ -244,15 +281,42 @@ func main() {
 		}
 	}
 
+	var teaOpts []tea.ProgramOption
+	teaOpts = append(teaOpts, tea.WithAltScreen(), tea.WithMouseCellMotion())
+
+	if usingStdin {
+		tty, err := openControllingTTY()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: cannot open controlling terminal: %v\n", err)
+			os.Exit(1)
+		}
+		defer tty.Close()
+		teaOpts = append(teaOpts, tea.WithInput(tty))
+	}
+
 	prog := tea.NewProgram(
 		model,
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
+		teaOpts...,
 	)
 
 	if _, err := prog.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func isStdinPiped() bool {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (stat.Mode() & os.ModeCharDevice) == 0
+}
+
+func openControllingTTY() (*os.File, error) {
+	if runtime.GOOS == "windows" {
+		return os.OpenFile("CONIN$", os.O_RDWR, 0)
+	}
+	return os.OpenFile("/dev/tty", os.O_RDWR, 0)
 }
 

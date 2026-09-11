@@ -138,6 +138,9 @@ type Model struct {
 	reconnecting     bool
 	manualDisconnect bool
 	isFileSource     bool
+	isProcessSource  bool
+	isPipeSource     bool
+	processCmd       string
 
 	// Profile & parser
 	profile *parser.Profile
@@ -314,13 +317,23 @@ func New(
 	if _, ok := src.(*serial.FileSource); ok {
 		isFile = true
 	}
+	isProcess := false
+	var procCmd string
+	if ps, ok := src.(*serial.ProcessSource); ok {
+		isProcess = true
+		procCmd = ps.Command()
+	}
+	isPipe := false
+	if _, ok := src.(*serial.PipeSource); ok {
+		isPipe = true
+	}
 
 	initState := ConnDisconnected
 	if src != nil {
 		initState = ConnConnected
 	}
 	manualDisc := false
-	if src == nil && !isFile {
+	if src == nil && !isFile && !isPipe {
 		manualDisc = true
 	}
 
@@ -375,6 +388,9 @@ func New(
 		manualDisconnect:    manualDisc,
 		reconnecting:        false,
 		isFileSource:        isFile,
+		isProcessSource:     isProcess,
+		isPipeSource:        isPipe,
+		processCmd:          procCmd,
 		profile:             profile,
 		parser:              p,
 		columns:             cols,
@@ -695,4 +711,10 @@ func (m Model) Init() tea.Cmd {
 		return tea.Batch(listenToSource(m.source), listenToSourceErrors(m.source))
 	}
 	return nil
+}
+
+// SetProcessCommand sets or updates the shell command associated with a process source.
+func (m *Model) SetProcessCommand(command string) {
+	m.isProcessSource = true
+	m.processCmd = command
 }
