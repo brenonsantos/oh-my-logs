@@ -85,7 +85,7 @@ When replaying saved log files via `oml --file <file.log>`, `oml` automatically 
 
 Try testing this with the included demo file:
 ```bash
-./oml --file demo.log --profile profiles/examples/example1.yaml
+./oml --file examples/logs/zephyr-rtos.log --profile profiles/examples/zephyr.yaml
 ```
 
 ---

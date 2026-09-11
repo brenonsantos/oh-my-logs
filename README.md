@@ -105,7 +105,7 @@ oml --port /dev/ttyUSB0 --baud 921600
 oml --port /dev/ttyACM0 --profile Zephyr
 
 # Replay an offline saved log file
-oml --file demo.log --profile Example1
+oml --file demo.log --profile Zephyr
 
 # Manage profiles
 oml --list-profiles                      # List all global & local profiles
