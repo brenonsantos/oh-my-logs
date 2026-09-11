@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/brenoniehues/oh-my-logs/internal/clipboard"
 	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -240,11 +239,11 @@ func (m Model) handleFilterPresetsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.message = "No active filter on current tab to save"
 			return m, nil
 		}
-		m.savePresetNameInput = cur.Name
-		if m.savePresetNameInput == "" || strings.HasPrefix(m.savePresetNameInput, "Tab ") {
-			m.savePresetNameInput = cur.FilterRaw
+		defaultName := cur.Name
+		if defaultName == "" || strings.HasPrefix(defaultName, "Tab ") {
+			defaultName = cur.FilterRaw
 		}
-		m.savePresetNameCursor = len([]rune(m.savePresetNameInput))
+		m.savePresetNameInput.SetText(defaultName)
 		m.mode = modeSavePresetPrompt
 		return m, nil
 
@@ -289,10 +288,9 @@ func (m Model) handleFilterPresetsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		// Add to filter history if new
-		if len(m.filterHistory) == 0 || m.filterHistory[len(m.filterHistory)-1] != selected.Filter {
-			m.filterHistory = append(m.filterHistory, selected.Filter)
+		if m.filterInput.AddHistory(selected.Filter) {
 			if m.filtersCfg != nil {
-				m.filtersCfg.History = m.filterHistory
+				m.filtersCfg.History = m.filterInput.History
 				if m.appConfig != nil {
 					_ = m.appConfig.SaveFilters(m.filtersCfg)
 				}
@@ -315,7 +313,7 @@ func (m Model) handleSavePresetPromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case keyMatches(msg, m.keys.Confirm):
-		name := strings.TrimSpace(m.savePresetNameInput)
+		name := strings.TrimSpace(m.savePresetNameInput.Value)
 		if name == "" {
 			name = "Custom Preset"
 		}
@@ -344,21 +342,8 @@ func (m Model) handleSavePresetPromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("✓ Saved preset %q", name)
 		return m, nil
 
-	case msg.Type == tea.KeyCtrlV || msg.String() == "ctrl+v":
-		clipText, err := clipboard.Read()
-		if err == nil && clipText != "" {
-			clean := strings.ReplaceAll(strings.ReplaceAll(clipText, "\r", ""), "\n", " ")
-			m.savePresetNameInput, m.savePresetNameCursor = insertStringAtCursor(m.savePresetNameInput, m.savePresetNameCursor, strings.TrimSpace(clean))
-		}
-		return m, nil
-
-	case msg.Type == tea.KeyCtrlU || msg.String() == "ctrl+u":
-		m.savePresetNameInput = ""
-		m.savePresetNameCursor = 0
-		return m, nil
-
 	default:
-		m.savePresetNameInput, m.savePresetNameCursor = handleTextInputWithCursor(m.savePresetNameInput, m.savePresetNameCursor, msg)
+		m.savePresetNameInput.HandleKey(msg)
 		return m, nil
 	}
 }

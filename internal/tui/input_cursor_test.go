@@ -220,20 +220,19 @@ func TestSliceInputForWindow(t *testing.T) {
 func TestFilterMode_CursorNavigationAndTypingK(t *testing.T) {
 	m := newTestModel()
 	m.mode = modeFilter
-	m.filterInput = "task:worker"
-	m.filterCursor = len([]rune(m.filterInput)) // 11
+	m.filterInput.SetText("task:worker")
 
 	// Ensure typing 'k' or 'j' does NOT trigger history Up/Down!
 	mMod, _ := m.handleFilterKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
 	m = mMod.(Model)
-	if m.filterInput != "task:workerk" || m.filterCursor != 12 {
-		t.Fatalf("expected typing 'k' to append 'k', got %q cursor %d", m.filterInput, m.filterCursor)
+	if m.filterInput.Value != "task:workerk" || m.filterInput.Cursor != 12 {
+		t.Fatalf("expected typing 'k' to append 'k', got %q cursor %d", m.filterInput.Value, m.filterInput.Cursor)
 	}
 
 	mMod, _ = m.handleFilterKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 	m = mMod.(Model)
-	if m.filterInput != "task:workerkj" || m.filterCursor != 13 {
-		t.Fatalf("expected typing 'j' to append 'j', got %q cursor %d", m.filterInput, m.filterCursor)
+	if m.filterInput.Value != "task:workerkj" || m.filterInput.Cursor != 13 {
+		t.Fatalf("expected typing 'j' to append 'j', got %q cursor %d", m.filterInput.Value, m.filterInput.Cursor)
 	}
 
 	// Move Left 4 times
@@ -241,80 +240,78 @@ func TestFilterMode_CursorNavigationAndTypingK(t *testing.T) {
 		mMod, _ = m.handleFilterKey(tea.KeyMsg{Type: tea.KeyLeft})
 		m = mMod.(Model)
 	}
-	if m.filterCursor != 9 {
-		t.Fatalf("expected filterCursor 9, got %d", m.filterCursor)
+	if m.filterInput.Cursor != 9 {
+		t.Fatalf("expected filterCursor 9, got %d", m.filterInput.Cursor)
 	}
 
 	// Insert 'X'
 	mMod, _ = m.handleFilterKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
 	m = mMod.(Model)
-	if m.filterInput != "task:workXerkj" || m.filterCursor != 10 {
-		t.Fatalf("expected 'task:workXerkj' cursor 10, got %q cursor %d", m.filterInput, m.filterCursor)
+	if m.filterInput.Value != "task:workXerkj" || m.filterInput.Cursor != 10 {
+		t.Fatalf("expected 'task:workXerkj' cursor 10, got %q cursor %d", m.filterInput.Value, m.filterInput.Cursor)
 	}
 
 	// Backspace deletes 'X'
 	mMod, _ = m.handleFilterKey(tea.KeyMsg{Type: tea.KeyBackspace})
 	m = mMod.(Model)
-	if m.filterInput != "task:workerkj" || m.filterCursor != 9 {
-		t.Fatalf("expected 'task:workerkj' cursor 9 after backspace, got %q cursor %d", m.filterInput, m.filterCursor)
+	if m.filterInput.Value != "task:workerkj" || m.filterInput.Cursor != 9 {
+		t.Fatalf("expected 'task:workerkj' cursor 9 after backspace, got %q cursor %d", m.filterInput.Value, m.filterInput.Cursor)
 	}
 
 	// Delete deletes 'e'
 	mMod, _ = m.handleFilterKey(tea.KeyMsg{Type: tea.KeyDelete})
 	m = mMod.(Model)
-	if m.filterInput != "task:workrkj" || m.filterCursor != 9 {
-		t.Fatalf("expected 'task:workrkj' cursor 9 after delete, got %q cursor %d", m.filterInput, m.filterCursor)
+	if m.filterInput.Value != "task:workrkj" || m.filterInput.Cursor != 9 {
+		t.Fatalf("expected 'task:workrkj' cursor 9 after delete, got %q cursor %d", m.filterInput.Value, m.filterInput.Cursor)
 	}
 }
 
 func TestSearchMode_CursorNavigation(t *testing.T) {
 	m := newTestModel()
 	m.mode = modeSearch
-	m.searchInput = "sensor"
-	m.searchPos = 6
+	m.searchInput.SetText("sensor")
 
 	// Move left 3 times
 	for i := 0; i < 3; i++ {
 		mMod, _ := m.handleSearchKey(tea.KeyMsg{Type: tea.KeyLeft})
 		m = mMod.(Model)
 	}
-	if m.searchPos != 3 {
-		t.Fatalf("expected searchPos 3, got %d", m.searchPos)
+	if m.searchInput.Cursor != 3 {
+		t.Fatalf("expected searchPos 3, got %d", m.searchInput.Cursor)
 	}
 
 	// Insert "12"
 	mMod, _ := m.handleSearchKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1', '2'}})
 	m = mMod.(Model)
-	if m.searchInput != "sen12sor" || m.searchPos != 5 {
-		t.Fatalf("expected 'sen12sor' pos 5, got %q pos %d", m.searchInput, m.searchPos)
+	if m.searchInput.Value != "sen12sor" || m.searchInput.Cursor != 5 {
+		t.Fatalf("expected 'sen12sor' pos 5, got %q pos %d", m.searchInput.Value, m.searchInput.Cursor)
 	}
 }
 
 func TestTXMode_CursorNavigationAndTypingK(t *testing.T) {
 	m := newTestModel()
 	m.mode = modeTXInput
-	m.txInput = "pkg:status"
-	m.txCursor = len([]rune(m.txInput)) // 10
+	m.txInput.SetText("pkg:status")
 
 	// Typing 'k' or 'j' should NOT trigger history!
 	mMod, _ := m.handleTXKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
 	m = mMod.(Model)
-	if m.txInput != "pkg:statusk" || m.txCursor != 11 {
-		t.Fatalf("expected 'pkg:statusk' txCursor 11, got %q txCursor %d", m.txInput, m.txCursor)
+	if m.txInput.Value != "pkg:statusk" || m.txInput.Cursor != 11 {
+		t.Fatalf("expected 'pkg:statusk' txCursor 11, got %q txCursor %d", m.txInput.Value, m.txInput.Cursor)
 	}
 
 	// Home key
 	mMod, _ = m.handleTXKey(tea.KeyMsg{Type: tea.KeyHome})
 	m = mMod.(Model)
-	if m.txCursor != 0 {
-		t.Fatalf("expected txCursor 0 after Home, got %d", m.txCursor)
+	if m.txInput.Cursor != 0 {
+		t.Fatalf("expected txCursor 0 after Home, got %d", m.txInput.Cursor)
 	}
 
 	// Insert "AT+"
 	mMod, _ = m.handleTXKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A', 'T', '+'}})
 	m = mMod.(Model)
-	if m.txInput != "AT+pkg:statusk" || m.txCursor != 3 {
-		t.Fatalf("expected 'AT+pkg:statusk' txCursor 3, got %q txCursor %d", m.txInput, m.txCursor)
+	if m.txInput.Value != "AT+pkg:statusk" || m.txInput.Cursor != 3 {
+		t.Fatalf("expected 'AT+pkg:statusk' txCursor 3, got %q txCursor %d", m.txInput.Value, m.txInput.Cursor)
 	}
 }
 
@@ -322,30 +319,29 @@ func TestSavePresetPrompt_CursorNavigation(t *testing.T) {
 	m := newTestModel()
 	m.filtersCfg = &config.FiltersConfig{}
 	m.mode = modeSavePresetPrompt
-	m.savePresetNameInput = "My Preset"
-	m.savePresetNameCursor = 9
+	m.savePresetNameInput.SetText("My Preset")
 
 	// Move Left 3 times (before "set")
 	for i := 0; i < 3; i++ {
 		mMod, _ := m.handleSavePresetPromptKey(tea.KeyMsg{Type: tea.KeyLeft})
 		m = mMod.(Model)
 	}
-	if m.savePresetNameCursor != 6 {
-		t.Fatalf("expected savePresetNameCursor 6, got %d", m.savePresetNameCursor)
+	if m.savePresetNameInput.Cursor != 6 {
+		t.Fatalf("expected savePresetNameCursor 6, got %d", m.savePresetNameInput.Cursor)
 	}
 
 	// Delete deletes 's'
 	mMod, _ := m.handleSavePresetPromptKey(tea.KeyMsg{Type: tea.KeyDelete})
 	m = mMod.(Model)
-	if m.savePresetNameInput != "My Preet" || m.savePresetNameCursor != 6 {
-		t.Fatalf("expected 'My Preet' cursor 6, got %q cursor %d", m.savePresetNameInput, m.savePresetNameCursor)
+	if m.savePresetNameInput.Value != "My Preet" || m.savePresetNameInput.Cursor != 6 {
+		t.Fatalf("expected 'My Preet' cursor 6, got %q cursor %d", m.savePresetNameInput.Value, m.savePresetNameInput.Cursor)
 	}
 
 	// Ctrl+U clears
 	mMod, _ = m.handleSavePresetPromptKey(tea.KeyMsg{Type: tea.KeyCtrlU})
 	m = mMod.(Model)
-	if m.savePresetNameInput != "" || m.savePresetNameCursor != 0 {
-		t.Fatalf("expected empty string cursor 0, got %q cursor %d", m.savePresetNameInput, m.savePresetNameCursor)
+	if m.savePresetNameInput.Value != "" || m.savePresetNameInput.Cursor != 0 {
+		t.Fatalf("expected empty string cursor 0, got %q cursor %d", m.savePresetNameInput.Value, m.savePresetNameInput.Cursor)
 	}
 }
 

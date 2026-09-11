@@ -360,7 +360,7 @@ func TestInteractiveVerticalScrollbarClickAndDrag(t *testing.T) {
 	}
 
 	// Click vertical scrollbar on row 10
-	tableStartY := 4
+	tableStartY := m.tableDataStartY()
 	clickY := tableStartY + 10
 	clickX := m.width - 1
 	res, _ := m.Update(tea.MouseMsg{

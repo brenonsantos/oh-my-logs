@@ -22,13 +22,13 @@ func renderHScrollTrack(scrollX int, maxContentW int, trackW int) string {
 	if trackW <= 0 {
 		return ""
 	}
-	if trackW < 10 || maxContentW <= trackW {
+	if trackW < minScrollTrackWidth || maxContentW <= trackW {
 		return theme.Divider.Render(strings.Repeat("─", trackW))
 	}
 
 	thumbW := trackW * trackW / maxContentW
-	if thumbW < 3 {
-		thumbW = 3
+	if thumbW < minScrollThumbWidth {
+		thumbW = minScrollThumbWidth
 	}
 	if thumbW > trackW {
 		thumbW = trackW
@@ -342,7 +342,7 @@ func (m Model) viewStatusBar() string {
 	if len(m.searchMatches) > 0 {
 		matchInfo := fmt.Sprintf("match %d of %d", m.searchCursor+1, len(m.searchMatches))
 		parts = append(parts, theme.Warning.Render(matchInfo))
-	} else if m.searchInput != "" {
+	} else if m.searchInput.Value != "" {
 		parts = append(parts, theme.Muted.Render("no matches"))
 	}
 
@@ -394,13 +394,13 @@ func (m Model) renderKeyBarContent() string {
 	switch m.mode {
 	case modeSearch:
 		prompt := theme.Primary.Render("Search: ")
-		text := renderInputWithCursor(m.searchInput, m.searchPos, theme.Content)
+		text := m.searchInput.Render(theme.Content)
 		help := theme.Muted.Render("  [Enter: next · ↑/↓: matches · ←/→: cursor · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
 
 	case modeFilter:
 		prompt := theme.Primary.Render("Filter: ")
-		text := renderInputWithCursor(m.filterInput, m.filterCursor, theme.Content)
+		text := m.filterInput.Render(theme.Content)
 		help := theme.Muted.Render("  [Enter: apply · ↑/↓: history · ←/→: cursor · ^P: presets · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
 
@@ -412,7 +412,7 @@ func (m Model) renderKeyBarContent() string {
 
 	case modeTXInput:
 		prompt := lipgloss.NewStyle().Foreground(colorMaple).Bold(true).Render(fmt.Sprintf("TX [%s] › ", m.txEnding.String()))
-		text := renderInputWithCursor(m.txInput, m.txCursor, theme.Content)
+		text := m.txInput.Render(theme.Content)
 		help := theme.Muted.Render("  [Enter: send · Tab: line ending · ↑/↓: history · ←/→: cursor · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
 
@@ -564,34 +564,3 @@ func (m Model) renderKeyBarContent() string {
 	}
 }
 
-// renderInputWithCursor renders input text with an accurate visual block cursor.
-// If the cursor is at the end (pos >= len(runes)), a "█" block is appended.
-// If the cursor is over a character, that character is styled with highlighted/inverted colors.
-func renderInputWithCursor(text string, pos int, baseStyle lipgloss.Style) string {
-	runes := []rune(text)
-	if pos < 0 {
-		pos = 0
-	}
-	if pos > len(runes) {
-		pos = len(runes)
-	}
-
-	cursorCharStyle := lipgloss.NewStyle().
-		Background(colorCyan).
-		Foreground(lipgloss.Color("#000000")).
-		Bold(true)
-	cursorEndBlock := lipgloss.NewStyle().
-		Foreground(colorCyan).
-		Bold(true).
-		Render("█")
-
-	if pos >= len(runes) {
-		return baseStyle.Render(text) + cursorEndBlock
-	}
-
-	before := baseStyle.Render(string(runes[:pos]))
-	underCursor := cursorCharStyle.Render(string(runes[pos]))
-	after := baseStyle.Render(string(runes[pos+1:]))
-
-	return before + underCursor + after
-}

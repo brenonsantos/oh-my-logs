@@ -48,7 +48,7 @@ func TestFilterHistoryNavigation(t *testing.T) {
 	if m.mode != modeFilter {
 		t.Fatalf("expected modeFilter, got %v", m.mode)
 	}
-	m.filterInput = "level:ERROR"
+	m.filterInput.SetText("level:ERROR")
 	m, _ = updateSpecialKey(m, tea.KeyEnter)
 	if m.mode != modeNormal {
 		t.Fatalf("expected modeNormal after submit, got %v", m.mode)
@@ -59,7 +59,7 @@ func TestFilterHistoryNavigation(t *testing.T) {
 
 	// 2. Enter second filter: "level:WARN"
 	m, _ = updateKey(m, 'f')
-	m.filterInput = "level:WARN"
+	m.filterInput.SetText("level:WARN")
 	m, _ = updateSpecialKey(m, tea.KeyEnter)
 	if len(m.visible) != 1 || m.visible[0].Fields["level"] != "WARN" {
 		t.Fatalf("expected 1 WARN record, got %d", len(m.visible))
@@ -67,36 +67,36 @@ func TestFilterHistoryNavigation(t *testing.T) {
 
 	// 3. Open filter again and test history navigation with Up/Down
 	m, _ = updateKey(m, 'f')
-	m.filterInput = "my-draft"
+	m.filterInput.SetText("my-draft")
 
 	// Press Up: should recall "level:WARN" and save "my-draft" as draft
 	m, _ = updateSpecialKey(m, tea.KeyUp)
-	if m.filterInput != "level:WARN" {
-		t.Errorf("expected level:WARN on first Up, got %q", m.filterInput)
+	if m.filterInput.Value != "level:WARN" {
+		t.Errorf("expected level:WARN on first Up, got %q", m.filterInput.Value)
 	}
 
 	// Press Up again: should recall "level:ERROR"
 	m, _ = updateSpecialKey(m, tea.KeyUp)
-	if m.filterInput != "level:ERROR" {
-		t.Errorf("expected level:ERROR on second Up, got %q", m.filterInput)
+	if m.filterInput.Value != "level:ERROR" {
+		t.Errorf("expected level:ERROR on second Up, got %q", m.filterInput.Value)
 	}
 
 	// Press Up at top of history: stays on oldest ("level:ERROR")
 	m, _ = updateSpecialKey(m, tea.KeyUp)
-	if m.filterInput != "level:ERROR" {
-		t.Errorf("expected level:ERROR at top of history, got %q", m.filterInput)
+	if m.filterInput.Value != "level:ERROR" {
+		t.Errorf("expected level:ERROR at top of history, got %q", m.filterInput.Value)
 	}
 
 	// Press Down: should return to "level:WARN"
 	m, _ = updateSpecialKey(m, tea.KeyDown)
-	if m.filterInput != "level:WARN" {
-		t.Errorf("expected level:WARN on Down, got %q", m.filterInput)
+	if m.filterInput.Value != "level:WARN" {
+		t.Errorf("expected level:WARN on Down, got %q", m.filterInput.Value)
 	}
 
 	// Press Down again: should restore original draft "my-draft"
 	m, _ = updateSpecialKey(m, tea.KeyDown)
-	if m.filterInput != "my-draft" {
-		t.Errorf("expected my-draft on second Down, got %q", m.filterInput)
+	if m.filterInput.Value != "my-draft" {
+		t.Errorf("expected my-draft on second Down, got %q", m.filterInput.Value)
 	}
 }
 
@@ -146,7 +146,7 @@ func TestFilterPresetsSaveCurrentFilter(t *testing.T) {
 
 	// Set a filter on active tab
 	m, _ = updateKey(m, 'f')
-	m.filterInput = "level:WARN Low"
+	m.filterInput.SetText("level:WARN Low")
 	m, _ = updateSpecialKey(m, tea.KeyEnter)
 
 	// Open presets modal
@@ -167,7 +167,7 @@ func TestFilterPresetsSaveCurrentFilter(t *testing.T) {
 	}
 
 	// Set custom preset name and confirm
-	m.savePresetNameInput = "Battery Alert"
+	m.savePresetNameInput.SetText("Battery Alert")
 	m, _ = updateSpecialKey(m, tea.KeyEnter)
 	if m.mode != modeFilterPresets {
 		t.Fatalf("expected return to modeFilterPresets after save, got %v", m.mode)

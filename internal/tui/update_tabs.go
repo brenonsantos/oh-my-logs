@@ -83,9 +83,15 @@ func (m Model) handleCreateNewTab() (tea.Model, tea.Cmd) {
 	newIdx := len(m.tabs)
 	name := fmt.Sprintf("Tab %d", newIdx+1)
 	newTab := Tab{
-		Name:    name,
-		Follow:  true,
-		Visible: m.buffer.All(),
+		Name: name,
+		ViewportState: ViewportState{
+			Follow:       true,
+			Visible:      m.buffer.All(),
+			SelectedRow:  -1,
+			CursorCol:    -1,
+			CharSelStart: -1,
+			CharSelEnd:   -1,
+		},
 	}
 	if len(newTab.Visible) > m.activeDataHeight() {
 		newTab.ScrollOffset = len(newTab.Visible) - m.activeDataHeight()
@@ -95,8 +101,7 @@ func (m Model) handleCreateNewTab() (tea.Model, tea.Cmd) {
 	m.syncModelToActiveTab()
 	m.recalcLayout()
 	m.mode = modeFilter
-	m.filterInput = ""
-	m.filterCursor = 0
+	m.filterInput.Clear()
 	m.message = fmt.Sprintf("Created %s — enter filter (or Enter/Esc for all)", name)
 	return m, nil
 }
@@ -128,7 +133,7 @@ func (m *Model) scrollToMatch(idx int) {
 // runSearch finds all visible rows matching the search string.
 func (m *Model) runSearch() {
 	m.searchMatches = nil
-	q := strings.ToLower(m.searchInput)
+	q := strings.ToLower(m.searchInput.Value)
 	if q == "" {
 		return
 	}
@@ -220,29 +225,27 @@ func (m *Model) recalcLayout() {
 	if m.height <= 0 {
 		return
 	}
-	// Fixed rows: 1 title + 1 divider + 1 header + 1 divider + 1 divider + 1 status + 1 keys = 7 fixed rows.
-	// If more than 1 tab is present, tab bar adds 2 rows (1 row tab bar + 1 row divider).
-	fixed := 7
+	fixed := fixedChromeRows
 	if len(m.tabs) > 1 {
-		fixed += 2
+		fixed += tabBarChromeRows
 	}
 	avail := m.height - fixed
 	if avail < 1 {
 		avail = 1
 	}
 
-	if m.isInspectorActive() && avail >= 10 {
+	if m.isInspectorActive() && avail >= minDrawerAvailHeight {
 		// Allocate drawer: ~35% of avail height (min 4 rows, max 10 rows)
-		drawerH := avail * 35 / 100
-		if drawerH < 4 {
-			drawerH = 4
-		} else if drawerH > 10 {
-			drawerH = 10
+		drawerH := avail * drawerHeightPercent / 100
+		if drawerH < minDrawerHeight {
+			drawerH = minDrawerHeight
+		} else if drawerH > maxDrawerHeight {
+			drawerH = maxDrawerHeight
 		}
 		m.inspectorHeight = drawerH
-		m.tableHeight = avail - drawerH - 1 // 1 row for inspector header divider
-		if m.tableHeight < 3 {
-			m.tableHeight = 3
+		m.tableHeight = avail - drawerH - inspectorDividerRows
+		if m.tableHeight < minTableHeight {
+			m.tableHeight = minTableHeight
 		}
 	} else {
 		m.inspectorHeight = 0

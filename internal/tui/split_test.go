@@ -390,8 +390,8 @@ func TestSyncScrollHoldsStillAcrossHiddenRecords(t *testing.T) {
 
 func TestSplitTabsPositionsFrozen(t *testing.T) {
 	m := newTestModel()
-	m.tabs = append(m.tabs, Tab{Name: "Tab 2", Visible: m.buffer.All()})
-	m.tabs = append(m.tabs, Tab{Name: "Tab 3", Visible: m.buffer.All()})
+	m.tabs = append(m.tabs, Tab{Name: "Tab 2", ViewportState: ViewportState{Visible: m.buffer.All()}})
+	m.tabs = append(m.tabs, Tab{Name: "Tab 3", ViewportState: ViewportState{Visible: m.buffer.All()}})
 
 	// Split vertical: pane 0 (left) is Tab 1 (idx 0), pane 1 (right) is Tab 2 (idx 1)
 	m.toggleSplit(SplitVertical)

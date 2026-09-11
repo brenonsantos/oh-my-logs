@@ -141,7 +141,9 @@ func TestVirtualTabsIndependentFilteringAndStreaming(t *testing.T) {
 		Name:      "Errors",
 		FilterRaw: "error",
 		Filter:    errFilter,
-		Follow:    true,
+		ViewportState: ViewportState{
+			Follow: true,
+		},
 	})
 	m.recalcLayout()
 
@@ -197,7 +199,9 @@ func TestVirtualTabsIndependentScrollAndFollow(t *testing.T) {
 	m.tabs = append(m.tabs, Tab{
 		Name:   "Tab 2",
 		Filter: f,
-		Follow: true,
+		ViewportState: ViewportState{
+			Follow: true,
+		},
 	})
 
 	// Add 10 lines
@@ -254,8 +258,10 @@ func TestVirtualTabsViewRendering(t *testing.T) {
 
 	// 2 Tabs: View() should show tab bar and hints
 	m.tabs = append(m.tabs, Tab{
-		Name:   "Errors",
-		Follow: true,
+		Name: "Errors",
+		ViewportState: ViewportState{
+			Follow: true,
+		},
 	})
 	m.recalcLayout()
 
