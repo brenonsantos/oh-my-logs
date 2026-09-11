@@ -1,6 +1,6 @@
 # oh-my-logs (`oml`)
 
-> **Release v1.1.0 — Jordanense**  
+> **Release v1.2.0 — Taubateano**  
 > A high-performance, cross-platform terminal UI for monitoring, filtering, measuring latency, and transmitting serial data for embedded systems.
 
 <img width="926" height="676" alt="oh-my-logs main interface" src="https://github.com/user-attachments/assets/beaa2cf3-4b70-4240-a166-a40532f9edb1" />
@@ -69,10 +69,10 @@ oml --uninstall        # Remove oml binary from system PATH
 #### Install Specific Release Tag
 ```bash
 # macOS & Linux
-curl -fsSL https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.sh | bash -s -- --version v1.1.0
+curl -fsSL https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.sh | bash -s -- --version v1.2.0
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.ps1 | iex -Version v1.1.0
+irm https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.ps1 | iex -Version v1.2.0
 ```
 
 #### Binary Self-Install (`--install`)
