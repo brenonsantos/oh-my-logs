@@ -286,7 +286,11 @@ const zephyrTestProfileYAML = `
 name: Zephyr
 parser:
   type: regex
-  pattern: '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?:(?P<module>[a-zA-Z0-9_.-]+):\s+)?(?P<message>.*)$'
+  patterns:
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?:(?P<module>[a-zA-Z0-9_.-]+):\s+)?(?P<message>.*)$'
+    - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+\[(?P<module>[^\]]+)\]\s*:?\s*(?P<message>.*)$'
+    - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+(?P<module>[a-zA-Z0-9_.-]+):\s+(?P<message>.*)$'
+    - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+(?P<message>.*)$'
 columns:
   - field: uptime
     title: Uptime
@@ -301,9 +305,13 @@ columns:
       wrn: yellow
       inf: cyan
       dbg: gray
+      E: red
+      W: yellow
+      I: cyan
+      D: gray
   - field: module
     title: Module
-    width: 16
+    width: 22
     style: identifier
   - field: message
     title: Message
@@ -325,7 +333,7 @@ func TestLoadProfile_Zephyr(t *testing.T) {
 		t.Fatalf("failed to build parser: %v", err)
 	}
 
-	// 1. Test standard generic Zephyr log lines (both formatted timestamp and seconds format)
+	// 1. Test standard generic Zephyr log lines and minimal UART lines
 	testCases := []struct {
 		line    string
 		uptime  string
@@ -360,6 +368,50 @@ func TestLoadProfile_Zephyr(t *testing.T) {
 			level:   "inf",
 			module:  "",
 			message: "Booting without module",
+		},
+		// Minimal Zephyr logging cases:
+		{
+			line:    "D: pmhw: wkup_pin_config",
+			uptime:  "",
+			level:   "D",
+			module:  "pmhw",
+			message: "wkup_pin_config",
+		},
+		{
+			line:    "D: [ServiceManager] State Updated: 3",
+			uptime:  "",
+			level:   "D",
+			module:  "ServiceManager",
+			message: "State Updated: 3",
+		},
+		{
+			line:    "I: 16 Sectors of 4096 bytes",
+			uptime:  "",
+			level:   "I",
+			module:  "",
+			message: "16 Sectors of 4096 bytes",
+		},
+		{
+			line:    "E: failed to create directory (-17)",
+			uptime:  "",
+			level:   "E",
+			module:  "",
+			message: "failed to create directory (-17)",
+		},
+		// Minimal Zephyr with optional host capture timestamp:
+		{
+			line:    "14:17:31:258 -> D: pmhw: wkup_pin_config",
+			uptime:  "14:17:31:258",
+			level:   "D",
+			module:  "pmhw",
+			message: "wkup_pin_config",
+		},
+		{
+			line:    "14:18:07:959 -> I: LittleFS version 2.11, disk version 2.1",
+			uptime:  "14:18:07:959",
+			level:   "I",
+			module:  "",
+			message: "LittleFS version 2.11, disk version 2.1",
 		},
 	}
 
