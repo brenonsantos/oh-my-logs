@@ -128,10 +128,7 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Table rows click
-	tableStartY := 4
-	if len(m.tabs) > 1 {
-		tableStartY = 6
-	}
+	tableStartY := m.tableDataStartY()
 	tableEndY := tableStartY + len(m.visibleRows())
 
 	if msg.Y >= tableStartY && msg.Y < tableEndY {
@@ -154,8 +151,8 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.selectedRow = absIdx
 			m.selectionStart = absIdx
 			m.selectionEnd = absIdx
-			if msg.X >= 3 {
-				m.cursorCol = msg.X - 3 + m.scrollX
+			if msg.X >= prefixWidth {
+				m.cursorCol = msg.X - prefixWidth + m.scrollX
 			} else {
 				m.cursorCol = 0
 			}
@@ -163,7 +160,7 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.charSelEnd = -1
 
 			now := time.Now()
-			if m.lastClickRow == absIdx && now.Sub(m.lastClickTime) < 400*time.Millisecond {
+			if m.lastClickRow == absIdx && now.Sub(m.lastClickTime) < doubleClickThreshold {
 				// Double click: copy row to clipboard
 				_ = clipboard.Copy(m.visible[absIdx].Raw)
 				m.message = "✓ Copied row to clipboard"
@@ -187,14 +184,19 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 // splitTableStartY returns the terminal Y row where viewSplitTable() begins.
 func (m Model) splitTableStartY() int {
 	if len(m.tabs) > 1 {
-		return 4
+		return 2 + tabBarChromeRows
 	}
 	return 2
 }
 
+// tableDataStartY returns the terminal Y row where log data rows begin in single-table view.
+func (m Model) tableDataStartY() int {
+	return m.splitTableStartY() + splitPaneHeaderOverhead
+}
+
 func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	splitStartY := m.splitTableStartY()
-	totalH := m.tableHeight + 2
+	totalH := m.tableHeight + splitPaneHeaderOverhead
 	splitEndY := splitStartY + totalH
 
 	if msg.Y < splitStartY || msg.Y >= splitEndY {
@@ -211,7 +213,7 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 			m.switchPaneFocus()
 		}
 
-		dataStartY := splitStartY + 2
+		dataStartY := splitStartY + splitPaneHeaderOverhead
 		if msg.Y >= dataStartY && msg.Y < splitEndY {
 			rowOffset := msg.Y - dataStartY
 			absIdx := m.scrollOffset + rowOffset
@@ -224,7 +226,7 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 				if clickedPane == 1 {
 					paneStartX = splitX + 1
 				}
-				col := msg.X - paneStartX - 3 + m.scrollX
+				col := msg.X - paneStartX - prefixWidth + m.scrollX
 				if col < 0 {
 					col = 0
 				}
@@ -233,7 +235,7 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 				m.charSelEnd = -1
 
 				now := time.Now()
-				if m.lastClickRow == absIdx && now.Sub(m.lastClickTime) < 400*time.Millisecond {
+				if m.lastClickRow == absIdx && now.Sub(m.lastClickTime) < doubleClickThreshold {
 					_ = clipboard.Copy(m.visible[absIdx].Raw)
 					m.message = "✓ Copied row to clipboard"
 				}
@@ -262,10 +264,10 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 
 	var dataStartY, dataEndY int
 	if clickedPane == 0 {
-		dataStartY = splitStartY + 2
+		dataStartY = splitStartY + splitPaneHeaderOverhead
 		dataEndY = splitStartY + topH
 	} else {
-		dataStartY = dividerY + 1 + 2
+		dataStartY = dividerY + 1 + splitPaneHeaderOverhead
 		dataEndY = splitEndY
 	}
 	if msg.Y >= dataStartY && msg.Y < dataEndY {
@@ -276,7 +278,7 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 			m.selectedRow = absIdx
 			m.selectionStart = absIdx
 			m.selectionEnd = absIdx
-			col := msg.X - 3 + m.scrollX
+			col := msg.X - prefixWidth + m.scrollX
 			if col < 0 {
 				col = 0
 			}
@@ -285,7 +287,7 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 			m.charSelEnd = -1
 
 			now := time.Now()
-			if m.lastClickRow == absIdx && now.Sub(m.lastClickTime) < 400*time.Millisecond {
+			if m.lastClickRow == absIdx && now.Sub(m.lastClickTime) < doubleClickThreshold {
 				_ = clipboard.Copy(m.visible[absIdx].Raw)
 				m.message = "✓ Copied row to clipboard"
 			}
@@ -362,12 +364,9 @@ func (m Model) handleStatusBarMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) 
 func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// Dragging vertical scrollbar
 	if msg.X >= m.tableWidth()-2 && len(m.visible) > m.tableHeight && m.tableHeight > 1 {
-		dataStartY := 4
-		if len(m.tabs) > 1 {
-			dataStartY = 6
-		}
+		dataStartY := m.tableDataStartY()
 		if m.splitMode != SplitNone {
-			dataStartY = m.splitTableStartY() + 2
+			dataStartY = m.splitTableStartY() + splitPaneHeaderOverhead
 		}
 		clickRow := msg.Y - dataStartY
 		if clickRow < 0 {
@@ -394,25 +393,22 @@ func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	dataStartY := 4
-	if len(m.tabs) > 1 {
-		dataStartY = 6
-	}
+	dataStartY := m.tableDataStartY()
 	dataEndY := dataStartY + m.tableHeight
 	if m.splitMode == SplitVertical {
-		dataStartY = m.splitTableStartY() + 2
-		dataEndY = m.splitTableStartY() + m.tableHeight + 2
+		dataStartY = m.splitTableStartY() + splitPaneHeaderOverhead
+		dataEndY = m.splitTableStartY() + m.tableHeight + splitPaneHeaderOverhead
 	} else if m.splitMode == SplitHorizontal {
 		splitStartY := m.splitTableStartY()
-		totalH := m.tableHeight + 2
+		totalH := m.tableHeight + splitPaneHeaderOverhead
 		availH := totalH - 1
 		topH := availH / 2
 		dividerY := splitStartY + topH
 		if m.activePane == 0 {
-			dataStartY = splitStartY + 2
+			dataStartY = splitStartY + splitPaneHeaderOverhead
 			dataEndY = splitStartY + topH
 		} else {
-			dataStartY = dividerY + 3
+			dataStartY = dividerY + 1 + splitPaneHeaderOverhead
 			dataEndY = splitStartY + totalH
 		}
 	}

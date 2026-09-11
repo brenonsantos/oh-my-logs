@@ -11,7 +11,7 @@ import (
 // viewPortPickerModal renders the centered rounded modal for Port & Baud Rate.
 // Up/Down selects the port directly, Left/Right adjusts baud rate directly.
 func (m Model) viewPortPickerModal() string {
-	modalWidth := 68
+	modalWidth := modalWidthPortPicker
 	for _, p := range m.portList {
 		if len(p)+10 > modalWidth {
 			modalWidth = len(p) + 10
@@ -74,12 +74,12 @@ func (m Model) viewPortPickerModal() string {
 	sb.WriteString(theme.ModalFooter.Render("Enter select · d disconnect · ↑/↓ port · ←/→ baud · Esc cancel"))
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
-	return centerBox(m.width, m.tableHeight+2, modalBox)
+	return centerBox(m.width, m.tableHeight+splitPaneHeaderOverhead, modalBox)
 }
 
 // viewProfilePickerModal renders the centered rounded modal for Profile switching.
 func (m Model) viewProfilePickerModal() string {
-	modalWidth := 52
+	modalWidth := modalWidthSettings
 	for _, p := range m.profileList {
 		labelLen := len(p.Name) + 14
 		if labelLen > modalWidth {
@@ -293,7 +293,7 @@ func (m Model) viewSavePresetModal() string {
 	}
 
 	reqW := len("Filter: ") + len(curFilter) + 8
-	modalWidth := 56
+	modalWidth := modalWidthFilters
 	if reqW > modalWidth {
 		modalWidth = reqW
 	}
@@ -331,9 +331,9 @@ func (m Model) viewSavePresetModal() string {
 	sb.WriteString("\n\n")
 
 	prompt := theme.Secondary.Render("Preset Name: ")
-	availInputW := innerW - 17
-	if availInputW < 10 {
-		availInputW = 10
+	availInputW := innerW - savePresetPromptLabelWidth
+	if availInputW < minSavePresetInputWidth {
+		availInputW = minSavePresetInputWidth
 	}
 	dispInput, relCursor := sliceInputForWindow(m.savePresetNameInput, m.savePresetNameCursor, availInputW)
 	input := renderInputWithCursor(dispInput, relCursor, theme.ModalSelected)
@@ -343,7 +343,7 @@ func (m Model) viewSavePresetModal() string {
 	sb.WriteString(theme.ModalFooter.Render("Enter save · ←/→ cursor · Esc cancel"))
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
-	return centerBox(m.width, m.tableHeight+2, modalBox)
+	return centerBox(m.width, m.tableHeight+splitPaneHeaderOverhead, modalBox)
 }
 
 
@@ -388,14 +388,14 @@ func (m Model) viewGameModal() string {
 	sb.WriteString(m.activeGame.View(innerW))
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
-	return centerBox(m.width, m.tableHeight+2, modalBox)
+	return centerBox(m.width, m.tableHeight+splitPaneHeaderOverhead, modalBox)
 }
 
 // viewHelpModal renders a clean floating modal with categorized keyboard shortcuts.
 func (m Model) viewHelpModal() string {
 	colWidth := 40
 	// 2 columns of colWidth + 3 for separator " │ " + 6 for borders and padding
-	modalWidth := (colWidth * 2) + 9 // 89
+	modalWidth := modalWidthHelp
 	if modalWidth > m.width-4 {
 		modalWidth = m.width - 4
 		colWidth = (modalWidth - 9) / 2

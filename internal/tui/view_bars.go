@@ -22,13 +22,13 @@ func renderHScrollTrack(scrollX int, maxContentW int, trackW int) string {
 	if trackW <= 0 {
 		return ""
 	}
-	if trackW < 10 || maxContentW <= trackW {
+	if trackW < minScrollTrackWidth || maxContentW <= trackW {
 		return theme.Divider.Render(strings.Repeat("─", trackW))
 	}
 
 	thumbW := trackW * trackW / maxContentW
-	if thumbW < 3 {
-		thumbW = 3
+	if thumbW < minScrollThumbWidth {
+		thumbW = minScrollThumbWidth
 	}
 	if thumbW > trackW {
 		thumbW = trackW

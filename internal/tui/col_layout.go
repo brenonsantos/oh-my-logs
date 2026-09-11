@@ -34,11 +34,11 @@ func (m Model) computeColWidthsForWidth(cols []record.Column, tableW int) []int 
 	}
 	widths := make([]int, len(cols))
 	flexIdx := -1
-	used := 3 // prefix takes 3 chars: cursor (1) + bookmark (1) + gap (1)
+	used := prefixWidth
 
-	// Each gap between columns takes 2 spaces: "  "
+	// Each gap between columns takes colGap spaces
 	if len(cols) > 1 {
-		used += (len(cols) - 1) * 2
+		used += (len(cols) - 1) * colGap
 	}
 
 	for i, col := range cols {
@@ -51,11 +51,11 @@ func (m Model) computeColWidthsForWidth(cols []record.Column, tableW int) []int 
 	}
 
 	// In narrow viewports, shrink hex or bin column if present to ensure flex column (e.g. ascii) has room
-	if flexIdx >= 0 && (tableW-used) < 15 {
+	if flexIdx >= 0 && (tableW-used) < narrowDeficitThreshold {
 		for i, col := range cols {
-			if (col.Field == "_hex" || col.Field == "_bin") && widths[i] > 18 {
-				deficit := 15 - (tableW - used)
-				shrink := widths[i] - 18
+			if (col.Field == "_hex" || col.Field == "_bin") && widths[i] > minHexBinWidth {
+				deficit := narrowDeficitThreshold - (tableW - used)
+				shrink := widths[i] - minHexBinWidth
 				if shrink > deficit {
 					shrink = deficit
 				}
@@ -68,8 +68,8 @@ func (m Model) computeColWidthsForWidth(cols []record.Column, tableW int) []int 
 
 	if flexIdx >= 0 {
 		flex := tableW - used
-		if flex < 8 {
-			flex = 8
+		if flex < minFlexColWidth {
+			flex = minFlexColWidth
 		}
 		widths[flexIdx] = flex
 	}
@@ -89,9 +89,9 @@ func (m Model) maxContentWidthForTab(tab *Tab, containerW int) int {
 	}
 	colWidths := m.computeColWidthsForWidth(cols, containerW)
 
-	fixedW := 3
+	fixedW := prefixWidth
 	if len(cols) > 1 {
-		fixedW += (len(cols) - 1) * 2
+		fixedW += (len(cols) - 1) * colGap
 	}
 
 	flexIdx := -1
@@ -187,14 +187,14 @@ func (m Model) effectiveColumnsForTab(tab *Tab) []record.Column {
 		}
 	case FormatHex:
 		baseCols = []record.Column{
-			{Field: "_len", Title: "LEN", Width: 6, Style: "identifier"},
-			{Field: "_hex", Title: "HEX DUMP", Width: 48, Style: "muted"},
+			{Field: "_len", Title: "LEN", Width: rawLenColWidth, Style: "identifier"},
+			{Field: "_hex", Title: "HEX DUMP", Width: hexDumpColWidth, Style: "muted"},
 			{Field: "_ascii", Title: "ASCII", Width: 0, Style: "primary"},
 		}
 	case FormatBinary:
 		baseCols = []record.Column{
-			{Field: "_len", Title: "LEN", Width: 6, Style: "identifier"},
-			{Field: "_bin", Title: "BINARY BITS", Width: 36, Style: "muted"},
+			{Field: "_len", Title: "LEN", Width: rawLenColWidth, Style: "identifier"},
+			{Field: "_bin", Title: "BINARY BITS", Width: binaryBitsColWidth, Style: "muted"},
 			{Field: "_ascii", Title: "ASCII", Width: 0, Style: "primary"},
 		}
 	default: // FormatParsed
@@ -212,13 +212,13 @@ func (m Model) effectiveColumnsForTab(tab *Tab) []record.Column {
 	tsCol := record.Column{
 		Field: m.tsField,
 		Title: "Time",
-		Width: 14,
+		Width: timestampColWidth,
 		Style: "timestamp",
 	}
 	deltaCol := record.Column{
 		Field: "_delta",
 		Title: "Δt",
-		Width: 10,
+		Width: deltaColWidth,
 		Style: "delta",
 	}
 
