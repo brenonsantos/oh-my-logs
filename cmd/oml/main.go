@@ -34,6 +34,9 @@ func main() {
 		flagUninstall     = flag.Bool("uninstall", false, "uninstall oml binary from system/user PATH")
 		flagUpdate        = flag.Bool("update", false, "check for and install latest oml release")
 		flagNightly       = flag.Bool("nightly", false, "use nightly build channel")
+		flagTee           = flag.String("tee", "", "stream raw incoming lines directly to specified log file")
+		flagDirectToDisk  = flag.Bool("direct-to-disk", false, "enable direct-to-disk continuous logging")
+		flagPrefix        = flag.String("prefix", "", "filename prefix for direct-to-disk logs (default: oml)")
 	)
 	flag.Parse()
 
@@ -226,6 +229,20 @@ func main() {
 		tui.SetCurrentTheme(savedSettings.Theme)
 	}
 	model := tui.New(serialCfg, profile, p, buf, src, appCfg)
+
+	if *flagPrefix != "" {
+		model.SetDirectToDiskPrefix(*flagPrefix)
+	}
+
+	if *flagTee != "" {
+		if err := model.StartDiskLogger(*flagTee); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: direct-to-disk: %v\n", err)
+		}
+	} else if *flagDirectToDisk {
+		if err := model.StartDiskLogger(""); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: direct-to-disk: %v\n", err)
+		}
+	}
 
 	prog := tea.NewProgram(
 		model,

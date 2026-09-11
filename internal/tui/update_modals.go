@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
@@ -379,5 +381,273 @@ func (m Model) handleGameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
+	return m, nil
+}
+
+// expandHomePath expands a leading ~ or ~/ to the user's home directory.
+func expandHomePath(p string) string {
+	if strings.HasPrefix(p, "~/") || p == "~" {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			if p == "~" {
+				return home
+			}
+			return filepath.Join(home, p[2:])
+		}
+	}
+	return p
+}
+
+// handleFilePickerKey handles keyboard navigation, path typing (:), prefix editing (p), and file selection.
+func (m Model) handleFilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch m.fpSubMode {
+	case fpModeTypeDir:
+		switch {
+		case msg.String() == "esc":
+			m.fpSubMode = fpModeBrowse
+			m.fpMatches = nil
+			m.fpMatchIndex = -1
+			return m, nil
+
+		case msg.String() == "tab" || msg.Type == tea.KeyTab:
+			if len(m.fpMatches) > 0 {
+				m.fpMatchIndex = (m.fpMatchIndex + 1) % len(m.fpMatches)
+				completed := m.fpMatchPrefix + m.fpMatches[m.fpMatchIndex]
+				m.fpDirInput.SetText(completed)
+			} else {
+				res := CompletePath(m.fpDirInput.Value, m.filePicker.CurrentDirectory)
+				if len(res.Matches) == 1 {
+					m.fpDirInput.SetText(res.Completed)
+					m.fpMatches = nil
+					m.fpMatchIndex = -1
+				} else if len(res.Matches) > 1 {
+					m.fpMatches = res.Matches
+					m.fpMatchPrefix = res.InputPrefix
+					if res.Completed != m.fpDirInput.Value {
+						m.fpDirInput.SetText(res.Completed)
+						m.fpMatchIndex = -1
+					} else {
+						m.fpMatchIndex = 0
+						completed := m.fpMatchPrefix + m.fpMatches[0]
+						m.fpDirInput.SetText(completed)
+					}
+				}
+			}
+
+			val := strings.TrimSpace(m.fpDirInput.Value)
+			expanded := expandHomePath(val)
+			if fi, err := os.Stat(expanded); err == nil && fi.IsDir() {
+				cleaned := filepath.Clean(expanded)
+				if cleaned != m.filePicker.CurrentDirectory {
+					m.filePicker.CurrentDirectory = cleaned
+					return m, m.filePicker.Init()
+				}
+			}
+			return m, nil
+
+		case msg.String() == "enter" || msg.Type == tea.KeyEnter:
+			m.fpMatches = nil
+			m.fpMatchIndex = -1
+			rawPath := strings.TrimSpace(m.fpDirInput.Value)
+			if rawPath != "" {
+				targetDir := expandHomePath(rawPath)
+				targetDir = filepath.Clean(targetDir)
+				wasNew := false
+				if _, err := os.Stat(targetDir); os.IsNotExist(err) {
+					wasNew = true
+				}
+				_ = os.MkdirAll(targetDir, 0o755)
+				m.filePicker.CurrentDirectory = targetDir
+				if m.fpPurpose == fpPurposeDirectToDisk && m.settings != nil {
+					m.settings.LogDir = targetDir
+				}
+				if wasNew {
+					m.message = fmt.Sprintf("✓ Created and opened %s", filepath.Base(targetDir))
+				}
+				m.fpSubMode = fpModeBrowse
+				return m, m.filePicker.Init()
+			}
+			m.fpSubMode = fpModeBrowse
+			return m, nil
+
+		default:
+			m.fpMatches = nil
+			m.fpMatchIndex = -1
+			m.fpDirInput.HandleKey(msg)
+			val := strings.TrimSpace(m.fpDirInput.Value)
+			if val != "" {
+				expanded := expandHomePath(val)
+				if fi, err := os.Stat(expanded); err == nil && fi.IsDir() {
+					cleaned := filepath.Clean(expanded)
+					if cleaned != m.filePicker.CurrentDirectory {
+						m.filePicker.CurrentDirectory = cleaned
+						return m, m.filePicker.Init()
+					}
+				}
+			}
+			return m, nil
+		}
+
+	case fpModeNewFolder:
+		switch {
+		case msg.String() == "esc":
+			m.fpSubMode = fpModeBrowse
+			return m, nil
+
+		case msg.String() == "enter" || msg.Type == tea.KeyEnter:
+			folderName := strings.TrimSpace(m.fpNewFolderInput.Value)
+			if folderName != "" {
+				newPath := filepath.Join(m.filePicker.CurrentDirectory, folderName)
+				if err := os.MkdirAll(newPath, 0o755); err != nil {
+					m.message = fmt.Sprintf("Failed to create folder: %v", err)
+				} else {
+					m.filePicker.CurrentDirectory = newPath
+					if m.fpPurpose == fpPurposeDirectToDisk && m.settings != nil {
+						m.settings.LogDir = newPath
+					}
+					m.message = fmt.Sprintf("✓ Created and opened %s", folderName)
+					m.fpSubMode = fpModeBrowse
+					return m, m.filePicker.Init()
+				}
+			}
+			m.fpSubMode = fpModeBrowse
+			return m, nil
+
+		default:
+			m.fpNewFolderInput.HandleKey(msg)
+			return m, nil
+		}
+
+	case fpModeTypePrefix:
+		switch {
+		case msg.String() == "esc":
+			m.fpSubMode = fpModeBrowse
+			return m, nil
+
+		case msg.String() == "enter" || msg.Type == tea.KeyEnter:
+			pref := strings.TrimSpace(m.fpPrefixInput.Value)
+			if pref == "" {
+				pref = "oml"
+			}
+			if m.fpPurpose == fpPurposeSaveLog {
+				m.saveLogPrefix = pref
+			} else {
+				m.directToDiskPrefix = pref
+				if m.settings != nil {
+					m.settings.LogPrefix = pref
+				}
+				m.saveSettings()
+			}
+			m.fpSubMode = fpModeBrowse
+			return m, nil
+
+		default:
+			m.fpPrefixInput.HandleKey(msg)
+			return m, nil
+		}
+
+	default: // fpModeBrowse
+		switch {
+		case msg.String() == "esc" || msg.String() == "q":
+			if m.fpPurpose == fpPurposeSaveLog {
+				m.mode = modeNormal
+				m.message = "Save log canceled"
+			} else {
+				m.mode = modeSettings
+			}
+			return m, nil
+
+		case msg.String() == ":":
+			m.fpSubMode = fpModeTypeDir
+			m.fpMatches = nil
+			m.fpMatchIndex = -1
+			cur := m.filePicker.CurrentDirectory
+			if cur != "" && !strings.HasSuffix(cur, "/") {
+				cur += "/"
+			}
+			m.fpDirInput.SetText(cur)
+			return m, nil
+
+		case msg.String() == "+" || msg.String() == "n" || msg.String() == "N":
+			m.fpSubMode = fpModeNewFolder
+			m.fpNewFolderInput.SetText("")
+			return m, nil
+
+		case msg.String() == "p" || msg.String() == "P":
+			m.fpSubMode = fpModeTypePrefix
+			m.fpPrefixInput.SetText(m.currentFilePickerPrefix())
+			return m, nil
+
+		case msg.String() == " " || msg.String() == "s" || msg.String() == "S":
+			// Select current directory as target log folder
+			return m.handleFilePickerSelected(m.filePicker.CurrentDirectory)
+
+		default:
+			var cmd tea.Cmd
+			m.filePicker, cmd = m.filePicker.Update(msg)
+			if didSelect, path := m.filePicker.DidSelectFile(msg); didSelect {
+				return m.handleFilePickerSelected(path)
+			}
+			if didSelectDisabled, path := m.filePicker.DidSelectDisabledFile(msg); didSelectDisabled {
+				m.message = fmt.Sprintf("Selected item %s cannot be used", filepath.Base(path))
+			}
+			return m, cmd
+		}
+	}
+}
+
+// handleFilePickerSelected processes a selected file or directory path.
+func (m Model) handleFilePickerSelected(path string) (Model, tea.Cmd) {
+	if path == "" {
+		if m.fpPurpose == fpPurposeSaveLog {
+			m.mode = modeNormal
+		} else {
+			m.mode = modeSettings
+		}
+		return m, nil
+	}
+
+	prefix := m.currentFilePickerPrefix()
+
+	fi, err := os.Stat(path)
+	var targetPath string
+	if err == nil && fi.IsDir() {
+		targetPath = GenerateTimestampLogPathWithPrefix(path, prefix)
+	} else {
+		targetPath = path
+	}
+
+	if m.fpPurpose == fpPurposeSaveLog {
+		// Decoupled: One-off log save does NOT mutate direct-to-disk settings
+		m.mode = modeNormal
+		cmd := m.cmdSaveLogToPath(targetPath)
+		return m, cmd
+	}
+
+	// Direct-to-disk continuous logging updates persistent settings
+	if err == nil && fi.IsDir() {
+		if m.settings != nil {
+			m.settings.LogDir = path
+			m.settings.LogPrefix = prefix
+		}
+	} else {
+		if m.settings != nil {
+			m.settings.LogDir = filepath.Dir(path)
+		}
+	}
+	m.saveSettings()
+
+	m.directToDiskPath = targetPath
+	if m.settings != nil && m.settings.DirectToDisk {
+		if err := m.StartDiskLogger(m.directToDiskPath); err != nil {
+			m.message = fmt.Sprintf("Failed to redirect logger: %v", err)
+		} else {
+			m.message = fmt.Sprintf("Logging to %s", m.diskLogger.Filename())
+		}
+	} else {
+		m.message = fmt.Sprintf("Log destination set: %s", filepath.Base(m.directToDiskPath))
+	}
+
+	m.mode = modeSettings
 	return m, nil
 }

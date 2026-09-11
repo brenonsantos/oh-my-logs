@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	tea "github.com/charmbracelet/bubbletea"
@@ -253,20 +252,40 @@ func (m *Model) recalcLayout() {
 	}
 }
 
-// cmdSaveLog saves all raw lines in the buffer to a timestamped file.
-func (m *Model) cmdSaveLog() tea.Cmd {
+// cmdSaveLogToPath saves all raw lines in the buffer to the specified file path.
+func (m *Model) cmdSaveLogToPath(path string) tea.Cmd {
 	return func() tea.Msg {
 		all := m.buffer.All()
-		name := fmt.Sprintf("oml-%s.log", time.Now().Format("2006-01-02T15-04-05"))
-		path := filepath.Join(".", name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return LogSavedMsg{Path: path, Err: fmt.Errorf("create directory: %w", err)}
+		}
 		f, err := os.Create(path)
 		if err != nil {
-			return ErrorMsg{Err: fmt.Errorf("save log: %w", err)}
+			return LogSavedMsg{Path: path, Err: fmt.Errorf("save log: %w", err)}
 		}
 		defer f.Close()
 		for _, r := range all {
-			fmt.Fprintln(f, r.Raw)
+			if _, err := fmt.Fprintln(f, r.Raw); err != nil {
+				return LogSavedMsg{Path: path, Err: fmt.Errorf("save log: %w", err)}
+			}
 		}
-		return ErrorMsg{Err: fmt.Errorf("saved %d records to %s", len(all), path)}
+		return LogSavedMsg{Path: path, Count: len(all)}
 	}
+}
+
+// cmdSaveLog saves all raw lines in the buffer to a timestamped file in the default directory.
+func (m *Model) cmdSaveLog() tea.Cmd {
+	prefix := m.directToDiskPrefix
+	if prefix == "" {
+		prefix = "oml"
+	}
+	dir := ""
+	if m.settings != nil && m.settings.LogDir != "" {
+		dir = m.settings.LogDir
+	}
+	if dir == "" {
+		dir = "."
+	}
+	path := GenerateTimestampLogPathWithPrefix(dir, prefix)
+	return m.cmdSaveLogToPath(path)
 }
