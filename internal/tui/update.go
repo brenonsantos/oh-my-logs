@@ -83,6 +83,19 @@ func tryReconnectCmd(cfg serial.Config) tea.Cmd {
 	}
 }
 
+// tryRestartProcessCmd restarts an external command process as the active source.
+func tryRestartProcessCmd(command string) tea.Cmd {
+	return func() tea.Msg {
+		src, err := serial.NewProcessSource(command)
+		if err != nil {
+			return reconnectFailedMsg{
+				reason: fmt.Sprintf("Failed to run %q: %v", command, err),
+			}
+		}
+		return sourceReadyMsg{source: src, port: command}
+	}
+}
+
 // connectCmd opens a new SerialSource asynchronously and returns a
 // sourceReadyMsg on success or an ErrorMsg on failure.
 func connectCmd(cfg serial.Config) tea.Cmd {
@@ -116,7 +129,11 @@ func (m Model) disconnect() (Model, tea.Cmd) {
 	}
 	m.connState = ConnDisconnected
 	m.connDetail = "Disconnected manually"
-	if m.serialCfg.Port != "" {
+	if m.isProcessSource {
+		m.message = "Process stopped (r to restart)"
+	} else if m.isPipeSource {
+		m.message = "Input stream stopped"
+	} else if m.serialCfg.Port != "" {
 		m.message = fmt.Sprintf("Disconnected from %s — port released (r to reconnect)", m.serialCfg.Port)
 	} else {
 		m.message = "Disconnected — port released (r to reconnect)"
@@ -168,10 +185,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.source.Stop()
 				m.source = nil
 			}
-			if !m.manualDisconnect && m.serialCfg.Port != "" && !m.isFileSource {
+			if !m.manualDisconnect && m.serialCfg.Port != "" && !m.isFileSource && !m.isProcessSource && !m.isPipeSource {
 				m.reconnecting = true
 				m.message = "Device disconnected — auto-reconnecting…"
 				return m, scheduleReconnectTick()
+			}
+			if m.isProcessSource {
+				m.message = fmt.Sprintf("Process error: %v — press 'r' to restart", msg.Err)
 			}
 			return m, nil
 		}
@@ -191,19 +211,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.source.Stop()
 				m.source = nil
 			}
-			if !m.manualDisconnect && m.serialCfg.Port != "" && !m.isFileSource {
+			if !m.manualDisconnect && m.serialCfg.Port != "" && !m.isFileSource && !m.isProcessSource && !m.isPipeSource {
 				if !m.reconnecting {
 					m.reconnecting = true
 					m.message = "Device disconnected — auto-reconnecting…"
 					return m, scheduleReconnectTick()
 				}
 			}
+			if m.isProcessSource {
+				m.message = "Process stopped — press 'r' to restart"
+			} else if m.isPipeSource {
+				m.message = "Standard input stream ended"
+			}
 		}
 		return m, nil
 
 	// ── Auto-reconnect polling ───────────────────────────────────────────────
 	case reconnectTickMsg:
-		if m.manualDisconnect || m.connState == ConnConnected || m.serialCfg.Port == "" || m.isFileSource {
+		if m.manualDisconnect || m.connState == ConnConnected || m.serialCfg.Port == "" || m.isFileSource || m.isProcessSource || m.isPipeSource {
 			m.reconnecting = false
 			return m, nil
 		}
@@ -218,7 +243,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.reason != "" {
 			m.message = msg.reason
 		}
-		if m.connState != ConnConnected && m.serialCfg.Port != "" && !m.isFileSource {
+		if m.connState != ConnConnected && m.serialCfg.Port != "" && !m.isFileSource && !m.isProcessSource && !m.isPipeSource {
 			m.reconnecting = true
 			return m, scheduleReconnectTick()
 		}
@@ -231,14 +256,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.source.Stop()
 		}
 		m.source = msg.source
-		m.serialCfg.Port = msg.port
+		if ps, ok := msg.source.(*serial.ProcessSource); ok {
+			m.isProcessSource = true
+			m.processCmd = ps.Command()
+			m.message = fmt.Sprintf("Running %s", ps.Command())
+		} else if _, ok := msg.source.(*serial.PipeSource); ok {
+			m.isPipeSource = true
+			m.message = "Streaming standard input"
+		} else {
+			m.serialCfg.Port = msg.port
+			m.message = fmt.Sprintf("Connected to %s", msg.port)
+			m.saveSettings()
+		}
 		m.connState = ConnConnected
 		m.connDetail = ""
 		m.reconnecting = false
 		m.manualDisconnect = false
 		m.mode = modeNormal
-		m.message = fmt.Sprintf("Connected to %s", msg.port)
-		m.saveSettings()
 		return m, tea.Batch(listenToSource(m.source), listenToSourceErrors(m.source))
 
 	// ── Mini-game physics tick ───────────────────────────────────────────────

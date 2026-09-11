@@ -144,24 +144,46 @@ func (m Model) viewTabBar() string {
 func (m Model) viewTitleBar() string {
 	badge := theme.TitleAppBadge.Render("OH MY LOGS")
 
-	portVal := m.serialCfg.Port
-	if portVal == "" {
-		portVal = "(no port)"
+	var srcInfo string
+	if m.isProcessSource || m.processCmd != "" {
+		cmdDisplay := m.processCmd
+		if len(cmdDisplay) > 28 {
+			cmdDisplay = cmdDisplay[:25] + "…"
+		}
+		srcInfo = theme.TitleLabel.Render("Cmd: ") + theme.TitleValue.Render(cmdDisplay)
+	} else if m.isPipeSource {
+		srcInfo = theme.TitleLabel.Render("Stream: ") + theme.TitleValue.Render("stdin")
+	} else {
+		portVal := m.serialCfg.Port
+		if portVal == "" {
+			portVal = "(no port)"
+		}
+		srcInfo = theme.TitleLabel.Render("Port: ") + theme.TitleValue.Render(portVal)
 	}
-	port := theme.TitleLabel.Render("Port: ") + theme.TitleValue.Render(portVal)
-	baud := theme.TitleLabel.Render("Baud: ") + theme.TitleValue.Render(fmt.Sprintf("%d", m.serialCfg.Baud))
 
 	var connStr string
 	switch m.connState {
 	case ConnConnected:
-		connStr = theme.TitleConnOn.Render("● Connected")
+		if m.isProcessSource {
+			connStr = theme.TitleConnOn.Render("● Running")
+		} else if m.isPipeSource {
+			connStr = theme.TitleConnOn.Render("● Streaming")
+		} else {
+			connStr = theme.TitleConnOn.Render("● Connected")
+		}
 	case ConnError:
 		connStr = theme.TitleConnErr.Render("⚠ " + m.connDetail)
 	default:
-		if m.reconnecting && m.serialCfg.Port != "" && !m.isFileSource {
+		if m.reconnecting && m.isProcessSource {
+			connStr = theme.Accent.Background(theme.TitleBg).Bold(true).Render("⟳ Restarting…")
+		} else if m.reconnecting && m.serialCfg.Port != "" && !m.isFileSource {
 			connStr = theme.Accent.Background(theme.TitleBg).Bold(true).Render("⟳ Reconnecting…")
 		} else {
-			connStr = theme.TitleConnOff.Render("○ Disconnected")
+			if m.isProcessSource {
+				connStr = theme.TitleConnOff.Render("○ Stopped")
+			} else {
+				connStr = theme.TitleConnOff.Render("○ Disconnected")
+			}
 		}
 	}
 
@@ -175,7 +197,15 @@ func (m Model) viewTitleBar() string {
 	gap := lipgloss.NewStyle().Background(theme.TitleBg).Render("    ")
 	padLeft := lipgloss.NewStyle().Background(theme.TitleBg).Render(" ")
 
-	content := padLeft + badge + " " + port + gap + baud + gap + connStr + sep + prof
+	var centerContent string
+	if m.isProcessSource || m.isPipeSource || m.isFileSource {
+		centerContent = srcInfo + gap + connStr
+	} else {
+		baud := theme.TitleLabel.Render("Baud: ") + theme.TitleValue.Render(fmt.Sprintf("%d", m.serialCfg.Baud))
+		centerContent = srcInfo + gap + baud + gap + connStr
+	}
+
+	content := padLeft + badge + " " + centerContent + sep + prof
 	if m.diskLogger != nil && m.diskLogger.IsActive() {
 		recBadge := theme.TitleConnErr.Render(fmt.Sprintf("🔴 REC: %s (%d lines)", m.diskLogger.Filename(), m.diskLogger.LinesWritten()))
 		content += sep + recBadge
@@ -200,31 +230,51 @@ func (m Model) viewEmptyState() string {
 
 	switch {
 	case m.connState != ConnConnected:
-		title = theme.Secondary.Bold(true).Render("No serial device connected")
-		if m.reconnecting && m.serialCfg.Port != "" && !m.isFileSource {
-			subtitle = theme.Muted.Render("Auto-reconnecting to ") + theme.Accent.Render(m.serialCfg.Port) +
-				theme.Muted.Render("   ·   Press ") + theme.KeyName.Render("p") +
-				theme.Muted.Render(" to select a port   ·   Press ") +
+		if m.isProcessSource || m.processCmd != "" {
+			title = theme.Secondary.Bold(true).Render("Process stopped")
+			cmdDisplay := m.processCmd
+			subtitle = theme.Muted.Render("Command: ") + theme.Accent.Render(cmdDisplay) +
+				theme.Muted.Render("   ·   Press ") + theme.KeyName.Render("r") +
+				theme.Muted.Render(" to restart   ·   Press ") +
 				theme.KeyName.Render("?") + theme.Muted.Render(" for shortcuts")
-		} else if m.serialCfg.Port != "" && !m.isFileSource {
-			statusPrefix := "Ready to connect ("
-			actionText := " to connect"
-			if m.connDetail == "Port released" {
-				statusPrefix = "Port released ("
-				actionText = " to reconnect"
-			}
-			subtitle = theme.Muted.Render(statusPrefix) + theme.Accent.Render(m.serialCfg.Port) +
-				theme.Muted.Render(")   ·   Press ") + theme.KeyName.Render("r") +
-				theme.Muted.Render(actionText) + theme.Muted.Render("   ·   Press ") +
-				theme.KeyName.Render("p") + theme.Muted.Render(" to select port")
+		} else if m.isPipeSource {
+			title = theme.Secondary.Bold(true).Render("Standard input stream ended")
+			subtitle = theme.Muted.Render("Press ") + theme.KeyName.Render("?") +
+				theme.Muted.Render(" for shortcuts   ·   Press ") +
+				theme.KeyName.Render("q") + theme.Muted.Render(" to quit")
 		} else {
-			subtitle = theme.Muted.Render("Press ") + theme.KeyName.Render("p") +
-				theme.Muted.Render(" to select a port   ·   Press ") +
-				theme.KeyName.Render("?") + theme.Muted.Render(" for shortcuts")
+			title = theme.Secondary.Bold(true).Render("No serial device connected")
+			if m.reconnecting && m.serialCfg.Port != "" && !m.isFileSource {
+				subtitle = theme.Muted.Render("Auto-reconnecting to ") + theme.Accent.Render(m.serialCfg.Port) +
+					theme.Muted.Render("   ·   Press ") + theme.KeyName.Render("p") +
+					theme.Muted.Render(" to select a port   ·   Press ") +
+					theme.KeyName.Render("?") + theme.Muted.Render(" for shortcuts")
+			} else if m.serialCfg.Port != "" && !m.isFileSource {
+				statusPrefix := "Ready to connect ("
+				actionText := " to connect"
+				if m.connDetail == "Port released" {
+					statusPrefix = "Port released ("
+					actionText = " to reconnect"
+				}
+				subtitle = theme.Muted.Render(statusPrefix) + theme.Accent.Render(m.serialCfg.Port) +
+					theme.Muted.Render(")   ·   Press ") + theme.KeyName.Render("r") +
+					theme.Muted.Render(actionText) + theme.Muted.Render("   ·   Press ") +
+					theme.KeyName.Render("p") + theme.Muted.Render(" to select port")
+			} else {
+				subtitle = theme.Muted.Render("Press ") + theme.KeyName.Render("p") +
+					theme.Muted.Render(" to select a port   ·   Press ") +
+					theme.KeyName.Render("?") + theme.Muted.Render(" for shortcuts")
+			}
 		}
 
 	case m.buffer.Len() == 0:
-		title = theme.Accent.Render("Waiting for serial data…")
+		if m.isProcessSource {
+			title = theme.Accent.Render("Waiting for process output…")
+		} else if m.isPipeSource {
+			title = theme.Accent.Render("Waiting for standard input…")
+		} else {
+			title = theme.Accent.Render("Waiting for serial data…")
+		}
 		subtitle = theme.Muted.Render("Press ") + theme.KeyName.Render("?") +
 			theme.Muted.Render(" for shortcuts")
 

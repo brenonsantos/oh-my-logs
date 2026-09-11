@@ -29,6 +29,7 @@
 - **Themes**: Multiple color schemes (Dark Slate, Monokai, Nord, Gruvbox, Tokyo Night, High Contrast).
 - **In-Place Self-Updater**: Update binary directly (`oml --update`) and uninstall (`oml --uninstall`).
 - **Direct-to-Disk Logging**: Stream incoming raw logs directly to disk without ring-buffer limits, with top-bar `🔴 REC` indicator, directory/file picker in Settings, and CLI flags (`--tee <path>`, `--direct-to-disk`).
+- **Custom Process Streams & Stdin Pipeline**: Stream logs directly from external commands (`oml --cmd "adb logcat -v threadtime"` / `--exec`) or piped standard input (`adb logcat | oml`, `cat file.log | oml`) with terminal redirection for full keyboard/mouse TUI interactivity, bi-directional stdin TX (`i`), and hot process restart (`r`).
 - **Row Detail Inspector**: View all parsed fields, pretty-printed structured payloads (automatic detection of JSON, XML, YAML, and Logfmt with syntax colorization), word-wrapped raw text, and hex preview in an interactive modal (`Enter` or `v`), with vertical scrolling (`↑`/`↓`, `PgUp`/`PgDn`), row hopping (`←`/`→`, `[`/`]`), quick bookmarking (`b`), and clipboard copy (`y`/`Y`).
 - **Mini-Games**: Built-in games (Snake, Tetris, 2048, etc.) accessible with `Ctrl+G`.
 
