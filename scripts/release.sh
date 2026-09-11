@@ -15,7 +15,7 @@ YELLOW="\033[33m"
 CYAN="\033[36m"
 RED="\033[31m"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$SCRIPT_DIR/dist"
 
 print_step() {
@@ -108,7 +108,12 @@ for TARGET in "${TARGETS[@]}"; do
     [ -f "$SCRIPT_DIR/LICENSE" ] && cp "$SCRIPT_DIR/LICENSE" "$PACKAGE_DIR/"
 
     # Copy example profiles
-    if [ -d "$SCRIPT_DIR/profiles/examples" ]; then
+    if [ -d "$SCRIPT_DIR/examples/profiles" ]; then
+        mkdir -p "$PACKAGE_DIR/examples"
+        cp -R "$SCRIPT_DIR/examples/profiles" "$PACKAGE_DIR/examples/"
+        mkdir -p "$PACKAGE_DIR/profiles"
+        cp -R "$SCRIPT_DIR/examples/profiles" "$PACKAGE_DIR/profiles/examples"
+    elif [ -d "$SCRIPT_DIR/profiles/examples" ]; then
         cp -R "$SCRIPT_DIR/profiles/examples" "$PACKAGE_DIR/profiles/"
     fi
 

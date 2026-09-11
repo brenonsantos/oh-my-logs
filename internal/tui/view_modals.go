@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/brenoniehues/oh-my-logs/internal/payload"
 	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -694,7 +695,7 @@ func (m Model) viewRowDetailModal() string {
 
 		for _, f := range fields {
 			keyStyled := theme.Primary.Render(padOrTrunc(f[0]+":", maxKeyLen+2))
-			valLines := wrapTextLines(f[1], valWidth)
+			valLines := payload.WrapTextLines(f[1], valWidth)
 			if len(valLines) == 0 {
 				contentLines = append(contentLines, "  "+keyStyled)
 			} else {
@@ -718,11 +719,11 @@ func (m Model) viewRowDetailModal() string {
 	}
 
 	if msg != "" {
-		det := DetectAndFormatPayload(msg, theme.Palette)
-		if det.Type != PayloadNone {
+		det := payload.DetectAndFormat(msg, theme.Palette.PayloadPalette())
+		if det.Type != payload.None {
 			contentLines = append(contentLines, theme.ModalSection.Render("MESSAGE & PAYLOAD")+" "+theme.Success.Bold(true).Render(fmt.Sprintf("[%s FORMATTED]", det.TypeLabel)))
 			if det.Prefix != "" {
-				for _, pl := range wrapTextLines(det.Prefix, contentWidth-2) {
+				for _, pl := range payload.WrapTextLines(det.Prefix, contentWidth-2) {
 					contentLines = append(contentLines, "  "+theme.Muted.Render(pl))
 				}
 			}
@@ -730,13 +731,13 @@ func (m Model) viewRowDetailModal() string {
 				contentLines = append(contentLines, "  "+pl)
 			}
 			if det.Suffix != "" {
-				for _, sl := range wrapTextLines(det.Suffix, contentWidth-2) {
+				for _, sl := range payload.WrapTextLines(det.Suffix, contentWidth-2) {
 					contentLines = append(contentLines, "  "+theme.Muted.Render(sl))
 				}
 			}
 		} else {
 			contentLines = append(contentLines, theme.ModalSection.Render("MESSAGE"))
-			for _, ml := range wrapTextLines(msg, contentWidth-2) {
+			for _, ml := range payload.WrapTextLines(msg, contentWidth-2) {
 				contentLines = append(contentLines, "  "+theme.Content.Render(ml))
 			}
 		}
@@ -746,7 +747,7 @@ func (m Model) viewRowDetailModal() string {
 	// ── Section 3: Raw Log ───────────────────────────────────────────────────
 	if r.Raw != "" && (len(r.Fields) > 0 || r.Raw != msg) {
 		contentLines = append(contentLines, theme.ModalSection.Render(fmt.Sprintf("RAW LOG (%d bytes)", len(r.Raw))))
-		for _, rl := range wrapTextLines(r.Raw, contentWidth-2) {
+		for _, rl := range payload.WrapTextLines(r.Raw, contentWidth-2) {
 			contentLines = append(contentLines, "  "+theme.Muted.Render(rl))
 		}
 		contentLines = append(contentLines, "")

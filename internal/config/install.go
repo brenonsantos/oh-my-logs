@@ -122,13 +122,17 @@ func InstallBinary(appCfg *AppConfig, targetDir string) (string, error) {
 	return destPath, nil
 }
 
-// CopyDefaultProfiles copies any files in local profiles/examples into targetDir without overwriting.
+// CopyDefaultProfiles copies any files in local examples/profiles into targetDir without overwriting.
 func CopyDefaultProfiles(targetDir string) int {
 	_ = os.MkdirAll(targetDir, 0o755)
-	localExamples := filepath.Join("profiles", "examples")
+	localExamples := filepath.Join("examples", "profiles")
 	entries, err := os.ReadDir(localExamples)
 	if err != nil {
-		return 0
+		localExamples = filepath.Join("profiles", "examples")
+		entries, err = os.ReadDir(localExamples)
+		if err != nil {
+			return 0
+		}
 	}
 
 	copied := 0

@@ -138,7 +138,7 @@ When set, fixed thresholds override dynamic moving-average ratios, making it ide
    - **Linux**: `~/.config/oh-my-logs/profiles/`
    - **Windows**: `%APPDATA%\oh-my-logs\profiles\`
 2. **Workspace Profiles (Local)**:
-   Profiles placed in `./profiles/` or `./profiles/examples/` relative to your current project. Marked with `[local]` in the UI.
+   Profiles placed in `./examples/profiles/` relative to your current project. Marked with `[local]` in the UI.
 
 > [!TIP]
 > **Keeping Proprietary Profiles Out of Git**:

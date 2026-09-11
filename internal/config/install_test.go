@@ -67,8 +67,8 @@ func TestCopyDefaultProfiles(t *testing.T) {
 	targetProfiles := filepath.Join(tmpDir, "profiles")
 
 	copied := config.CopyDefaultProfiles(targetProfiles)
-	// If profiles/examples exists in working dir, it should copy
-	if _, err := os.Stat(filepath.Join("profiles", "examples")); err == nil {
+	// If examples/profiles exists in working dir, it should copy
+	if _, err := os.Stat(filepath.Join("examples", "profiles")); err == nil {
 		if copied < 2 {
 			t.Errorf("expected at least 2 default profiles copied, got %d", copied)
 		}

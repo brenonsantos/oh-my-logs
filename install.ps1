@@ -160,7 +160,7 @@ if (-not (Test-Path $ProfilesDir)) {
     New-Item -ItemType Directory -Path $ProfilesDir -Force | Out-Null
 }
 
-$ExamplesDir = if ($ExtractedExamplesDir) { $ExtractedExamplesDir } elseif ($ScriptDir) { Join-Path $ScriptDir "profiles\examples" } else { "" }
+$ExamplesDir = if ($ExtractedExamplesDir) { $ExtractedExamplesDir } elseif ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "examples\profiles"))) { Join-Path $ScriptDir "examples\profiles" } elseif ($ScriptDir) { Join-Path $ScriptDir "profiles\examples" } else { "" }
 if ($ExamplesDir -and (Test-Path $ExamplesDir)) {
     $Copied = 0
     Get-ChildItem -Path $ExamplesDir -Filter "*.yaml" | ForEach-Object {
