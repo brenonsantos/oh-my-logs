@@ -346,37 +346,7 @@ func (m Model) viewSavePresetModal() string {
 	return centerBox(m.width, m.tableHeight+2, modalBox)
 }
 
-// sliceInputForWindow calculates a sliding window of maxW runes containing the cursor.
-// It returns the visible slice of text and the relative cursor position inside that slice.
-func sliceInputForWindow(text string, cursor int, maxW int) (string, int) {
-	runes := []rune(text)
-	if cursor < 0 {
-		cursor = 0
-	}
-	if cursor > len(runes) {
-		cursor = len(runes)
-	}
-	if maxW <= 0 || len(runes) <= maxW {
-		return text, cursor
-	}
 
-	start := cursor - maxW/2
-	if start < 0 {
-		start = 0
-	}
-	if start+maxW > len(runes) {
-		start = len(runes) - maxW
-	}
-	if start < 0 {
-		start = 0
-	}
-	end := start + maxW
-	if end > len(runes) {
-		end = len(runes)
-	}
-
-	return string(runes[start:end]), cursor - start
-}
 
 // viewGameModal renders the active mini-game in a centered floating container
 // sized according to the game's requested dimensions.

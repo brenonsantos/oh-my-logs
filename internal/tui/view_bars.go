@@ -564,34 +564,3 @@ func (m Model) renderKeyBarContent() string {
 	}
 }
 
-// renderInputWithCursor renders input text with an accurate visual block cursor.
-// If the cursor is at the end (pos >= len(runes)), a "█" block is appended.
-// If the cursor is over a character, that character is styled with highlighted/inverted colors.
-func renderInputWithCursor(text string, pos int, baseStyle lipgloss.Style) string {
-	runes := []rune(text)
-	if pos < 0 {
-		pos = 0
-	}
-	if pos > len(runes) {
-		pos = len(runes)
-	}
-
-	cursorCharStyle := lipgloss.NewStyle().
-		Background(colorCyan).
-		Foreground(lipgloss.Color("#000000")).
-		Bold(true)
-	cursorEndBlock := lipgloss.NewStyle().
-		Foreground(colorCyan).
-		Bold(true).
-		Render("█")
-
-	if pos >= len(runes) {
-		return baseStyle.Render(text) + cursorEndBlock
-	}
-
-	before := baseStyle.Render(string(runes[:pos]))
-	underCursor := cursorCharStyle.Render(string(runes[pos]))
-	after := baseStyle.Render(string(runes[pos+1:]))
-
-	return before + underCursor + after
-}

@@ -121,12 +121,9 @@ const (
 	SplitHorizontal                  // Stacked split (top & bottom)
 )
 
-// Tab represents an independent virtual tab with its own filter, visible records,
-// scroll position, follow state, and search state.
-type Tab struct {
-	Name           string
-	FilterRaw      string
-	Filter         *filter.Filter
+// ViewportState encapsulates the scroll, search, selection, and viewport rendering
+// state that is isolated per tab or pane.
+type ViewportState struct {
 	Visible        []record.Record
 	ScrollOffset   int
 	Follow         bool
@@ -140,6 +137,15 @@ type Tab struct {
 	CursorCol      int // character cursor column (-1 if none)
 	CharSelStart   int // character selection start (-1 if none)
 	CharSelEnd     int // character selection end (-1 if none)
+}
+
+// Tab represents an independent virtual tab with its own filter, visible records,
+// scroll position, follow state, and search state.
+type Tab struct {
+	Name      string
+	FilterRaw string
+	Filter    *filter.Filter
+	ViewportState
 }
 
 // DisplayName returns a user-friendly label for the tab.
@@ -435,15 +441,17 @@ func New(
 	}
 
 	initTab := Tab{
-		Name:          "All",
-		FilterRaw:     "",
-		Filter:        initFilter,
-		Follow:        true,
-		SelectedRow:   -1,
-		DisplayFormat: initFormat,
-		CursorCol:     -1,
-		CharSelStart:  -1,
-		CharSelEnd:    -1,
+		Name:      "All",
+		FilterRaw: "",
+		Filter:    initFilter,
+		ViewportState: ViewportState{
+			Follow:        true,
+			SelectedRow:   -1,
+			DisplayFormat: initFormat,
+			CursorCol:     -1,
+			CharSelStart:  -1,
+			CharSelEnd:    -1,
+		},
 	}
 	m.tabs = []Tab{initTab}
 	m.activeTab = 0
@@ -463,11 +471,16 @@ func (m *Model) currentTab() *Tab {
 	if len(m.tabs) == 0 {
 		initFilter, _ := filter.New("")
 		m.tabs = []Tab{{
-			Name:        "All",
-			FilterRaw:   "",
-			Filter:      initFilter,
-			Follow:      true,
-			SelectedRow: -1,
+			Name:      "All",
+			FilterRaw: "",
+			Filter:    initFilter,
+			ViewportState: ViewportState{
+				Follow:       true,
+				SelectedRow:  -1,
+				CursorCol:    -1,
+				CharSelStart: -1,
+				CharSelEnd:   -1,
+			},
 		}}
 		m.activeTab = 0
 		m.splitLeftTab = 0
@@ -525,12 +538,17 @@ func (m *Model) toggleSplit(mode SplitMode) {
 		// Automatically create a second tab if only 1 exists
 		initFilter, _ := filter.New("")
 		m.tabs = append(m.tabs, Tab{
-			Name:        "Tab 2",
-			FilterRaw:   "",
-			Filter:      initFilter,
-			Visible:     m.buffer.All(),
-			Follow:      true,
-			SelectedRow: -1,
+			Name:      "Tab 2",
+			FilterRaw: "",
+			Filter:    initFilter,
+			ViewportState: ViewportState{
+				Visible:      m.buffer.All(),
+				Follow:       true,
+				SelectedRow:  -1,
+				CursorCol:    -1,
+				CharSelStart: -1,
+				CharSelEnd:   -1,
+			},
 		})
 		m.splitLeftTab = 0
 		m.splitRightTab = 1
@@ -684,6 +702,45 @@ func (m *Model) activeDataHeight() int {
 	return m.paneDataHeight(m.activePane)
 }
 
+// exportViewport captures the active tab/viewport state from Model.
+func (m *Model) exportViewport() ViewportState {
+	return ViewportState{
+		Visible:        m.visible,
+		ScrollOffset:   m.scrollOffset,
+		Follow:         m.follow,
+		SearchInput:    m.searchInput,
+		SearchMatches:  m.searchMatches,
+		SearchCursor:   m.searchCursor,
+		SelectedRow:    m.selectedRow,
+		BookmarkedOnly: m.bookmarkedOnly,
+		DisplayFormat:  m.displayFormat,
+		ScrollX:        m.scrollX,
+		CursorCol:      m.cursorCol,
+		CharSelStart:   m.charSelStart,
+		CharSelEnd:     m.charSelEnd,
+	}
+}
+
+// importViewport restores active viewport state into Model from vs.
+func (m *Model) importViewport(vs ViewportState) {
+	m.visible = vs.Visible
+	m.scrollOffset = vs.ScrollOffset
+	m.follow = vs.Follow
+	m.searchInput = vs.SearchInput
+	m.searchPos = len([]rune(vs.SearchInput))
+	m.searchMatches = vs.SearchMatches
+	m.searchCursor = vs.SearchCursor
+	m.selectedRow = vs.SelectedRow
+	m.bookmarkedOnly = vs.BookmarkedOnly
+	m.displayFormat = vs.DisplayFormat
+	m.scrollX = vs.ScrollX
+	m.cursorCol = vs.CursorCol
+	m.charSelStart = vs.CharSelStart
+	m.charSelEnd = vs.CharSelEnd
+	m.selectionStart = -1
+	m.selectionEnd = -1
+}
+
 // syncActiveTabToModel saves the active model's interactive state back to the active tab struct.
 func (m *Model) syncActiveTabToModel() {
 	if len(m.tabs) == 0 {
@@ -692,19 +749,7 @@ func (m *Model) syncActiveTabToModel() {
 	cur := m.currentTab()
 	cur.Filter = m.activeFilter
 	cur.FilterRaw = m.filterInput
-	cur.Visible = m.visible
-	cur.ScrollOffset = m.scrollOffset
-	cur.Follow = m.follow
-	cur.SearchInput = m.searchInput
-	cur.SearchMatches = m.searchMatches
-	cur.SearchCursor = m.searchCursor
-	cur.SelectedRow = m.selectedRow
-	cur.BookmarkedOnly = m.bookmarkedOnly
-	cur.DisplayFormat = m.displayFormat
-	cur.ScrollX = m.scrollX
-	cur.CursorCol = m.cursorCol
-	cur.CharSelStart = m.charSelStart
-	cur.CharSelEnd = m.charSelEnd
+	cur.ViewportState = m.exportViewport()
 }
 
 // syncModelToActiveTab updates the model's active view state from the current tab.
@@ -713,22 +758,7 @@ func (m *Model) syncModelToActiveTab() {
 	m.activeFilter = cur.Filter
 	m.filterInput = cur.FilterRaw
 	m.filterCursor = len([]rune(m.filterInput))
-	m.visible = cur.Visible
-	m.scrollOffset = cur.ScrollOffset
-	m.follow = cur.Follow
-	m.searchInput = cur.SearchInput
-	m.searchPos = len([]rune(m.searchInput))
-	m.searchMatches = cur.SearchMatches
-	m.searchCursor = cur.SearchCursor
-	m.selectedRow = cur.SelectedRow
-	m.bookmarkedOnly = cur.BookmarkedOnly
-	m.displayFormat = cur.DisplayFormat
-	m.scrollX = cur.ScrollX
-	m.cursorCol = cur.CursorCol
-	m.charSelStart = cur.CharSelStart
-	m.charSelEnd = cur.CharSelEnd
-	m.selectionStart = -1
-	m.selectionEnd = -1
+	m.importViewport(cur.ViewportState)
 }
 
 // switchTab changes the active tab and synchronizes state.

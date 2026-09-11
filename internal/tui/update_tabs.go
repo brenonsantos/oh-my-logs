@@ -83,9 +83,15 @@ func (m Model) handleCreateNewTab() (tea.Model, tea.Cmd) {
 	newIdx := len(m.tabs)
 	name := fmt.Sprintf("Tab %d", newIdx+1)
 	newTab := Tab{
-		Name:    name,
-		Follow:  true,
-		Visible: m.buffer.All(),
+		Name: name,
+		ViewportState: ViewportState{
+			Follow:       true,
+			Visible:      m.buffer.All(),
+			SelectedRow:  -1,
+			CursorCol:    -1,
+			CharSelStart: -1,
+			CharSelEnd:   -1,
+		},
 	}
 	if len(newTab.Visible) > m.activeDataHeight() {
 		newTab.ScrollOffset = len(newTab.Visible) - m.activeDataHeight()
