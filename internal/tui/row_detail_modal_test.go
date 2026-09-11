@@ -312,3 +312,48 @@ func TestRowDetailModal_ViewRendering(t *testing.T) {
 		t.Errorf("expected 'HEX PREVIEW' in View, got:\n%s", viewStr)
 	}
 }
+
+func TestRowDetailModal_MultiFormatRendering(t *testing.T) {
+	// XML record
+	xmlRec := record.Record{
+		ID:     201,
+		Fields: map[string]string{"message": `<response status="ok"><data value="true"/></response>`},
+		Raw:    `<response status="ok"><data value="true"/></response>`,
+	}
+	m := newTestModelWithRecords([]record.Record{xmlRec})
+	m.selectedRow = 0
+	m.mode = modeRowDetail
+	viewXML := m.View()
+	if !strings.Contains(viewXML, "XML FORMATTED") {
+		t.Errorf("expected '[XML FORMATTED]' in View for XML, got:\n%s", viewXML)
+	}
+
+	// YAML record
+	yamlRec := record.Record{
+		ID:     202,
+		Fields: map[string]string{"message": "server:\n  port: 8080\n  host: 127.0.0.1"},
+		Raw:    "server:\n  port: 8080\n  host: 127.0.0.1",
+	}
+	m = newTestModelWithRecords([]record.Record{yamlRec})
+	m.selectedRow = 0
+	m.mode = modeRowDetail
+	viewYAML := m.View()
+	if !strings.Contains(viewYAML, "YAML FORMATTED") {
+		t.Errorf("expected '[YAML FORMATTED]' in View for YAML, got:\n%s", viewYAML)
+	}
+
+	// Logfmt record
+	logfmtRec := record.Record{
+		ID:     203,
+		Fields: map[string]string{"message": `level=info msg="sync complete" bytes=1024 success=true`},
+		Raw:    `level=info msg="sync complete" bytes=1024 success=true`,
+	}
+	m = newTestModelWithRecords([]record.Record{logfmtRec})
+	m.selectedRow = 0
+	m.mode = modeRowDetail
+	viewLogfmt := m.View()
+	if !strings.Contains(viewLogfmt, "LOGFMT FORMATTED") {
+		t.Errorf("expected '[LOGFMT FORMATTED]' in View for Logfmt, got:\n%s", viewLogfmt)
+	}
+}
+

@@ -153,12 +153,12 @@ func FormattedRecordDetail(r record.Record, tsField string, bookmarked bool) str
 
 	if msg != "" {
 		sb.WriteString("\nMessage:\n")
-		det := DetectAndFormatJSON(msg)
-		if det.HasJSON {
+		det := DetectAndFormatPayload(msg, Palette{})
+		if det.Type != PayloadNone {
 			if det.Prefix != "" {
 				sb.WriteString(det.Prefix + "\n")
 			}
-			sb.WriteString(det.IndentedJSON + "\n")
+			sb.WriteString(det.FormattedText + "\n")
 			if det.Suffix != "" {
 				sb.WriteString(det.Suffix + "\n")
 			}

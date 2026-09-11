@@ -79,3 +79,45 @@ func TestFormattedRecordDetail(t *testing.T) {
 		t.Errorf("missing raw log in detail:\n%s", detail)
 	}
 }
+
+func TestFormattedRecordDetail_MultiFormat(t *testing.T) {
+	// 1. XML Record
+	xmlRec := record.Record{
+		ID: 101,
+		Fields: map[string]string{
+			"level":   "INFO",
+			"message": `<response status="ok"><id>42</id></response>`,
+		},
+	}
+	xmlDetail := FormattedRecordDetail(xmlRec, "", false)
+	if !strings.Contains(xmlDetail, "<id>42</id>") {
+		t.Errorf("expected formatted XML in detail:\n%s", xmlDetail)
+	}
+
+	// 2. YAML Record
+	yamlRec := record.Record{
+		ID: 102,
+		Fields: map[string]string{
+			"level":   "DEBUG",
+			"message": "server:\n  host: 127.0.0.1\n  port: 9000",
+		},
+	}
+	yamlDetail := FormattedRecordDetail(yamlRec, "", false)
+	if !strings.Contains(yamlDetail, "host: 127.0.0.1") {
+		t.Errorf("expected formatted YAML in detail:\n%s", yamlDetail)
+	}
+
+	// 3. Logfmt Record
+	logfmtRec := record.Record{
+		ID: 103,
+		Fields: map[string]string{
+			"level":   "INFO",
+			"message": `module=auth action=login user="john doe" status=success`,
+		},
+	}
+	logfmtDetail := FormattedRecordDetail(logfmtRec, "", false)
+	if !strings.Contains(logfmtDetail, "module") || !strings.Contains(logfmtDetail, "john doe") {
+		t.Errorf("expected formatted Logfmt in detail:\n%s", logfmtDetail)
+	}
+}
+

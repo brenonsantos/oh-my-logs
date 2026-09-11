@@ -718,17 +718,16 @@ func (m Model) viewRowDetailModal() string {
 	}
 
 	if msg != "" {
-		det := DetectAndFormatJSON(msg)
-		if det.HasJSON {
-			contentLines = append(contentLines, theme.ModalSection.Render("MESSAGE & PAYLOAD")+" "+theme.Success.Bold(true).Render("[JSON FORMATTED]"))
+		det := DetectAndFormatPayload(msg, theme.Palette)
+		if det.Type != PayloadNone {
+			contentLines = append(contentLines, theme.ModalSection.Render("MESSAGE & PAYLOAD")+" "+theme.Success.Bold(true).Render(fmt.Sprintf("[%s FORMATTED]", det.TypeLabel)))
 			if det.Prefix != "" {
 				for _, pl := range wrapTextLines(det.Prefix, contentWidth-2) {
 					contentLines = append(contentLines, "  "+theme.Muted.Render(pl))
 				}
 			}
-			colorizedJSON := ColorizeJSON(det.IndentedJSON, theme.Palette)
-			for _, jl := range strings.Split(colorizedJSON, "\n") {
-				contentLines = append(contentLines, "  "+jl)
+			for _, pl := range det.ColorizedLines {
+				contentLines = append(contentLines, "  "+pl)
 			}
 			if det.Suffix != "" {
 				for _, sl := range wrapTextLines(det.Suffix, contentWidth-2) {
