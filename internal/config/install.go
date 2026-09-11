@@ -114,9 +114,9 @@ func InstallBinary(appCfg *AppConfig, targetDir string) (string, error) {
 		_ = os.Chmod(destPath, 0o755)
 	}
 
-	// Ensure profiles directory exists if configured
+	// Copy default curated profiles to global directory if present and not yet installed
 	if appCfg != nil && appCfg.ProfilesDir != "" {
-		_ = os.MkdirAll(appCfg.ProfilesDir, 0o755)
+		CopyDefaultProfiles(appCfg.ProfilesDir)
 	}
 
 	return destPath, nil

@@ -119,6 +119,15 @@ if ($SourceBinary -and (Test-Path $SourceBinary)) {
             exit 1
         }
         $SourceBinary = $FoundBinary.FullName
+
+        # Locate profiles in extracted folder
+        $FoundProfiles = Get-ChildItem -Path $TempDir -Recurse -Directory -Filter "profiles" | Select-Object -First 1
+        if (-not $FoundProfiles) {
+            $FoundProfiles = Get-ChildItem -Path $TempDir -Recurse -Directory -Filter "examples" | Select-Object -First 1
+        }
+        if ($FoundProfiles) {
+            $ExtractedProfilesDir = $FoundProfiles.FullName
+        }
     } catch {
         Write-Error "Failed to download release: $_"
         exit 1
@@ -146,9 +155,24 @@ if (-not $AlreadyInPath) {
     Write-Success "$InstallDir is already in User PATH"
 }
 
-# 5. Ensure profiles directory exists
+# 5. Install default curated profiles (Zephyr, Logcat, Raw)
 if (-not (Test-Path $ProfilesDir)) {
     New-Item -ItemType Directory -Path $ProfilesDir -Force | Out-Null
+}
+
+$ProfilesSource = if ($ExtractedProfilesDir) { $ExtractedProfilesDir } elseif ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "examples\profiles"))) { Join-Path $ScriptDir "examples\profiles" } else { "" }
+if ($ProfilesSource -and (Test-Path $ProfilesSource)) {
+    $Copied = 0
+    Get-ChildItem -Path $ProfilesSource -Filter "*.yaml" | ForEach-Object {
+        $DestFile = Join-Path $ProfilesDir $_.Name
+        if (-not (Test-Path $DestFile)) {
+            Copy-Item -Path $_.FullName -Destination $DestFile
+            $Copied++
+        }
+    }
+    if ($Copied -gt 0) {
+        Write-Success "Installed $Copied default profile(s) to $ProfilesDir"
+    }
 }
 
 Write-Host "`noh-my-logs is ready to use!" -ForegroundColor Green

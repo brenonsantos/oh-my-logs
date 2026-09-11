@@ -48,13 +48,9 @@ func TestInstallAndUninstallBinary(t *testing.T) {
 		t.Fatalf("installed binary not found: %v", err)
 	}
 
-	// Verify that example profiles are NOT copied during installation
-	entries, err := os.ReadDir(appCfg.ProfilesDir)
-	if err != nil {
-		t.Fatalf("failed to read profiles directory: %v", err)
-	}
-	if len(entries) != 0 {
-		t.Errorf("expected 0 profiles in profiles dir on clean install, got %d", len(entries))
+	// Verify that profiles directory is initialized
+	if _, err := os.Stat(appCfg.ProfilesDir); err != nil {
+		t.Fatalf("profiles directory not created: %v", err)
 	}
 
 	// Test Uninstall
