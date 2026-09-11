@@ -98,7 +98,7 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeNormal
 		return m, nil
 	}
-	if m.mode == modePortPicker || m.mode == modeProfilePicker || m.mode == modeFilterPresets || m.mode == modeSavePresetPrompt || m.mode == modeGame || m.mode == modeTXInput {
+	if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
 		return m, nil
 	}
 
@@ -362,6 +362,10 @@ func (m Model) handleStatusBarMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) 
 }
 
 func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+		return m, nil
+	}
+
 	// Dragging vertical scrollbar
 	if msg.X >= m.tableWidth()-2 && len(m.visible) > m.tableHeight && m.tableHeight > 1 {
 		dataStartY := m.tableDataStartY()
@@ -451,6 +455,9 @@ func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleMouseRelease(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+		return m, nil
+	}
 	if start, end := m.selectionRange(); start >= 0 && end >= 0 {
 		m.selectedRow = m.selectionEnd
 		m.message = m.selectionMessage(end-start+1, "press y to copy")

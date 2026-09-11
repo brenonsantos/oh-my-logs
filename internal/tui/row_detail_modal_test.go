@@ -370,3 +370,37 @@ func TestRowDetailModal_MultiFormatRendering(t *testing.T) {
 	}
 }
 
+func TestRowDetailModal_MouseClickDoesNotSelectRow(t *testing.T) {
+	records := []record.Record{
+		{ID: 1, Raw: "row 0", Timestamp: time.Now()},
+		{ID: 2, Raw: "row 1", Timestamp: time.Now()},
+		{ID: 3, Raw: "row 2", Timestamp: time.Now()},
+		{ID: 4, Raw: "row 3", Timestamp: time.Now()},
+	}
+	m := newTestModelWithRecords(records)
+	m.selectedRow = 1 // Row 1 is selected
+	m.mode = modeRowDetail
+
+	// Click on row 3 area (e.g. Y = 6)
+	clickMsg := tea.MouseMsg{
+		X:      10,
+		Y:      6,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	}
+
+	updated, _ := m.Update(clickMsg)
+	m = updated.(Model)
+
+	// selectedRow must remain row 1, NOT changed to row 3!
+	if m.selectedRow != 1 {
+		t.Errorf("expected selectedRow to remain 1, but got %d", m.selectedRow)
+	}
+
+	// Mode must remain modeRowDetail
+	if m.mode != modeRowDetail {
+		t.Errorf("expected mode to remain modeRowDetail, but got %v", m.mode)
+	}
+}
+
+

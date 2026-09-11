@@ -255,6 +255,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Button {
 		case tea.MouseButtonWheelUp:
 			if msg.Shift {
+				if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+					return m, nil
+				}
 				if m.scrollX > 0 {
 					m.scrollX -= 6
 					m.clampScrollX()
@@ -298,6 +301,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case tea.MouseButtonWheelDown:
 			if msg.Shift {
+				if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+					return m, nil
+				}
 				m.scrollX += 6
 				m.clampScrollX()
 				if m.splitMode != SplitNone {
@@ -338,6 +344,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case tea.MouseButtonWheelLeft:
+			if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+				return m, nil
+			}
 			if m.scrollX > 0 {
 				m.scrollX -= 6
 				m.clampScrollX()
@@ -348,6 +357,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case tea.MouseButtonWheelRight:
+			if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+				return m, nil
+			}
 			m.scrollX += 6
 			m.clampScrollX()
 			if m.splitMode != SplitNone {
