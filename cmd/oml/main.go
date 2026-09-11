@@ -212,9 +212,9 @@ func main() {
 		}
 	} else if savedSettings != nil && savedSettings.Port != "" {
 		serialCfg.Port = savedSettings.Port
-		// Auto-connect to last used port if device is plugged in.
-		// If disconnected, src remains nil and TUI displays disconnected empty state.
-		src, _ = serial.NewSerialSource(serialCfg)
+		// Keep last used port pre-configured in settings, but start in clean
+		// disconnected state so launch does not lock busy ports or loop.
+		// User can press 'r' to connect when ready.
 	}
 
 	// ── Ring buffer ───────────────────────────────────────────────────────────

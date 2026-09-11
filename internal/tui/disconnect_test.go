@@ -218,8 +218,15 @@ func TestViewBars_DisconnectedRendering(t *testing.T) {
 	}
 
 	emptyState := m.viewEmptyState()
-	if !strings.Contains(emptyState, "Port released") || !strings.Contains(emptyState, "COM1") {
-		t.Errorf("expected emptyState to announce port released for COM1, got:\n%s", emptyState)
+	if !strings.Contains(emptyState, "Ready to connect") || !strings.Contains(emptyState, "COM1") {
+		t.Errorf("expected emptyState to announce ready to connect for COM1, got:\n%s", emptyState)
+	}
+
+	// 3. Port released state (e.g. after pressing 'D')
+	m.connDetail = "Port released"
+	emptyStateReleased := m.viewEmptyState()
+	if !strings.Contains(emptyStateReleased, "Port released") || !strings.Contains(emptyStateReleased, "COM1") {
+		t.Errorf("expected emptyState to announce port released for COM1, got:\n%s", emptyStateReleased)
 	}
 }
 
@@ -302,5 +309,53 @@ func TestDisconnect_SuppressesSubsequentAutoReconnectMessages(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Fatalf("expected tryReconnectCmd to be scheduled after 'r'")
+	}
+}
+
+func TestDefaultDisconnectedOnLaunch(t *testing.T) {
+	cfg := serial.Config{Port: "/dev/ttyUSB0", Baud: 115200}
+	buf := record.NewBuffer(100)
+	m := New(cfg, nil, nil, buf, nil, nil)
+	m.width = 100
+	m.height = 30
+	m.tableHeight = 23
+
+	// 1. Verify initial model state is disconnected and not auto-reconnecting
+	if m.connState != ConnDisconnected {
+		t.Errorf("expected connState to be ConnDisconnected, got %v", m.connState)
+	}
+	if m.reconnecting {
+		t.Errorf("expected reconnecting to be false on launch, got true")
+	}
+	if !m.manualDisconnect {
+		t.Errorf("expected manualDisconnect to be true on launch without active source")
+	}
+
+	// 2. Init() should NOT schedule any reconnect ticks
+	initCmd := m.Init()
+	if initCmd != nil {
+		t.Errorf("expected Init() to return nil when launched disconnected, got %v", initCmd)
+	}
+
+	// 3. View should show ready to connect with the configured port
+	emptyView := m.viewEmptyState()
+	if !strings.Contains(emptyView, "Ready to connect (/dev/ttyUSB0)") {
+		t.Errorf("expected empty state to show 'Ready to connect (/dev/ttyUSB0)', got:\n%s", emptyView)
+	}
+	if !strings.Contains(emptyView, "Press r to connect") {
+		t.Errorf("expected empty state to show 'Press r to connect', got:\n%s", emptyView)
+	}
+
+	// 4. Pressing 'r' initiates connection
+	mMod, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = mMod.(Model)
+	if m.manualDisconnect {
+		t.Errorf("expected manualDisconnect to be reset to false after 'r'")
+	}
+	if !m.reconnecting {
+		t.Errorf("expected reconnecting to be true after pressing 'r'")
+	}
+	if cmd == nil {
+		t.Errorf("expected tryReconnectCmd to be returned after pressing 'r'")
 	}
 }
