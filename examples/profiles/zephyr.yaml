@@ -16,16 +16,22 @@ name: Zephyr
 parser:
   type: regex
   patterns:
-    # 1. Standard Zephyr verbose logging: [<uptime>] <<level>> [module:] message
-    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?:(?P<module>[a-zA-Z0-9_.-]+):\s+)?(?P<message>.*)$'
+    # 1. Standard Zephyr with bracketed module: [uptime] <level> [module]: message
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+\[(?P<module>[^\]]+)\]:\s*(?P<message>.*)$'
 
-    # 2. Minimal Zephyr with bracketed module: [<time> -> ]<level>: [<module>] message
+    # 2. Standard Zephyr with identifier module: [uptime] <level> module: message
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?P<module>[a-zA-Z0-9_.-]+):\s*(?P<message>.*)$'
+
+    # 3. Standard Zephyr general message (no module): [uptime] <level> message
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?P<message>.*)$'
+
+    # 4. Minimal Zephyr with bracketed module: [<time> -> ]<level>: [<module>] message
     - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+\[(?P<module>[^\]]+)\]\s*:?\s*(?P<message>.*)$'
 
-    # 3. Minimal Zephyr with identifier module: [<time> -> ]<level>: <module>: message
+    # 5. Minimal Zephyr with identifier module: [<time> -> ]<level>: module: message
     - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+(?P<module>[a-zA-Z0-9_.-]+):\s+(?P<message>.*)$'
 
-    # 4. Minimal Zephyr general message (no module): [<time> -> ]<level>: message
+    # 6. Minimal Zephyr general message (no module): [<time> -> ]<level>: message
     - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+(?P<message>.*)$'
 
 columns:

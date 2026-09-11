@@ -287,7 +287,9 @@ name: Zephyr
 parser:
   type: regex
   patterns:
-    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?:(?P<module>[a-zA-Z0-9_.-]+):\s+)?(?P<message>.*)$'
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+\[(?P<module>[^\]]+)\]:\s*(?P<message>.*)$'
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?P<module>[a-zA-Z0-9_.-]+):\s*(?P<message>.*)$'
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?P<message>.*)$'
     - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+\[(?P<module>[^\]]+)\]\s*:?\s*(?P<message>.*)$'
     - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+(?P<module>[a-zA-Z0-9_.-]+):\s+(?P<message>.*)$'
     - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+(?P<message>.*)$'
@@ -354,6 +356,13 @@ func TestLoadProfile_Zephyr(t *testing.T) {
 			level:   "inf",
 			module:  "fs_nvs",
 			message: "16 Sectors of 4096 bytes",
+		},
+		{
+			line:    "[    867.545] <dbg> [lib-mqtt]: mqtt_client_adapter.cpp: connected",
+			uptime:  "867.545",
+			level:   "dbg",
+			module:  "lib-mqtt",
+			message: "mqtt_client_adapter.cpp: connected",
 		},
 		{
 			line:    "[      5.200] <wrn> net_core: Network interface initialization timed out",
