@@ -1,13 +1,38 @@
 name: Zephyr
 
-# Zephyr RTOS log profile
+# Zephyr RTOS log profile (Standard formatted and Minimal UART logging)
 # Supports:
+#   # Standard format:
 #   [00:00:03.165,977] <err> ext_log_system: critical level log
 #   [      5.182] <inf> fs_nvs: 16 Sectors of 4096 bytes
 #   [   1.234] <dbg> Message without module
+#   # Minimal format:
+#   D: pmhw: wkup_pin_config
+#   D: [ServiceManager] State Updated: 3
+#   I: 16 Sectors of 4096 bytes
+#   E: failed to create directory (-17)
+#   # With optional host timestamp:
+#   14:17:31:258 -> D: pmhw: wkup_pin_config
 parser:
   type: regex
-  pattern: '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?:(?P<module>[a-zA-Z0-9_.-]+):\s+)?(?P<message>.*)$'
+  patterns:
+    # 1. Standard Zephyr with bracketed module: [uptime] <level> [module]: message
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+\[(?P<module>[^\]]+)\]:\s*(?P<message>.*)$'
+
+    # 2. Standard Zephyr with identifier module: [uptime] <level> module: message
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?P<module>[a-zA-Z0-9_.-]+):\s*(?P<message>.*)$'
+
+    # 3. Standard Zephyr general message (no module): [uptime] <level> message
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?P<message>.*)$'
+
+    # 4. Minimal Zephyr with bracketed module: [<time> -> ]<level>: [<module>] message
+    - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+\[(?P<module>[^\]]+)\]\s*:?\s*(?P<message>.*)$'
+
+    # 5. Minimal Zephyr with identifier module: [<time> -> ]<level>: module: message
+    - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+(?P<module>[a-zA-Z0-9_.-]+):\s+(?P<message>.*)$'
+
+    # 6. Minimal Zephyr general message (no module): [<time> -> ]<level>: message
+    - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+(?P<message>.*)$'
 
 columns:
   - field: uptime
@@ -24,10 +49,22 @@ columns:
       wrn: yellow
       inf: cyan
       dbg: gray
+      ERR: red
+      WRN: yellow
+      INF: cyan
+      DBG: gray
+      E: red
+      W: yellow
+      I: cyan
+      D: gray
+      e: red
+      w: yellow
+      i: cyan
+      d: gray
 
   - field: module
     title: Module
-    width: 16
+    width: 22
     style: identifier
 
   - field: message

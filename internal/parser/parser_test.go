@@ -112,6 +112,52 @@ func TestRegexParser_InvalidPattern(t *testing.T) {
 	}
 }
 
+func TestRegexParser_EmptyPatterns(t *testing.T) {
+	if _, err := parser.NewRegexParser(); err == nil {
+		t.Error("expected error when no patterns provided")
+	}
+	if _, err := parser.NewRegexParser("", ""); err == nil {
+		t.Error("expected error when only empty patterns provided")
+	}
+}
+
+func TestRegexParser_MultiplePatterns(t *testing.T) {
+	p, err := parser.NewRegexParser(
+		`^(?P<time>\d{2}:\d{2})\s+\[(?P<level>\w+)\]\s+(?P<message>.*)$`,
+		`^(?P<level>\w+):(?P<time>\d{2}:\d{2}):(?P<message>.*)$`,
+	)
+	if err != nil {
+		t.Fatalf("NewRegexParser error: %v", err)
+	}
+
+	// First pattern match
+	r1, err := p.Parse("12:30 [INFO] First message")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if r1.Fields["time"] != "12:30" || r1.Fields["level"] != "INFO" || r1.Fields["message"] != "First message" {
+		t.Errorf("r1 parsed incorrectly: %+v", r1.Fields)
+	}
+
+	// Fallback pattern match
+	r2, err := p.Parse("WARN:12:31:Second message")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if r2.Fields["time"] != "12:31" || r2.Fields["level"] != "WARN" || r2.Fields["message"] != "Second message" {
+		t.Errorf("r2 parsed incorrectly: %+v", r2.Fields)
+	}
+
+	// Neither matches
+	r3, err := p.Parse("Just an unformatted line")
+	if err == nil {
+		t.Error("expected error for unmatched line")
+	}
+	if r3.Fields["message"] != "Just an unformatted line" {
+		t.Errorf("expected fallback message, got %q", r3.Fields["message"])
+	}
+}
+
 // ── Profile loading ───────────────────────────────────────────────────────────
 
 const validProfileYAML = `
@@ -240,7 +286,13 @@ const zephyrTestProfileYAML = `
 name: Zephyr
 parser:
   type: regex
-  pattern: '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?:(?P<module>[a-zA-Z0-9_.-]+):\s+)?(?P<message>.*)$'
+  patterns:
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+\[(?P<module>[^\]]+)\]:\s*(?P<message>.*)$'
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?P<module>[a-zA-Z0-9_.-]+):\s*(?P<message>.*)$'
+    - '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?P<message>.*)$'
+    - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+\[(?P<module>[^\]]+)\]\s*:?\s*(?P<message>.*)$'
+    - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+(?P<module>[a-zA-Z0-9_.-]+):\s+(?P<message>.*)$'
+    - '^(?:(?P<uptime>\d{2}:\d{2}:\d{2}[:.]\d{3})\s+->\s+)?(?P<level>[DIWE]):\s+(?P<message>.*)$'
 columns:
   - field: uptime
     title: Uptime
@@ -255,9 +307,13 @@ columns:
       wrn: yellow
       inf: cyan
       dbg: gray
+      E: red
+      W: yellow
+      I: cyan
+      D: gray
   - field: module
     title: Module
-    width: 16
+    width: 22
     style: identifier
   - field: message
     title: Message
@@ -279,7 +335,7 @@ func TestLoadProfile_Zephyr(t *testing.T) {
 		t.Fatalf("failed to build parser: %v", err)
 	}
 
-	// 1. Test standard generic Zephyr log lines (both formatted timestamp and seconds format)
+	// 1. Test standard generic Zephyr log lines and minimal UART lines
 	testCases := []struct {
 		line    string
 		uptime  string
@@ -302,6 +358,13 @@ func TestLoadProfile_Zephyr(t *testing.T) {
 			message: "16 Sectors of 4096 bytes",
 		},
 		{
+			line:    "[    867.545] <dbg> [lib-mqtt]: mqtt_client_adapter.cpp: connected",
+			uptime:  "867.545",
+			level:   "dbg",
+			module:  "lib-mqtt",
+			message: "mqtt_client_adapter.cpp: connected",
+		},
+		{
 			line:    "[      5.200] <wrn> net_core: Network interface initialization timed out",
 			uptime:  "5.200",
 			level:   "wrn",
@@ -314,6 +377,50 @@ func TestLoadProfile_Zephyr(t *testing.T) {
 			level:   "inf",
 			module:  "",
 			message: "Booting without module",
+		},
+		// Minimal Zephyr logging cases:
+		{
+			line:    "D: pmhw: wkup_pin_config",
+			uptime:  "",
+			level:   "D",
+			module:  "pmhw",
+			message: "wkup_pin_config",
+		},
+		{
+			line:    "D: [ServiceManager] State Updated: 3",
+			uptime:  "",
+			level:   "D",
+			module:  "ServiceManager",
+			message: "State Updated: 3",
+		},
+		{
+			line:    "I: 16 Sectors of 4096 bytes",
+			uptime:  "",
+			level:   "I",
+			module:  "",
+			message: "16 Sectors of 4096 bytes",
+		},
+		{
+			line:    "E: failed to create directory (-17)",
+			uptime:  "",
+			level:   "E",
+			module:  "",
+			message: "failed to create directory (-17)",
+		},
+		// Minimal Zephyr with optional host capture timestamp:
+		{
+			line:    "14:17:31:258 -> D: pmhw: wkup_pin_config",
+			uptime:  "14:17:31:258",
+			level:   "D",
+			module:  "pmhw",
+			message: "wkup_pin_config",
+		},
+		{
+			line:    "14:18:07:959 -> I: LittleFS version 2.11, disk version 2.1",
+			uptime:  "14:18:07:959",
+			level:   "I",
+			module:  "",
+			message: "LittleFS version 2.11, disk version 2.1",
 		},
 	}
 
@@ -351,12 +458,16 @@ const logcatTestProfileYAML = `
 name: Logcat
 parser:
   type: regex
-  pattern: '^(?:(?P<time>(?:\d{2}-\d{2}\s+)?\d{2}:\d{2}:\d{2}\.\d{3}))\s+(?P<pid>\d+)\s+(?P<tid>\d+)\s+(?P<level>[VDIWEAFvdiweaf])\s+(?:(?P<tag>[^:\r\n]+?):\s+)?(?P<message>.*)$'
+  patterns:
+    # 1. threadtime format: [MM-DD ]HH:MM:SS.mmm PID TID Level Tag: Message
+    - '^(?:(?P<time>(?:\d{2}-\d{2}\s+)?\d{2}:\d{2}:\d{2}\.\d{3}))\s+(?P<pid>\d+)\s+(?P<tid>\d+)\s+(?P<level>[VDIWEAFvdiweaf])\s+(?:(?P<tag>[^:\r\n]+?):\s+)?(?P<message>.*)$'
+    # 2. time format: [MM-DD ]HH:MM:SS.mmm Level/Tag(PID): Message
+    - '^(?:(?P<time>(?:\d{2}-\d{2}\s+)?\d{2}:\d{2}:\d{2}\.\d{3}))\s+(?P<level>[VDIWEAFvdiweaf])/(?P<tag>.+?)\(\s*(?P<pid>\d+)\):\s*(?P<message>.*)$'
 columns:
   - field: time
     title: Time
     width: 18
-    style: uptime
+    style: timestamp
   - field: pid
     title: PID
     width: 6
@@ -446,6 +557,61 @@ func TestLoadProfile_Logcat(t *testing.T) {
 			level:   "V",
 			tag:     "BatteryService",
 			message: "level=100 scale=100",
+		},
+		// -v time format cases: [MM-DD ]HH:MM:SS.mmm Level/Tag(PID): Message
+		{
+			line:    "10-23 15:19:23.255 I/SystemServerTiming(  546): OnBootPhase_550_com.android.server.UiModeManagerService",
+			time:    "10-23 15:19:23.255",
+			pid:     "546",
+			tid:     "",
+			level:   "I",
+			tag:     "SystemServerTiming",
+			message: "OnBootPhase_550_com.android.server.UiModeManagerService",
+		},
+		{
+			line:    "09-09 13:37:12.574 D/WifiService( 1000): Connected to network",
+			time:    "09-09 13:37:12.574",
+			pid:     "1000",
+			tid:     "",
+			level:   "D",
+			tag:     "WifiService",
+			message: "Connected to network",
+		},
+		{
+			line:    "10-23 15:19:23.276 W/WallpaperManagerService(  546): Invalid wallpaper data",
+			time:    "10-23 15:19:23.276",
+			pid:     "546",
+			tid:     "",
+			level:   "W",
+			tag:     "WallpaperManagerService",
+			message: "Invalid wallpaper data",
+		},
+		{
+			line:    "05:34:48.670 E/AudioFlinger(  559): cannot open hw device",
+			time:    "05:34:48.670",
+			pid:     "559",
+			tid:     "",
+			level:   "E",
+			tag:     "AudioFlinger",
+			message: "cannot open hw device",
+		},
+		{
+			line:    "08-10 05:34:48.670 F/libc(  123): Fatal signal 11 (SIGSEGV)",
+			time:    "08-10 05:34:48.670",
+			pid:     "123",
+			tid:     "",
+			level:   "F",
+			tag:     "libc",
+			message: "Fatal signal 11 (SIGSEGV)",
+		},
+		{
+			line:    "10-23 15:19:23.457 D/UsbHostManager: Sub(  546): USB endpoint registered",
+			time:    "10-23 15:19:23.457",
+			pid:     "546",
+			tid:     "",
+			level:   "D",
+			tag:     "UsbHostManager: Sub",
+			message: "USB endpoint registered",
 		},
 	}
 

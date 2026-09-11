@@ -12,8 +12,9 @@ import (
 
 // ParserConfig describes which parser to use and its parameters.
 type ParserConfig struct {
-	Type    string `yaml:"type"`    // "raw" or "regex"
-	Pattern string `yaml:"pattern"` // only used when Type == "regex"
+	Type     string   `yaml:"type"`               // "raw" or "regex"
+	Pattern  string   `yaml:"pattern,omitempty"`  // single regex pattern (when Type == "regex")
+	Patterns []string `yaml:"patterns,omitempty"` // ordered list of fallback regex patterns (when Type == "regex")
 }
 
 // ColumnConfig describes a single column as defined in a YAML profile.
@@ -130,10 +131,16 @@ func (p *Profile) BuildParser() (Parser, error) {
 	case "raw", "":
 		return NewRawParser(), nil
 	case "regex":
-		if p.Parser.Pattern == "" {
-			return nil, fmt.Errorf("profile %q: regex parser requires a pattern", p.Name)
+		var patterns []string
+		if len(p.Parser.Patterns) > 0 {
+			patterns = append(patterns, p.Parser.Patterns...)
+		} else if p.Parser.Pattern != "" {
+			patterns = append(patterns, p.Parser.Pattern)
 		}
-		return NewRegexParser(p.Parser.Pattern)
+		if len(patterns) == 0 {
+			return nil, fmt.Errorf("profile %q: regex parser requires a pattern or patterns", p.Name)
+		}
+		return NewRegexParser(patterns...)
 	default:
 		return nil, fmt.Errorf("profile %q: unknown parser type %q", p.Name, p.Parser.Type)
 	}
