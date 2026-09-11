@@ -197,8 +197,6 @@ else
         print_error "Extracted archive did not contain 'oml' binary."
         exit 1
     fi
-
-    EXTRACTED_PROFILES="$(find "$TMP_DIR" -type d -name "examples" | head -n 1 || true)"
 fi
 
 # Install binary
@@ -218,31 +216,8 @@ if [ "$TARGET_DIR" != "/usr/local/bin" ] && [ -f "/usr/local/bin/oml" ]; then
     printf "To update /usr/local/bin/oml, run: sudo cp \"%s/oml\" /usr/local/bin/oml\n\n" "$TARGET_DIR"
 fi
 
-# Install default example profiles
+# Ensure profiles directory exists
 mkdir -p "$PROFILES_DIR"
-SRC_EXAMPLES=""
-if [ -n "$EXTRACTED_PROFILES" ] && [ -d "$EXTRACTED_PROFILES" ]; then
-    SRC_EXAMPLES="$EXTRACTED_PROFILES"
-elif [ -n "$SCRIPT_DIR" ] && [ -d "$SCRIPT_DIR/examples/profiles" ]; then
-    SRC_EXAMPLES="$SCRIPT_DIR/examples/profiles"
-elif [ -n "$SCRIPT_DIR" ] && [ -d "$SCRIPT_DIR/profiles/examples" ]; then
-    SRC_EXAMPLES="$SCRIPT_DIR/profiles/examples"
-fi
-
-if [ -n "$SRC_EXAMPLES" ] && [ -d "$SRC_EXAMPLES" ]; then
-    COPIED=0
-    for f in "$SRC_EXAMPLES"/*.yaml; do
-        [ -e "$f" ] || continue
-        base="$(basename "$f")"
-        if [ ! -f "$PROFILES_DIR/$base" ]; then
-            cp "$f" "$PROFILES_DIR/$base"
-            COPIED=$((COPIED + 1))
-        fi
-    done
-    if [ "$COPIED" -gt 0 ]; then
-        print_success "Copied $COPIED default profile(s) to $PROFILES_DIR"
-    fi
-fi
 
 # Check PATH
 printf "\n"

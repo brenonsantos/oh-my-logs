@@ -114,25 +114,20 @@ func InstallBinary(appCfg *AppConfig, targetDir string) (string, error) {
 		_ = os.Chmod(destPath, 0o755)
 	}
 
-	// Copy example profiles to global directory if present and not yet installed
+	// Ensure profiles directory exists if configured
 	if appCfg != nil && appCfg.ProfilesDir != "" {
-		CopyDefaultProfiles(appCfg.ProfilesDir)
+		_ = os.MkdirAll(appCfg.ProfilesDir, 0o755)
 	}
 
 	return destPath, nil
 }
 
-// CopyDefaultProfiles copies any files in local examples/profiles into targetDir without overwriting.
-func CopyDefaultProfiles(targetDir string) int {
+// CopyProfilesFrom copies yaml profile files from srcDir into targetDir without overwriting.
+func CopyProfilesFrom(srcDir, targetDir string) int {
 	_ = os.MkdirAll(targetDir, 0o755)
-	localExamples := filepath.Join("examples", "profiles")
-	entries, err := os.ReadDir(localExamples)
+	entries, err := os.ReadDir(srcDir)
 	if err != nil {
-		localExamples = filepath.Join("profiles", "examples")
-		entries, err = os.ReadDir(localExamples)
-		if err != nil {
-			return 0
-		}
+		return 0
 	}
 
 	copied := 0
@@ -144,7 +139,7 @@ func CopyDefaultProfiles(targetDir string) int {
 		if _, err := os.Stat(dest); err == nil {
 			continue // Don't overwrite existing user profiles
 		}
-		src := filepath.Join(localExamples, e.Name())
+		src := filepath.Join(srcDir, e.Name())
 		data, err := os.ReadFile(src)
 		if err == nil {
 			if err := os.WriteFile(dest, data, 0o644); err == nil {
@@ -153,6 +148,15 @@ func CopyDefaultProfiles(targetDir string) int {
 		}
 	}
 	return copied
+}
+
+// CopyDefaultProfiles copies any files in local examples/profiles into targetDir without overwriting.
+func CopyDefaultProfiles(targetDir string) int {
+	src := filepath.Join("examples", "profiles")
+	if _, err := os.Stat(src); err != nil {
+		src = filepath.Join("profiles", "examples")
+	}
+	return CopyProfilesFrom(src, targetDir)
 }
 
 // UninstallBinary removes the installed binary from targetDir, or scans standard
