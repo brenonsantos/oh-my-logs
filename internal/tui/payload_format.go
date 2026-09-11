@@ -287,7 +287,11 @@ func formatAndColorizeXMLTokens(tokens []xml.Token, p Palette) (string, []string
 // ── YAML Formatting ───────────────────────────────────────────────────────────
 
 func detectAndFormatYAML(s string, p Palette) (PayloadDetection, bool) {
-	trimmed := strings.TrimSpace(s)
+	candidate := s
+	if !strings.Contains(candidate, "\n") && strings.Contains(candidate, `\n`) {
+		candidate = strings.ReplaceAll(candidate, `\n`, "\n")
+	}
+	trimmed := strings.TrimSpace(candidate)
 	// Must contain at least one newline or ": " key-value delimiter or list item
 	if !strings.Contains(trimmed, ": ") && !strings.Contains(trimmed, ":\n") && !strings.HasPrefix(trimmed, "- ") {
 		return PayloadDetection{}, false

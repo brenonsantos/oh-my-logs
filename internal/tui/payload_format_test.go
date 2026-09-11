@@ -120,11 +120,18 @@ func TestDetectAndFormatPayload_YAML(t *testing.T) {
 			wantSub:   "port: 8080",
 		},
 		{
-			name: "yaml list sequence",
-			input: "- item1\n- item2\n- item3",
+			name:      "yaml list sequence",
+			input:     "- item1\n- item2\n- item3",
 			wantType:  PayloadYAML,
 			wantLabel: "YAML",
 			wantSub:   "- item1",
+		},
+		{
+			name:      "escaped newline yaml mapping",
+			input:     "config:\\n  database: postgres\\n  pool: 10\\n  ssl: true",
+			wantType:  PayloadYAML,
+			wantLabel: "YAML",
+			wantSub:   "database: postgres",
 		},
 	}
 
