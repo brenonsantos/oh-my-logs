@@ -346,3 +346,142 @@ func TestLoadProfile_Zephyr(t *testing.T) {
 		t.Errorf("expected non-matching line to fallback to message, got %q", rUnmatched.Fields["message"])
 	}
 }
+
+const logcatTestProfileYAML = `
+name: Logcat
+parser:
+  type: regex
+  pattern: '^(?:(?P<time>(?:\d{2}-\d{2}\s+)?\d{2}:\d{2}:\d{2}\.\d{3}))\s+(?P<pid>\d+)\s+(?P<tid>\d+)\s+(?P<level>[VDIWEAFvdiweaf])\s+(?:(?P<tag>[^:\r\n]+?):\s+)?(?P<message>.*)$'
+columns:
+  - field: time
+    title: Time
+    width: 18
+    style: uptime
+  - field: pid
+    title: PID
+    width: 6
+    style: muted
+  - field: tid
+    title: TID
+    width: 6
+    style: muted
+  - field: level
+    title: Lvl
+    width: 5
+    style: level
+  - field: tag
+    title: Tag
+    width: 20
+    style: identifier
+  - field: message
+    title: Message
+    width: 0
+    style: primary
+`
+
+func TestLoadProfile_Logcat(t *testing.T) {
+	path := writeTemp(t, logcatTestProfileYAML)
+	p, err := parser.LoadProfile(path)
+	if err != nil {
+		t.Fatalf("failed to load logcat profile: %v", err)
+	}
+	if p.Name != "Logcat" {
+		t.Errorf("expected profile name Logcat, got %q", p.Name)
+	}
+	bp, err := p.BuildParser()
+	if err != nil {
+		t.Fatalf("failed to build parser: %v", err)
+	}
+
+	testCases := []struct {
+		line    string
+		time    string
+		pid     string
+		tid     string
+		level   string
+		tag     string
+		message string
+	}{
+		{
+			line:    "08-10 05:34:48.669   559   559 I SystemServerTiming: Initializing system service",
+			time:    "08-10 05:34:48.669",
+			pid:     "559",
+			tid:     "559",
+			level:   "I",
+			tag:     "SystemServerTiming",
+			message: "Initializing system service",
+		},
+		{
+			line:    "08-10 12:00:00.123  1000  1001 D WifiService: Connected to network",
+			time:    "08-10 12:00:00.123",
+			pid:     "1000",
+			tid:     "1001",
+			level:   "D",
+			tag:     "WifiService",
+			message: "Connected to network",
+		},
+		{
+			line:    "05:34:48.670   559   620 E AudioFlinger: cannot open hw device",
+			time:    "05:34:48.670",
+			pid:     "559",
+			tid:     "620",
+			level:   "E",
+			tag:     "AudioFlinger",
+			message: "cannot open hw device",
+		},
+		{
+			line:    "12:34:56.789  1234  1234 W ActivityManager: Slow delivery of broadcast",
+			time:    "12:34:56.789",
+			pid:     "1234",
+			tid:     "1234",
+			level:   "W",
+			tag:     "ActivityManager",
+			message: "Slow delivery of broadcast",
+		},
+		{
+			line:    "01-01 00:00:01.000   100   100 V BatteryService: level=100 scale=100",
+			time:    "01-01 00:00:01.000",
+			pid:     "100",
+			tid:     "100",
+			level:   "V",
+			tag:     "BatteryService",
+			message: "level=100 scale=100",
+		},
+	}
+
+	for _, tc := range testCases {
+		r, err := bp.Parse(tc.line)
+		if err != nil {
+			t.Fatalf("failed to parse Logcat line %q: %v", tc.line, err)
+		}
+		if r.Fields["time"] != tc.time {
+			t.Errorf("expected time %q, got %q", tc.time, r.Fields["time"])
+		}
+		if r.Fields["pid"] != tc.pid {
+			t.Errorf("expected pid %q, got %q", tc.pid, r.Fields["pid"])
+		}
+		if r.Fields["tid"] != tc.tid {
+			t.Errorf("expected tid %q, got %q", tc.tid, r.Fields["tid"])
+		}
+		if r.Fields["level"] != tc.level {
+			t.Errorf("expected level %q, got %q", tc.level, r.Fields["level"])
+		}
+		if r.Fields["tag"] != tc.tag {
+			t.Errorf("expected tag %q, got %q", tc.tag, r.Fields["tag"])
+		}
+		if r.Fields["message"] != tc.message {
+			t.Errorf("expected message %q, got %q", tc.message, r.Fields["message"])
+		}
+	}
+
+	// Non-matching logcat line (e.g. system banner) fallbacks to raw message
+	banner := "--------- beginning of system"
+	rUnmatched, err := bp.Parse(banner)
+	if err == nil {
+		t.Errorf("expected error for non-matching banner line")
+	}
+	if rUnmatched.Fields["message"] != banner {
+		t.Errorf("expected non-matching banner to fallback to message, got %q", rUnmatched.Fields["message"])
+	}
+}
+

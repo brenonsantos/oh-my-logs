@@ -121,9 +121,12 @@ if ($SourceBinary -and (Test-Path $SourceBinary)) {
         $SourceBinary = $FoundBinary.FullName
 
         # Locate profiles in extracted folder
-        $FoundProfiles = Get-ChildItem -Path $TempDir -Recurse -Directory -Filter "examples" | Select-Object -First 1
+        $FoundProfiles = Get-ChildItem -Path $TempDir -Recurse -Directory -Filter "profiles" | Select-Object -First 1
+        if (-not $FoundProfiles) {
+            $FoundProfiles = Get-ChildItem -Path $TempDir -Recurse -Directory -Filter "examples" | Select-Object -First 1
+        }
         if ($FoundProfiles) {
-            $ExtractedExamplesDir = $FoundProfiles.FullName
+            $ExtractedProfilesDir = $FoundProfiles.FullName
         }
     } catch {
         Write-Error "Failed to download release: $_"
@@ -133,19 +136,16 @@ if ($SourceBinary -and (Test-Path $SourceBinary)) {
 
 # 3. Create destination directory & copy binary
 Write-Step "Installing oml.exe to $InstallDir..."
-if (-not (Test-Path $InstallDir)) {
-    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-}
-
+New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 Copy-Item -Path $SourceBinary -Destination $BinaryPath -Force
 Write-Success "Installed binary at $BinaryPath"
 
-# 4. Add to User PATH if needed
+# 4. Add to User PATH if not already present
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
-$NormalizedTarget = $InstallDir.TrimEnd('\')
-$Paths = $UserPath -split ';' | ForEach-Object { $_.TrimEnd('\') }
+$PathParts = if ($UserPath) { $UserPath -split ";" } else { @() }
+$AlreadyInPath = $PathParts | Where-Object { $_.TrimEnd("\") -ieq $InstallDir.TrimEnd("\") }
 
-if ($Paths -notcontains $NormalizedTarget) {
+if (-not $AlreadyInPath) {
     Write-Step "Adding $InstallDir to User PATH..."
     $NewPath = if ($UserPath) { "$UserPath;$InstallDir" } else { $InstallDir }
     [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
@@ -155,15 +155,15 @@ if ($Paths -notcontains $NormalizedTarget) {
     Write-Success "$InstallDir is already in User PATH"
 }
 
-# 5. Copy default profiles
+# 5. Install default curated profiles (Zephyr, Logcat, Raw)
 if (-not (Test-Path $ProfilesDir)) {
     New-Item -ItemType Directory -Path $ProfilesDir -Force | Out-Null
 }
 
-$ExamplesDir = if ($ExtractedExamplesDir) { $ExtractedExamplesDir } elseif ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "examples\profiles"))) { Join-Path $ScriptDir "examples\profiles" } elseif ($ScriptDir) { Join-Path $ScriptDir "profiles\examples" } else { "" }
-if ($ExamplesDir -and (Test-Path $ExamplesDir)) {
+$ProfilesSource = if ($ExtractedProfilesDir) { $ExtractedProfilesDir } elseif ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "examples\profiles"))) { Join-Path $ScriptDir "examples\profiles" } else { "" }
+if ($ProfilesSource -and (Test-Path $ProfilesSource)) {
     $Copied = 0
-    Get-ChildItem -Path $ExamplesDir -Filter "*.yaml" | ForEach-Object {
+    Get-ChildItem -Path $ProfilesSource -Filter "*.yaml" | ForEach-Object {
         $DestFile = Join-Path $ProfilesDir $_.Name
         if (-not (Test-Path $DestFile)) {
             Copy-Item -Path $_.FullName -Destination $DestFile
@@ -171,7 +171,7 @@ if ($ExamplesDir -and (Test-Path $ExamplesDir)) {
         }
     }
     if ($Copied -gt 0) {
-        Write-Success "Copied $Copied default profile(s) to $ProfilesDir"
+        Write-Success "Installed $Copied default profile(s) to $ProfilesDir"
     }
 }
 

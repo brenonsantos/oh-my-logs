@@ -48,6 +48,11 @@ func TestInstallAndUninstallBinary(t *testing.T) {
 		t.Fatalf("installed binary not found: %v", err)
 	}
 
+	// Verify that profiles directory is initialized
+	if _, err := os.Stat(appCfg.ProfilesDir); err != nil {
+		t.Fatalf("profiles directory not created: %v", err)
+	}
+
 	// Test Uninstall
 	uninstalledDest, err := config.UninstallBinary(installTargetDir)
 	if err != nil {
@@ -62,16 +67,24 @@ func TestInstallAndUninstallBinary(t *testing.T) {
 	}
 }
 
-func TestCopyDefaultProfiles(t *testing.T) {
-	tmpDir := t.TempDir()
-	targetProfiles := filepath.Join(tmpDir, "profiles")
+func TestCopyProfilesFrom(t *testing.T) {
+	srcDir := t.TempDir()
+	targetDir := t.TempDir()
 
-	copied := config.CopyDefaultProfiles(targetProfiles)
-	// If examples/profiles exists in working dir, it should copy
-	if _, err := os.Stat(filepath.Join("examples", "profiles")); err == nil {
-		if copied < 2 {
-			t.Errorf("expected at least 2 default profiles copied, got %d", copied)
-		}
+	// Write mock yaml profiles in srcDir
+	_ = os.WriteFile(filepath.Join(srcDir, "mock1.yaml"), []byte("name: mock1\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(srcDir, "mock2.yml"), []byte("name: mock2\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(srcDir, "ignored.txt"), []byte("not a yaml\n"), 0o644)
+
+	copied := config.CopyProfilesFrom(srcDir, targetDir)
+	if copied != 2 {
+		t.Fatalf("expected 2 profiles copied, got %d", copied)
+	}
+
+	// Second copy should not overwrite existing files
+	copiedAgain := config.CopyProfilesFrom(srcDir, targetDir)
+	if copiedAgain != 0 {
+		t.Errorf("expected 0 profiles copied on second run, got %d", copiedAgain)
 	}
 }
 

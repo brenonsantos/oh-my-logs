@@ -215,6 +215,15 @@ func (m Model) effectiveColumnsForTab(tab *Tab) []record.Column {
 		Width: timestampColWidth,
 		Style: "timestamp",
 	}
+	for _, col := range m.columns {
+		if isTimestampCol(col, m.tsField) {
+			tsCol = col
+			if tsCol.Width <= 0 {
+				tsCol.Width = timestampColWidth
+			}
+			break
+		}
+	}
 	deltaCol := record.Column{
 		Field: "_delta",
 		Title: "Δt",

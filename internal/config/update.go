@@ -236,7 +236,7 @@ func UpdateBinary(appCfg *AppConfig, currentVersion string, nightly bool) (strin
 
 	_ = os.Chmod(destPath, 0o755)
 
-	// Update example profiles if present
+	// Ensure default profiles exist
 	if appCfg != nil && appCfg.ProfilesDir != "" {
 		CopyDefaultProfiles(appCfg.ProfilesDir)
 	}
