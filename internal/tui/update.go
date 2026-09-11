@@ -255,6 +255,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Button {
 		case tea.MouseButtonWheelUp:
 			if msg.Shift {
+				if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+					return m, nil
+				}
 				if m.scrollX > 0 {
 					m.scrollX -= 6
 					m.clampScrollX()
@@ -277,6 +280,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.presetCursor > 0 {
 					m.presetCursor--
 				}
+			case modeRowDetail:
+				if m.detailScrollOffset > 0 {
+					m.detailScrollOffset -= 2
+					if m.detailScrollOffset < 0 {
+						m.detailScrollOffset = 0
+					}
+				}
 			case modeHelp, modeGame, modeSavePresetPrompt:
 				// ignore scrolling while modal or game is active
 			default:
@@ -291,6 +301,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case tea.MouseButtonWheelDown:
 			if msg.Shift {
+				if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+					return m, nil
+				}
 				m.scrollX += 6
 				m.clampScrollX()
 				if m.splitMode != SplitNone {
@@ -311,6 +324,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.filtersCfg != nil && m.presetCursor < len(m.filtersCfg.Presets)-1 {
 					m.presetCursor++
 				}
+			case modeRowDetail:
+				m.detailScrollOffset += 2
 			case modeHelp, modeGame, modeSavePresetPrompt:
 				// ignore scrolling while modal or game is active
 			default:
@@ -329,6 +344,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case tea.MouseButtonWheelLeft:
+			if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+				return m, nil
+			}
 			if m.scrollX > 0 {
 				m.scrollX -= 6
 				m.clampScrollX()
@@ -339,6 +357,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case tea.MouseButtonWheelRight:
+			if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+				return m, nil
+			}
 			m.scrollX += 6
 			m.clampScrollX()
 			if m.splitMode != SplitNone {

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -435,6 +436,7 @@ func (m Model) viewHelpModal() string {
 
 	left := []string{
 		renderHeader("NAVIGATION", colWidth),
+		renderItem("Enter / v", "Inspect row detail", colWidth),
 		renderItem("↑, k / ↓, j", "Scroll / select row", colWidth),
 		renderItem("←, h / →, l", "Char cursor / auto-pan", colWidth),
 		renderItem("{, }", "Pan viewport left / right", colWidth),
@@ -618,6 +620,244 @@ func (m Model) viewFilePickerModal() string {
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+2, modalBox)
+}
+
+// viewRowDetailModal renders the multiline row inspector modal displaying
+// all parsed fields, pretty-printed JSON payloads, raw log, and hex preview.
+func (m Model) viewRowDetailModal() string {
+	r, ok := m.activeInspectorRecord()
+	if !ok {
+		return centerBox(m.width, m.tableHeight+2, theme.ModalBox.Render("No log record to inspect"))
+	}
+
+	rowIdx := m.selectedRow
+	totalRows := len(m.visible)
+	if m.splitMode != SplitNone {
+		t := m.currentTabForPane(m.activePane)
+		if t != nil {
+			rowIdx = t.SelectedRow
+			totalRows = len(t.Visible)
+		}
+	}
+	if rowIdx < 0 {
+		if m.follow && totalRows > 0 {
+			rowIdx = totalRows - 1
+		} else if m.scrollOffset >= 0 && m.scrollOffset < totalRows {
+			rowIdx = m.scrollOffset
+		} else {
+			rowIdx = 0
+		}
+	}
+
+	modalWidth := int(float64(m.width) * 0.82)
+	if modalWidth < 68 {
+		modalWidth = 68
+	}
+	if modalWidth > 115 {
+		modalWidth = 115
+	}
+	if modalWidth > m.width-4 {
+		modalWidth = m.width - 4
+	}
+	contentWidth := modalWidth - 6
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+
+	availHeight := m.tableHeight + 2
+	if availHeight < 14 {
+		availHeight = 14
+	}
+	if availHeight > m.height-4 {
+		availHeight = m.height - 4
+	}
+
+	var contentLines []string
+
+	// ── Section 1: Parsed Fields ─────────────────────────────────────────────
+	fields := OrderedRecordFields(r.Fields)
+	if len(fields) > 0 {
+		contentLines = append(contentLines, theme.ModalSection.Render("PARSED FIELDS"))
+		maxKeyLen := 0
+		for _, f := range fields {
+			if len(f[0]) > maxKeyLen {
+				maxKeyLen = len(f[0])
+			}
+		}
+		if maxKeyLen > 18 {
+			maxKeyLen = 18
+		}
+		valWidth := contentWidth - maxKeyLen - 4
+		if valWidth < 10 {
+			valWidth = 10
+		}
+
+		for _, f := range fields {
+			keyStyled := theme.Primary.Render(padOrTrunc(f[0]+":", maxKeyLen+2))
+			valLines := wrapTextLines(f[1], valWidth)
+			if len(valLines) == 0 {
+				contentLines = append(contentLines, "  "+keyStyled)
+			} else {
+				contentLines = append(contentLines, "  "+keyStyled+" "+theme.Content.Render(valLines[0]))
+				indent := strings.Repeat(" ", maxKeyLen+3)
+				for _, vl := range valLines[1:] {
+					contentLines = append(contentLines, "  "+indent+theme.Content.Render(vl))
+				}
+			}
+		}
+		contentLines = append(contentLines, "")
+	}
+
+	// ── Section 2: Message & Payload (with JSON formatting) ───────────────────
+	msg := r.Get("message")
+	if msg == "" {
+		msg = r.Get("msg")
+	}
+	if msg == "" && len(r.Fields) == 0 {
+		msg = r.Raw
+	}
+
+	if msg != "" {
+		det := DetectAndFormatPayload(msg, theme.Palette)
+		if det.Type != PayloadNone {
+			contentLines = append(contentLines, theme.ModalSection.Render("MESSAGE & PAYLOAD")+" "+theme.Success.Bold(true).Render(fmt.Sprintf("[%s FORMATTED]", det.TypeLabel)))
+			if det.Prefix != "" {
+				for _, pl := range wrapTextLines(det.Prefix, contentWidth-2) {
+					contentLines = append(contentLines, "  "+theme.Muted.Render(pl))
+				}
+			}
+			for _, pl := range det.ColorizedLines {
+				contentLines = append(contentLines, "  "+pl)
+			}
+			if det.Suffix != "" {
+				for _, sl := range wrapTextLines(det.Suffix, contentWidth-2) {
+					contentLines = append(contentLines, "  "+theme.Muted.Render(sl))
+				}
+			}
+		} else {
+			contentLines = append(contentLines, theme.ModalSection.Render("MESSAGE"))
+			for _, ml := range wrapTextLines(msg, contentWidth-2) {
+				contentLines = append(contentLines, "  "+theme.Content.Render(ml))
+			}
+		}
+		contentLines = append(contentLines, "")
+	}
+
+	// ── Section 3: Raw Log ───────────────────────────────────────────────────
+	if r.Raw != "" && (len(r.Fields) > 0 || r.Raw != msg) {
+		contentLines = append(contentLines, theme.ModalSection.Render(fmt.Sprintf("RAW LOG (%d bytes)", len(r.Raw))))
+		for _, rl := range wrapTextLines(r.Raw, contentWidth-2) {
+			contentLines = append(contentLines, "  "+theme.Muted.Render(rl))
+		}
+		contentLines = append(contentLines, "")
+	}
+
+	// ── Section 4: Hex Preview ───────────────────────────────────────────────
+	if len(r.Raw) > 0 {
+		contentLines = append(contentLines, theme.ModalSection.Render("HEX PREVIEW"))
+		hexLines := FormatHexPreview([]byte(r.Raw), 64)
+		for _, hl := range hexLines {
+			contentLines = append(contentLines, "  "+theme.Muted.Render(hl))
+		}
+	}
+
+	// Calculate viewport height inside modal box
+	viewportHeight := availHeight - 7
+	if viewportHeight < 6 {
+		viewportHeight = 6
+	}
+
+	totalContentLines := len(contentLines)
+	maxOffset := totalContentLines - viewportHeight
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	offset := m.detailScrollOffset
+	if offset > maxOffset {
+		offset = maxOffset
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	endIdx := offset + viewportHeight
+	if endIdx > totalContentLines {
+		endIdx = totalContentLines
+	}
+
+	var visibleContent []string
+	if totalContentLines > 0 && offset < totalContentLines {
+		visibleContent = append(visibleContent, contentLines[offset:endIdx]...)
+	}
+
+	// Scroll overflow indicators
+	if offset > 0 && len(visibleContent) > 0 {
+		visibleContent[0] = theme.Muted.Render(fmt.Sprintf("  ▲ %d more lines above (k/↑ to scroll)", offset))
+	}
+	if endIdx < totalContentLines && len(visibleContent) > 0 {
+		visibleContent[len(visibleContent)-1] = theme.Muted.Render(fmt.Sprintf("  ▼ %d more lines below (j/↓ to scroll)", totalContentLines-endIdx))
+	}
+
+	var sb strings.Builder
+
+	// Title & position header
+	title := theme.ModalTitle.Render("🔍 Log Row Inspector")
+	recBadge := theme.Primary.Bold(true).Render(fmt.Sprintf("#%d", r.ID))
+	rowBadge := theme.Muted.Render(fmt.Sprintf("[%d/%d]", rowIdx+1, totalRows))
+	sb.WriteString(fmt.Sprintf("%s   %s %s\n", title, recBadge, rowBadge))
+
+	// Badges row: Timestamp, Delta, Level, Pinned
+	var badges []string
+	tsStr := ""
+	if !r.Timestamp.IsZero() {
+		tsStr = r.Timestamp.Format("2006-01-02 15:04:05.000000")
+	} else if r.Get(m.tsField) != "" {
+		tsStr = r.Get(m.tsField)
+	}
+	if tsStr != "" {
+		badges = append(badges, theme.Muted.Render("⏱ ")+theme.Secondary.Render(tsStr))
+	}
+	if r.Delta > 0 {
+		badges = append(badges, theme.Success.Render(fmt.Sprintf("Δt: +%s", timing.FormatDelta(r.Delta))))
+	}
+
+	level := strings.ToUpper(strings.TrimSpace(r.Get("level")))
+	if level != "" {
+		lvlBadge := theme.Header.Render(fmt.Sprintf("[%s]", level))
+		switch level {
+		case "ERROR", "ERR", "FATAL", "PANIC":
+			lvlBadge = lipgloss.NewStyle().Background(theme.Palette.Red).Foreground(theme.Palette.Bg).Bold(true).Render(fmt.Sprintf(" %s ", level))
+		case "WARN", "WARNING":
+			lvlBadge = lipgloss.NewStyle().Background(theme.Palette.Yellow).Foreground(theme.Palette.Bg).Bold(true).Render(fmt.Sprintf(" %s ", level))
+		case "INFO", "INF":
+			lvlBadge = lipgloss.NewStyle().Background(theme.Palette.Green).Foreground(theme.Palette.Bg).Bold(true).Render(fmt.Sprintf(" %s ", level))
+		case "DEBUG", "DBG":
+			lvlBadge = lipgloss.NewStyle().Background(theme.Palette.Cyan).Foreground(theme.Palette.Bg).Bold(true).Render(fmt.Sprintf(" %s ", level))
+		}
+		badges = append(badges, lvlBadge)
+	}
+
+	if _, ok := m.bookmarks[r.ID]; ok {
+		badges = append(badges, lipgloss.NewStyle().Foreground(theme.Palette.Yellow).Bold(true).Render("★ PINNED"))
+	}
+
+	sb.WriteString(strings.Join(badges, "   "))
+	sb.WriteString("\n")
+	sb.WriteString(theme.Divider.Render(strings.Repeat("─", contentWidth)))
+	sb.WriteString("\n")
+
+	for _, l := range visibleContent {
+		sb.WriteString(l)
+		sb.WriteString("\n")
+	}
+	for i := len(visibleContent); i < viewportHeight; i++ {
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString(theme.ModalFooter.Render("↑/↓ scroll · ←/→ (or n/p) record · b pin · y copy · Esc close"))
+
+	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
+	return centerBox(m.width, m.tableHeight+splitPaneHeaderOverhead, modalBox)
 }
 
 // centerBox centers a multi-line box horizontally and vertically within target dimensions.

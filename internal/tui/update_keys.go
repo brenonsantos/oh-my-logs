@@ -38,6 +38,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleSettingsKey(msg)
 	case modeFilePicker:
 		return m.handleFilePickerKey(msg)
+	case modeRowDetail:
+		return m.handleRowDetailKey(msg)
 	default:
 		return m.handleNormalKey(msg)
 	}
@@ -136,6 +138,9 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeSettings
 		return m, nil
 
+	case keyMatches(msg, m.keys.ViewDetail):
+		return m.openRowDetail()
+
 	case keyMatches(msg, m.keys.Help):
 		m.mode = modeHelp
 		return m, nil
@@ -176,6 +181,47 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return newM, cmd
 	}
 
+	return m, nil
+}
+
+func (m Model) openRowDetail() (Model, tea.Cmd) {
+	totalRows := len(m.visible)
+	if m.splitMode != SplitNone {
+		t := m.currentTabForPane(m.activePane)
+		if t != nil {
+			totalRows = len(t.Visible)
+		}
+	}
+	if totalRows == 0 {
+		m.message = "No log entry to inspect"
+		return m, nil
+	}
+
+	if m.splitMode != SplitNone {
+		t := m.currentTabForPane(m.activePane)
+		if t != nil && t.SelectedRow < 0 {
+			if t.Follow && len(t.Visible) > 0 {
+				t.SelectedRow = len(t.Visible) - 1
+			} else if t.ScrollOffset >= 0 && t.ScrollOffset < len(t.Visible) {
+				t.SelectedRow = t.ScrollOffset
+			} else {
+				t.SelectedRow = 0
+			}
+		}
+	} else {
+		if m.selectedRow < 0 {
+			if m.follow && len(m.visible) > 0 {
+				m.selectedRow = len(m.visible) - 1
+			} else if m.scrollOffset >= 0 && m.scrollOffset < len(m.visible) {
+				m.selectedRow = m.scrollOffset
+			} else {
+				m.selectedRow = 0
+			}
+		}
+	}
+
+	m.detailScrollOffset = 0
+	m.mode = modeRowDetail
 	return m, nil
 }
 

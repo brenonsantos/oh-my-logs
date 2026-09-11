@@ -314,7 +314,7 @@ func TestBookmarksProfileSwitchTransformPreservesID(t *testing.T) {
 }
 
 func TestBookmarksZephyrLogFile(t *testing.T) {
-	// Sample lines from zephyr logs including ZCore_Init.txt lines
+	// Sample lines from zephyr device logs
 	sample := []string{
 		"88:E7:12:6D:0E:D4 board_type: 2, board_type mapping:",
 		"0----QFN",

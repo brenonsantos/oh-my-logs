@@ -1,0 +1,40 @@
+[14:23:01.000][INFO][kernel] Linux kernel 6.1.0 booting on ARM Cortex-M7
+[14:23:01.020][INFO][clock] PLL initialized @ 480 MHz
+[14:23:01.040][INFO][mem] DDR3 RAM initialized: 32MB available
+[14:23:01.042][DEBUG][dma] Channel 0 allocated for SPI1
+[14:23:01.043][DEBUG][dma] Channel 1 allocated for SPI2
+[14:23:01.044][DEBUG][dma] Channel 2 allocated for UART3
+[14:23:01.160][WARN][flash] Wear leveling block table rebuild in progress
+[14:23:01.180][INFO][flash] NAND flash mounted: 128MB SPI-NOR
+[14:23:01.200][INFO][sensor] IMU BMI088 initialized @ 100Hz ODR
+[14:23:01.220][INFO][sensor] Barometer BMP390 initialized
+[14:23:01.240][INFO][can] CAN bus transceiver online at 500 kbps
+[14:23:01.260][INFO][can] Filter bank configured (16 filters active)
+[14:23:01.280][INFO][telemetry] Heartbeat task started (cadence: 20ms)
+[14:23:01.300][INFO][telemetry] Telemetry frame #001: roll=0.10 pitch=-0.20 yaw=182.40
+[14:23:01.320][INFO][telemetry] Telemetry frame #002: roll=0.12 pitch=-0.19 yaw=182.42
+[14:23:01.322][DEBUG][can] Rapid burst frame RX 0x104 [id=24 len=8]
+[14:23:01.323][DEBUG][can] Rapid burst frame RX 0x105 [id=25 len=8]
+[14:23:01.324][DEBUG][can] Rapid burst frame RX 0x106 [id=26 len=8]
+[14:23:01.340][INFO][telemetry] Telemetry frame #003: roll=0.15 pitch=-0.18 yaw=182.45
+[14:23:01.360][INFO][telemetry] Telemetry frame #004: roll=0.18 pitch=-0.17 yaw=182.49
+[14:23:01.480][WARN][i2c] Bus arbitration lost on I2C2, backoff retry initiated
+[14:23:01.500][INFO][i2c] Bus arbitration recovered after retry
+[14:23:01.520][INFO][telemetry] Telemetry frame #005: roll=0.20 pitch=-0.16 yaw=182.52
+[14:23:01.540][INFO][telemetry] Telemetry frame #006: roll=0.22 pitch=-0.15 yaw=182.55
+[14:23:03.200][ERROR][cellular] Modem LTE connection timed out (no ACK for 1660ms)
+[14:23:03.220][WARN][cellular] Switching to backup APN (apn=iot.telecom.net)
+[14:23:03.240][INFO][cellular] Re-established LTE-M link (RSSI: -74 dBm)
+[14:23:03.260][INFO][telemetry] Telemetry frame #007: roll=0.25 pitch=-0.14 yaw=182.60
+[14:23:03.280][INFO][telemetry] Telemetry frame #008: roll=0.28 pitch=-0.12 yaw=182.64
+[14:23:03.300][INFO][telemetry] Telemetry frame #009: roll=0.30 pitch=-0.10 yaw=182.68
+[14:23:03.320][INFO][telemetry] Telemetry frame #010: roll=0.32 pitch=-0.08 yaw=182.72
+[14:23:03.340][INFO][telemetry] Telemetry frame #011: roll=0.35 pitch=-0.06 yaw=182.75
+[14:23:03.342][DEBUG][spi] High-speed burst dump to SD card sector 4892
+[14:23:03.343][DEBUG][spi] High-speed burst dump to SD card sector 4893
+[14:23:03.360][INFO][telemetry] Telemetry frame #012: roll=0.37 pitch=-0.05 yaw=182.78
+[14:23:03.380][INFO][telemetry] Telemetry frame #013: roll=0.40 pitch=-0.03 yaw=182.82
+[14:23:03.750][WARN][power] Voltage droop detected on 3V3 rail: 3.12V
+[14:23:03.770][INFO][power] Voltage normalized to 3.31V
+[14:23:03.790][INFO][telemetry] Telemetry frame #014: roll=0.42 pitch=-0.02 yaw=182.85
+[14:23:03.810][INFO][telemetry] Telemetry frame #015: roll=0.45 pitch=-0.01 yaw=182.89

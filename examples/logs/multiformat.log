@@ -1,0 +1,11 @@
+2026-09-11 11:30:00.100 [INF] boot: initializing oh-my-logs device monitor firmware v2.4.0
+2026-09-11 11:30:00.250 [INF] sensor: {"event":"telemetry","node_id":"stm32-sensor-01","battery_pct":96.5,"online":true,"firmware":{"version":"2.4.0","git":"13205fd","channels":["can","serial","ble"]},"sensors":[{"name":"bme280","temp_c":23.8,"humidity":48.2},{"name":"ina219","bus_v":3.31,"current_ma":18.4}],"uptime_sec":1420}
+2026-09-11 11:30:01.050 [INF] network: <response status="ok" code="200"><device id="stm32-sensor-01" type="mcu"><network ssid="Lab-IoT-5G" rssi="-58"><ip>192.168.1.142</ip><dhcp>true</dhcp></network><channels><can bitrate="500000">active</can><uart baud="115200">connected</uart></channels><!-- hardware watchdog ok --><watchdog ping_ms="500">true</watchdog></device></response>
+2026-09-11 11:30:02.180 [INF] config: manifest:\n  version: "1.2.0"\n  environment: production\n  services:\n    telemetry:\n      enabled: true\n      port: 9090\n      protocol: udp\n    ingest:\n      buffer_size: 50000\n      flush_ms: 250\n  tags:\n    - embedded\n    - serial\n    - zephyr
+2026-09-11 11:30:03.410 [INF] router: level=info method=POST path="/api/v1/telemetry" status=200 duration_ms=14.8 bytes=2048 ip=192.168.1.142 user="device-agent" success=true
+2026-09-11 11:30:04.520 [WRN] wifi: level=warn module=wifi event=rssi_drop current_rssi=-86 threshold=-80 retry_count=2 reconnect=false
+2026-09-11 11:30:05.890 [DBG] soap: <Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/"><Body><DeviceEvent type="firmware_update"><target>stm32f407</target><size_bytes>262144</size_bytes><status>downloading</status><progress_pct>42.5</progress_pct></DeviceEvent></Body></Envelope>
+2026-09-11 11:30:07.110 [INF] auth: level=info module=auth action=token_refresh client_id="oml-cli" scope="read:logs" expires_in=3600 valid=true
+2026-09-11 11:30:08.330 [ERR] can: {"error":"CAN_BUS_OFF","code":504,"bus_id":1,"mailbox":3,"tx_err_count":128,"rx_err_count":0,"recovery_attempt":1,"backtrace":["can_isr_handler at can.c:142","can_transmit_packet at can_tx.c:88"]}
+2026-09-11 11:30:09.900 [INF] sync: level=info module=sync total_records=50000 synced_records=49992 dropped=8 duration_sec=1.45 speed_mbps=12.4
+2026-09-11 11:30:11.000 [INF] sys: system health normal, free_heap_bytes=184320 min_heap_bytes=142000

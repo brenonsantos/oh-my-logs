@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/brenoniehues/oh-my-logs/internal/clipboard"
 	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -650,4 +651,179 @@ func (m Model) handleFilePickerSelected(path string) (Model, tea.Cmd) {
 
 	m.mode = modeSettings
 	return m, nil
+}
+
+// handleRowDetailKey handles navigation, scrolling, copying, and bookmarking inside the row detail modal.
+func (m Model) handleRowDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case keyMatches(msg, m.keys.Cancel) || keyMatches(msg, m.keys.Confirm) || msg.String() == "q" || msg.String() == "v" || msg.Type == tea.KeyEscape:
+		m.mode = modeNormal
+		// Keep table viewport aligned with the selected row
+		if m.selectedRow >= 0 {
+			if m.selectedRow < m.scrollOffset {
+				m.scrollOffset = m.selectedRow
+			} else if m.selectedRow >= m.scrollOffset+m.tableHeight {
+				m.scrollOffset = m.selectedRow - m.tableHeight + 1
+			}
+			m.clampScroll()
+		}
+		return m, nil
+
+	case msg.String() == "right" || msg.String() == "l" || msg.String() == "]" || msg.Type == tea.KeyRight || msg.String() == "n":
+		// Next record
+		m.detailNextRecord()
+		return m, nil
+
+	case msg.String() == "left" || msg.String() == "h" || msg.String() == "[" || msg.Type == tea.KeyLeft || msg.String() == "p":
+		// Previous record
+		m.detailPrevRecord()
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollUp) || msg.String() == "k" || msg.Type == tea.KeyUp:
+		if m.detailScrollOffset > 0 {
+			m.detailScrollOffset--
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollDown) || msg.String() == "j" || msg.Type == tea.KeyDown:
+		m.detailScrollOffset++
+		return m, nil
+
+	case keyMatches(msg, m.keys.PageUp) || msg.Type == tea.KeyPgUp || msg.String() == "ctrl+u":
+		if m.detailScrollOffset >= 8 {
+			m.detailScrollOffset -= 8
+		} else {
+			m.detailScrollOffset = 0
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.PageDown) || msg.Type == tea.KeyPgDown || msg.String() == "ctrl+d":
+		m.detailScrollOffset += 8
+		return m, nil
+
+	case keyMatches(msg, m.keys.GoToTop) || msg.String() == "g" || msg.Type == tea.KeyHome:
+		m.detailScrollOffset = 0
+		return m, nil
+
+	case keyMatches(msg, m.keys.GoToBottom) || msg.String() == "G" || msg.Type == tea.KeyEnd:
+		m.detailScrollOffset = 99999
+		return m, nil
+
+	case keyMatches(msg, m.keys.CopyRow) || msg.String() == "y":
+		r, ok := m.activeInspectorRecord()
+		if ok {
+			isPinned := false
+			if _, hasPin := m.bookmarks[r.ID]; hasPin {
+				isPinned = true
+			}
+			text := FormattedRecordDetail(r, m.tsField, isPinned)
+			if err := clipboard.Copy(text); err == nil {
+				m.message = fmt.Sprintf("✓ Copied record #%d details to clipboard", r.ID)
+			} else {
+				m.message = fmt.Sprintf("Clipboard error: %v", err)
+			}
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.CopyRaw) || msg.String() == "Y":
+		r, ok := m.activeInspectorRecord()
+		if ok {
+			if err := clipboard.Copy(r.Raw); err == nil {
+				m.message = fmt.Sprintf("✓ Copied raw log #%d to clipboard", r.ID)
+			} else {
+				m.message = fmt.Sprintf("Clipboard error: %v", err)
+			}
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.ToggleBookmark) || msg.String() == "b" || msg.String() == "m":
+		if m.bookmarks == nil {
+			m.bookmarks = make(map[uint64]struct{})
+		}
+		r, ok := m.activeInspectorRecord()
+		if ok {
+			if r.ID == 0 {
+				m.nextRecordID++
+				r.ID = m.nextRecordID
+			}
+			if _, exists := m.bookmarks[r.ID]; exists {
+				delete(m.bookmarks, r.ID)
+				m.message = fmt.Sprintf("Unpinned record #%d", r.ID)
+			} else {
+				m.bookmarks[r.ID] = struct{}{}
+				m.message = fmt.Sprintf("★ Pinned record #%d", r.ID)
+			}
+			if m.bookmarkedOnly {
+				m.rebuildVisible()
+				m.clampScroll()
+			}
+		}
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// detailNextRecord advances the inspector selection to the next record.
+func (m *Model) detailNextRecord() {
+	total := len(m.visible)
+	if m.splitMode != SplitNone {
+		t := m.currentTabForPane(m.activePane)
+		if t != nil {
+			total = len(t.Visible)
+			if t.SelectedRow < total-1 {
+				t.SelectedRow++
+				t.Follow = false
+				m.selectedRow = t.SelectedRow
+				m.follow = false
+				m.detailScrollOffset = 0
+			} else {
+				m.message = "Already at latest record"
+			}
+			return
+		}
+	}
+	if m.selectedRow < total-1 {
+		m.selectedRow++
+		m.follow = false
+		curTab := m.currentTab()
+		if curTab != nil {
+			curTab.SelectedRow = m.selectedRow
+			curTab.Follow = false
+		}
+		m.detailScrollOffset = 0
+	} else {
+		m.message = "Already at latest record"
+	}
+}
+
+// detailPrevRecord moves the inspector selection to the previous record.
+func (m *Model) detailPrevRecord() {
+	if m.splitMode != SplitNone {
+		t := m.currentTabForPane(m.activePane)
+		if t != nil {
+			if t.SelectedRow > 0 {
+				t.SelectedRow--
+				t.Follow = false
+				m.selectedRow = t.SelectedRow
+				m.follow = false
+				m.detailScrollOffset = 0
+			} else {
+				m.message = "Already at oldest record"
+			}
+			return
+		}
+	}
+	if m.selectedRow > 0 {
+		m.selectedRow--
+		m.follow = false
+		curTab := m.currentTab()
+		if curTab != nil {
+			curTab.SelectedRow = m.selectedRow
+			curTab.Follow = false
+		}
+		m.detailScrollOffset = 0
+	} else {
+		m.message = "Already at oldest record"
+	}
 }

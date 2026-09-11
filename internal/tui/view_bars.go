@@ -426,6 +426,9 @@ func (m Model) renderKeyBarContent() string {
 	case modeHelp:
 		return "  " + theme.Muted.Render("Press ") + theme.KeyName.Render("?") + theme.Muted.Render(", ") + theme.KeyName.Render("Esc") + theme.Muted.Render(", or ") + theme.KeyName.Render("q") + theme.Muted.Render(" to close help")
 
+	case modeRowDetail:
+		return "  " + theme.Muted.Render("Log Inspector: [↑/↓: scroll · ←/→: prev/next · y: copy detail · Y: copy raw · b: pin · Esc/Enter: close]")
+
 	default:
 		hint := func(k, action string) string {
 			return theme.KeyName.Render(k) + " " + theme.Muted.Render(action)
@@ -450,7 +453,7 @@ func (m Model) renderKeyBarContent() string {
 				count := end - start + 1
 				candidates = append(candidates, hint("y", fmt.Sprintf("copy (%d)", count)))
 			} else {
-				candidates = append(candidates, hint("y", "copy"))
+				candidates = append(candidates, hint("Enter", "detail"), hint("y", "copy"))
 			}
 			candidates = append(candidates,
 				hint("←/→", "char"),

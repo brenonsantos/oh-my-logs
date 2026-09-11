@@ -49,6 +49,7 @@ type keyMap struct {
 	CopyRaw          key.Binding
 	SelectUp         key.Binding
 	SelectDown       key.Binding
+	ViewDetail       key.Binding
 	Help             key.Binding
 	Game             key.Binding
 	SendTX           key.Binding
@@ -238,6 +239,10 @@ func defaultKeyMap() keyMap {
 		ToggleFormat: key.NewBinding(
 			key.WithKeys("x", "X"),
 			key.WithHelp("x", "toggle format"),
+		),
+		ViewDetail: key.NewBinding(
+			key.WithKeys("enter", "v"),
+			key.WithHelp("Enter/v", "row detail"),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
