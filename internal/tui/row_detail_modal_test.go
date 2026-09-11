@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -165,6 +166,118 @@ func TestRowDetailModal_CopyAndBookmark(t *testing.T) {
 	m = res.(Model)
 	if !strings.Contains(m.message, "Copied raw log #99") {
 		t.Errorf("unexpected message after 'Y': %q", m.message)
+	}
+}
+
+func TestRowDetailModal_PinMovePinNext(t *testing.T) {
+	records := []record.Record{
+		{ID: 1, Raw: "log 1", Timestamp: time.Now()},
+		{ID: 2, Raw: "log 2", Timestamp: time.Now()},
+		{ID: 3, Raw: "log 3", Timestamp: time.Now()},
+	}
+	m := newTestModelWithRecords(records)
+	m.selectedRow = 0
+	m.mode = modeRowDetail
+
+	// 1. Pin first record (#1)
+	res, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	m = res.(Model)
+	if _, ok := m.bookmarks[1]; !ok {
+		t.Fatalf("expected record #1 to be bookmarked")
+	}
+
+	// 2. Move to next record (#2)
+	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	m = res.(Model)
+	if m.selectedRow != 1 {
+		t.Fatalf("expected selectedRow=1, got %d", m.selectedRow)
+	}
+
+	// 3. Pin second record (#2)
+	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	m = res.(Model)
+
+	t.Logf("Bookmarks after pinning second record: %+v", m.bookmarks)
+	t.Logf("Message: %s", m.message)
+	if _, ok := m.bookmarks[1]; !ok {
+		t.Errorf("expected record #1 to STILL be bookmarked")
+	}
+	if _, ok := m.bookmarks[2]; !ok {
+		t.Errorf("expected record #2 to BE bookmarked")
+	}
+}
+
+func TestRowDetailModal_PinStreamingIngest(t *testing.T) {
+	m := newTestModel()
+	m.width = 120
+	m.height = 30
+	m.tableHeight = 20
+
+	// Ingest 3 records
+	for i := 1; i <= 3; i++ {
+		r := record.NewRecord(fmt.Sprintf("log %d", i))
+		m.ingestRecord(r)
+	}
+
+	// User opens detail modal
+	res, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = res.(Model)
+	rec1, _ := m.activeInspectorRecord()
+	t.Logf("Record 1 ID: %d, selectedRow: %d", rec1.ID, m.selectedRow)
+
+	// User pins
+	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	m = res.(Model)
+
+	// Now a new record is ingested while modal is open!
+	rNew := record.NewRecord("new log while modal open")
+	m.ingestRecord(rNew)
+
+	// User moves to next
+	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = res.(Model)
+	rec2, _ := m.activeInspectorRecord()
+	t.Logf("Record 2 ID: %d, selectedRow: %d", rec2.ID, m.selectedRow)
+
+	// User pins next
+	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	m = res.(Model)
+
+	t.Logf("Bookmarks: %+v", m.bookmarks)
+	if len(m.bookmarks) != 2 {
+		t.Errorf("expected 2 bookmarks, got %d", len(m.bookmarks))
+	}
+}
+
+func TestRowDetailModal_SplitViewPinMovePinNext(t *testing.T) {
+	records := []record.Record{
+		{ID: 1, Raw: "log 1", Timestamp: time.Now()},
+		{ID: 2, Raw: "log 2", Timestamp: time.Now()},
+		{ID: 3, Raw: "log 3", Timestamp: time.Now()},
+	}
+	m := newTestModelWithRecords(records)
+	m.splitMode = SplitVertical
+	m.activePane = 1 // Right pane!
+	t1 := m.currentTabForPane(1)
+	t1.Visible = records
+	t1.SelectedRow = 0
+	m.mode = modeRowDetail
+
+	// 1. Pin first record (#1)
+	res, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	m = res.(Model)
+
+	// 2. Move to next record (#2)
+	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = res.(Model)
+
+	// 3. Pin second record (#2)
+	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	m = res.(Model)
+
+	t.Logf("Split view bookmarks: %+v", m.bookmarks)
+	if len(m.bookmarks) != 2 {
+		t.Errorf("expected 2 bookmarks in split view, got %d", len(m.bookmarks))
 	}
 }
 

@@ -855,7 +855,7 @@ func (m Model) viewRowDetailModal() string {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString(theme.ModalFooter.Render("↑/↓ scroll · ←/→ prev/next · y copy · Y copy raw · b pin · Esc/Enter close"))
+	sb.WriteString(theme.ModalFooter.Render("↑/↓ scroll · ←/→ (or n/p) record · b pin · y copy · Esc close"))
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+splitPaneHeaderOverhead, modalBox)

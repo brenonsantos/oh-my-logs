@@ -658,6 +658,25 @@ func (m Model) handleRowDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case keyMatches(msg, m.keys.Cancel) || keyMatches(msg, m.keys.Confirm) || msg.String() == "q" || msg.String() == "v" || msg.Type == tea.KeyEscape:
 		m.mode = modeNormal
+		// Keep table viewport aligned with the selected row
+		if m.selectedRow >= 0 {
+			if m.selectedRow < m.scrollOffset {
+				m.scrollOffset = m.selectedRow
+			} else if m.selectedRow >= m.scrollOffset+m.tableHeight {
+				m.scrollOffset = m.selectedRow - m.tableHeight + 1
+			}
+			m.clampScroll()
+		}
+		return m, nil
+
+	case msg.String() == "right" || msg.String() == "l" || msg.String() == "]" || msg.Type == tea.KeyRight || msg.String() == "n":
+		// Next record
+		m.detailNextRecord()
+		return m, nil
+
+	case msg.String() == "left" || msg.String() == "h" || msg.String() == "[" || msg.Type == tea.KeyLeft || msg.String() == "p":
+		// Previous record
+		m.detailPrevRecord()
 		return m, nil
 
 	case keyMatches(msg, m.keys.ScrollUp) || msg.String() == "k" || msg.Type == tea.KeyUp:
@@ -690,40 +709,6 @@ func (m Model) handleRowDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.detailScrollOffset = 99999
 		return m, nil
 
-	case msg.String() == "left" || msg.String() == "h" || msg.String() == "[" || msg.Type == tea.KeyLeft:
-		// Previous record
-		if m.splitMode != SplitNone {
-			t := m.currentTabForPane(m.activePane)
-			if t != nil && t.SelectedRow > 0 {
-				t.SelectedRow--
-				t.Follow = false
-				m.detailScrollOffset = 0
-			}
-		} else {
-			if m.selectedRow > 0 {
-				m.selectedRow--
-				m.follow = false
-				m.detailScrollOffset = 0
-			}
-		}
-		return m, nil
-
-	case msg.String() == "right" || msg.String() == "l" || msg.String() == "]" || msg.Type == tea.KeyRight:
-		// Next record
-		if m.splitMode != SplitNone {
-			t := m.currentTabForPane(m.activePane)
-			if t != nil && t.SelectedRow < len(t.Visible)-1 {
-				t.SelectedRow++
-				m.detailScrollOffset = 0
-			}
-		} else {
-			if m.selectedRow < len(m.visible)-1 {
-				m.selectedRow++
-				m.detailScrollOffset = 0
-			}
-		}
-		return m, nil
-
 	case keyMatches(msg, m.keys.CopyRow) || msg.String() == "y":
 		r, ok := m.activeInspectorRecord()
 		if ok {
@@ -752,9 +737,93 @@ func (m Model) handleRowDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case keyMatches(msg, m.keys.ToggleBookmark) || msg.String() == "b" || msg.String() == "m":
-		resM, cmd := m.handleToggleBookmark()
-		return resM.(Model), cmd
+		if m.bookmarks == nil {
+			m.bookmarks = make(map[uint64]struct{})
+		}
+		r, ok := m.activeInspectorRecord()
+		if ok {
+			if r.ID == 0 {
+				m.nextRecordID++
+				r.ID = m.nextRecordID
+			}
+			if _, exists := m.bookmarks[r.ID]; exists {
+				delete(m.bookmarks, r.ID)
+				m.message = fmt.Sprintf("Unpinned record #%d", r.ID)
+			} else {
+				m.bookmarks[r.ID] = struct{}{}
+				m.message = fmt.Sprintf("★ Pinned record #%d", r.ID)
+			}
+			if m.bookmarkedOnly {
+				m.rebuildVisible()
+				m.clampScroll()
+			}
+		}
+		return m, nil
 	}
 
 	return m, nil
+}
+
+// detailNextRecord advances the inspector selection to the next record.
+func (m *Model) detailNextRecord() {
+	total := len(m.visible)
+	if m.splitMode != SplitNone {
+		t := m.currentTabForPane(m.activePane)
+		if t != nil {
+			total = len(t.Visible)
+			if t.SelectedRow < total-1 {
+				t.SelectedRow++
+				t.Follow = false
+				m.selectedRow = t.SelectedRow
+				m.follow = false
+				m.detailScrollOffset = 0
+			} else {
+				m.message = "Already at latest record"
+			}
+			return
+		}
+	}
+	if m.selectedRow < total-1 {
+		m.selectedRow++
+		m.follow = false
+		curTab := m.currentTab()
+		if curTab != nil {
+			curTab.SelectedRow = m.selectedRow
+			curTab.Follow = false
+		}
+		m.detailScrollOffset = 0
+	} else {
+		m.message = "Already at latest record"
+	}
+}
+
+// detailPrevRecord moves the inspector selection to the previous record.
+func (m *Model) detailPrevRecord() {
+	if m.splitMode != SplitNone {
+		t := m.currentTabForPane(m.activePane)
+		if t != nil {
+			if t.SelectedRow > 0 {
+				t.SelectedRow--
+				t.Follow = false
+				m.selectedRow = t.SelectedRow
+				m.follow = false
+				m.detailScrollOffset = 0
+			} else {
+				m.message = "Already at oldest record"
+			}
+			return
+		}
+	}
+	if m.selectedRow > 0 {
+		m.selectedRow--
+		m.follow = false
+		curTab := m.currentTab()
+		if curTab != nil {
+			curTab.SelectedRow = m.selectedRow
+			curTab.Follow = false
+		}
+		m.detailScrollOffset = 0
+	} else {
+		m.message = "Already at oldest record"
+	}
 }
