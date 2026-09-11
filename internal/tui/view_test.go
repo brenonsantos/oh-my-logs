@@ -82,15 +82,27 @@ func TestEmptyStateWithoutHeader(t *testing.T) {
 	m.connState = ConnDisconnected
 	v := m.View()
 
-	// Should show empty state message
+	// Should show empty state message with ready to connect prompt when port is set
 	if !strings.Contains(v, "No serial device connected") {
 		t.Errorf("expected view to contain 'No serial device connected', got:\n%s", v)
 	}
-	if !strings.Contains(v, "Press p to select a port") {
-		t.Errorf("expected view to contain 'Press p to select a port', got:\n%s", v)
+	if !strings.Contains(v, "Ready to connect") || !strings.Contains(v, "Press r to connect") {
+		t.Errorf("expected view to contain 'Ready to connect' and 'Press r to connect', got:\n%s", v)
 	}
-	if !strings.Contains(v, "Press ? for shortcuts") {
-		t.Errorf("expected view to contain 'Press ? for shortcuts', got:\n%s", v)
+	if !strings.Contains(v, "Press p to select port") {
+		t.Errorf("expected view to contain 'Press p to select port', got:\n%s", v)
+	}
+
+	// Without a port configured, should prompt to select port and shortcuts
+	mNoPort := newTestModel()
+	mNoPort.serialCfg.Port = ""
+	mNoPort.connState = ConnDisconnected
+	vNoPort := mNoPort.View()
+	if !strings.Contains(vNoPort, "Press p to select a port") {
+		t.Errorf("expected view to contain 'Press p to select a port', got:\n%s", vNoPort)
+	}
+	if !strings.Contains(vNoPort, "Press ? for shortcuts") {
+		t.Errorf("expected view to contain 'Press ? for shortcuts', got:\n%s", vNoPort)
 	}
 
 	// Table header (e.g. "Message") should NOT be present in empty state
@@ -249,6 +261,7 @@ func TestAutoReconnectLifecycle(t *testing.T) {
 	m := newTestModel()
 	m.serialCfg.Port = "/dev/ttyUSB0"
 	m.connState = ConnDisconnected
+	m.manualDisconnect = false
 	m.reconnecting = true
 
 	// 1. Check title bar shows Reconnecting
