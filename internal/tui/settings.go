@@ -411,3 +411,54 @@ func (m Model) viewSettingsModal() string {
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+2, modalBox)
 }
+
+// saveSettings persists current port, baud, profile, and timestamp display state to disk.
+func (m Model) saveSettings() {
+	if m.appConfig == nil {
+		return
+	}
+	s := m.settings
+	if s == nil {
+		s = &config.Settings{}
+	}
+	s.Port = m.serialCfg.Port
+	s.Baud = m.serialCfg.Baud
+	if m.profile != nil {
+		s.Profile = m.profile.Name
+	} else {
+		s.Profile = ""
+	}
+	s.ShowTimestamp = (m.tsMode != TSModeOff)
+	s.TimestampMode = m.tsMode.String()
+	s.TXEnding = m.txEnding.String()
+	s.TXHistory = m.txInput.History
+	if m.buffer != nil {
+		s.BufferCapacity = m.buffer.Cap()
+	}
+	if m.settings != nil {
+		s.DefaultFollow = m.settings.DefaultFollow
+		s.DirectToDisk = m.settings.DirectToDisk
+		s.Theme = m.settings.Theme
+	}
+	_ = m.appConfig.SaveSettings(s)
+}
+
+// loadFilters loads filter presets and history from config, or populates defaults.
+func (m *Model) loadFilters() {
+	if m.filtersCfg != nil {
+		return
+	}
+	if m.appConfig != nil {
+		if fc, err := m.appConfig.LoadFilters(); err == nil && fc != nil {
+			m.filtersCfg = fc
+			if len(m.filterInput.History) == 0 {
+				m.filterInput.History = fc.History
+			}
+			return
+		}
+	}
+	m.filtersCfg = &config.FiltersConfig{
+		Presets: config.DefaultFilterPresets(),
+		History: []string{},
+	}
+}
