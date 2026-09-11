@@ -277,6 +277,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.presetCursor > 0 {
 					m.presetCursor--
 				}
+			case modeRowDetail:
+				if m.detailScrollOffset > 0 {
+					m.detailScrollOffset -= 2
+					if m.detailScrollOffset < 0 {
+						m.detailScrollOffset = 0
+					}
+				}
 			case modeHelp, modeGame, modeSavePresetPrompt:
 				// ignore scrolling while modal or game is active
 			default:
@@ -311,6 +318,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.filtersCfg != nil && m.presetCursor < len(m.filtersCfg.Presets)-1 {
 					m.presetCursor++
 				}
+			case modeRowDetail:
+				m.detailScrollOffset += 2
 			case modeHelp, modeGame, modeSavePresetPrompt:
 				// ignore scrolling while modal or game is active
 			default:

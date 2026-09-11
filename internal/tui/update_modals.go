@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/brenoniehues/oh-my-logs/internal/clipboard"
 	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -649,5 +650,111 @@ func (m Model) handleFilePickerSelected(path string) (Model, tea.Cmd) {
 	}
 
 	m.mode = modeSettings
+	return m, nil
+}
+
+// handleRowDetailKey handles navigation, scrolling, copying, and bookmarking inside the row detail modal.
+func (m Model) handleRowDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case keyMatches(msg, m.keys.Cancel) || keyMatches(msg, m.keys.Confirm) || msg.String() == "q" || msg.String() == "v" || msg.Type == tea.KeyEscape:
+		m.mode = modeNormal
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollUp) || msg.String() == "k" || msg.Type == tea.KeyUp:
+		if m.detailScrollOffset > 0 {
+			m.detailScrollOffset--
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollDown) || msg.String() == "j" || msg.Type == tea.KeyDown:
+		m.detailScrollOffset++
+		return m, nil
+
+	case keyMatches(msg, m.keys.PageUp) || msg.Type == tea.KeyPgUp || msg.String() == "ctrl+u":
+		if m.detailScrollOffset >= 8 {
+			m.detailScrollOffset -= 8
+		} else {
+			m.detailScrollOffset = 0
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.PageDown) || msg.Type == tea.KeyPgDown || msg.String() == "ctrl+d":
+		m.detailScrollOffset += 8
+		return m, nil
+
+	case keyMatches(msg, m.keys.GoToTop) || msg.String() == "g" || msg.Type == tea.KeyHome:
+		m.detailScrollOffset = 0
+		return m, nil
+
+	case keyMatches(msg, m.keys.GoToBottom) || msg.String() == "G" || msg.Type == tea.KeyEnd:
+		m.detailScrollOffset = 99999
+		return m, nil
+
+	case msg.String() == "left" || msg.String() == "h" || msg.String() == "[" || msg.Type == tea.KeyLeft:
+		// Previous record
+		if m.splitMode != SplitNone {
+			t := m.currentTabForPane(m.activePane)
+			if t != nil && t.SelectedRow > 0 {
+				t.SelectedRow--
+				t.Follow = false
+				m.detailScrollOffset = 0
+			}
+		} else {
+			if m.selectedRow > 0 {
+				m.selectedRow--
+				m.follow = false
+				m.detailScrollOffset = 0
+			}
+		}
+		return m, nil
+
+	case msg.String() == "right" || msg.String() == "l" || msg.String() == "]" || msg.Type == tea.KeyRight:
+		// Next record
+		if m.splitMode != SplitNone {
+			t := m.currentTabForPane(m.activePane)
+			if t != nil && t.SelectedRow < len(t.Visible)-1 {
+				t.SelectedRow++
+				m.detailScrollOffset = 0
+			}
+		} else {
+			if m.selectedRow < len(m.visible)-1 {
+				m.selectedRow++
+				m.detailScrollOffset = 0
+			}
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.CopyRow) || msg.String() == "y":
+		r, ok := m.activeInspectorRecord()
+		if ok {
+			isPinned := false
+			if _, hasPin := m.bookmarks[r.ID]; hasPin {
+				isPinned = true
+			}
+			text := FormattedRecordDetail(r, m.tsField, isPinned)
+			if err := clipboard.Copy(text); err == nil {
+				m.message = fmt.Sprintf("✓ Copied record #%d details to clipboard", r.ID)
+			} else {
+				m.message = fmt.Sprintf("Clipboard error: %v", err)
+			}
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.CopyRaw) || msg.String() == "Y":
+		r, ok := m.activeInspectorRecord()
+		if ok {
+			if err := clipboard.Copy(r.Raw); err == nil {
+				m.message = fmt.Sprintf("✓ Copied raw log #%d to clipboard", r.ID)
+			} else {
+				m.message = fmt.Sprintf("Clipboard error: %v", err)
+			}
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.ToggleBookmark) || msg.String() == "b" || msg.String() == "m":
+		resM, cmd := m.handleToggleBookmark()
+		return resM.(Model), cmd
+	}
+
 	return m, nil
 }

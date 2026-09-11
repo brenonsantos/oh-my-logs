@@ -32,6 +32,7 @@ const (
 	modeTXInput
 	modeSettings
 	modeFilePicker
+	modeRowDetail
 )
 
 type filePickerPurpose int
@@ -253,6 +254,9 @@ type Model struct {
 	fpMatches           []string
 	fpMatchPrefix       string
 	fpMatchIndex        int
+
+	// Row detail inspector modal
+	detailScrollOffset int
 }
 
 // New creates a new Model with sensible defaults.

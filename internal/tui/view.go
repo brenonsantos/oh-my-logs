@@ -43,6 +43,8 @@ func (m Model) View() string {
 		sb.WriteString(m.viewFilePickerModal())
 	} else if m.mode == modeHelp {
 		sb.WriteString(m.viewHelpModal())
+	} else if m.mode == modeRowDetail {
+		sb.WriteString(m.viewRowDetailModal())
 	} else if m.mode == modeGame {
 		sb.WriteString(m.viewGameModal())
 	} else if len(m.visible) == 0 && m.splitMode == SplitNone {
