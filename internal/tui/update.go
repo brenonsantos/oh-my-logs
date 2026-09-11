@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -134,6 +135,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recalcLayout()
 		m.clampScroll()
 		m.clampScrollX()
+		if m.mode == modeFilePicker {
+			m.filePicker.SetHeight(m.filePickerHeight())
+		}
 		return m, nil
 
 	// ── New line from source ─────────────────────────────────────────────────
@@ -141,6 +145,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		r, _ := m.parser.Parse(string(msg))
 		m.ingestRecord(r)
 		return m, listenToSource(m.source)
+
+	// ── Log save completed ───────────────────────────────────────────────────
+	case LogSavedMsg:
+		if msg.Err != nil {
+			m.message = fmt.Sprintf("Save log failed: %v", msg.Err)
+		} else {
+			m.message = fmt.Sprintf("✓ Saved %d records to %s", msg.Count, filepath.Base(msg.Path))
+		}
+		return m, nil
 
 	// ── Source error ─────────────────────────────────────────────────────────
 	case ErrorMsg:
@@ -351,6 +364,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 	}
 
+	// ── FilePicker background messages (e.g. readDirMsg) ────────────────────
+	if m.mode == modeFilePicker {
+		var cmd tea.Cmd
+		m.filePicker, cmd = m.filePicker.Update(msg)
+		return m, cmd
+	}
+
 	return m, nil
 }
 
@@ -454,6 +474,16 @@ func (m *Model) ingestRecord(r record.Record) {
 	m.buffer.Add(r)
 	if m.mode == modeGame {
 		m.logsDuringGame++
+	}
+
+	if m.diskLogger != nil && m.diskLogger.IsActive() {
+		raw := r.Raw
+		if raw == "" && r.Fields != nil {
+			raw = r.Fields["message"]
+		}
+		if raw != "" {
+			m.diskLogger.WriteLine(raw)
+		}
 	}
 
 	// Dispatch to all tabs

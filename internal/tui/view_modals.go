@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -524,6 +525,98 @@ func (m Model) viewHelpModal() string {
 	sb.WriteString(theme.ModalFooter.Render(footerText))
 
 	modalBox := theme.ModalBox.Padding(0, 2).Width(modalWidth).Render(sb.String())
+	return centerBox(m.width, m.tableHeight+2, modalBox)
+}
+
+// viewFilePickerModal renders the interactive directory and file browser modal.
+func (m Model) viewFilePickerModal() string {
+	modalWidth := m.filePickerModalWidth()
+
+	var sb strings.Builder
+	if m.fpPurpose == fpPurposeSaveLog {
+		sb.WriteString(theme.ModalTitle.Render("💾 Save Logs to File"))
+	} else {
+		sb.WriteString(theme.ModalTitle.Render("📂 Select Log Destination"))
+	}
+	sb.WriteString("\n\n")
+
+	currDir := m.filePicker.CurrentDirectory
+	if currDir == "" {
+		currDir = "."
+	}
+
+	prefix := m.currentFilePickerPrefix()
+
+	switch m.fpSubMode {
+	case fpModeTypeDir:
+		expanded := expandHomePath(strings.TrimSpace(m.fpDirInput.Value))
+		statusLabel := ""
+		if fi, err := os.Stat(expanded); err == nil && fi.IsDir() {
+			statusLabel = theme.Accent.Render("  ✓ existing directory")
+		} else if strings.TrimSpace(m.fpDirInput.Value) != "" {
+			statusLabel = theme.Muted.Render("  (Enter will create new folder)")
+		}
+
+		sb.WriteString("  " + theme.Secondary.Bold(true).Render("Go to Directory:") + statusLabel + "\n")
+		input := m.fpDirInput.RenderWindow(modalWidth-8, theme.ModalSelected)
+		sb.WriteString("  " + input + "\n")
+		if len(m.fpMatches) > 0 {
+			compStr := formatCompletions(m.fpMatches, m.fpMatchIndex, modalWidth-8)
+			sb.WriteString("  " + compStr + "\n\n")
+		} else {
+			sb.WriteString("\n")
+		}
+
+		sb.WriteString("  " + theme.Muted.Render("Contents of ") + theme.Accent.Render(currDir) + ":\n")
+		sb.WriteString(m.filePicker.View())
+		sb.WriteString("\n\n")
+
+		sb.WriteString(theme.ModalFooter.Render("Enter open/create · Tab complete · Esc cancel"))
+
+	case fpModeNewFolder:
+		sb.WriteString("  " + theme.Muted.Render("Location: ") + theme.Accent.Render(currDir) + "\n\n")
+		sb.WriteString("  " + theme.Secondary.Bold(true).Render("New Folder Name:") + "\n")
+		input := m.fpNewFolderInput.RenderWindow(modalWidth-8, theme.ModalSelected)
+		sb.WriteString("  " + input + "\n\n")
+
+		sb.WriteString(m.filePicker.View())
+		sb.WriteString("\n\n")
+
+		sb.WriteString(theme.ModalFooter.Render("Enter create & open · Esc cancel"))
+
+	case fpModeTypePrefix:
+		sb.WriteString("  " + theme.Secondary.Bold(true).Render("Filename Prefix:") + "\n")
+		input := m.fpPrefixInput.RenderWindow(modalWidth-8, theme.ModalSelected)
+		sb.WriteString("  " + input + "\n\n")
+		sampleFile := fmt.Sprintf("%s-YYYY-MM-DD_HH-MM-SS.log", strings.TrimSpace(m.fpPrefixInput.Value))
+		sb.WriteString("  " + theme.Muted.Render("Preview: ") + theme.Accent.Render(sampleFile) + "\n\n")
+
+		sb.WriteString(m.filePicker.View())
+		sb.WriteString("\n\n")
+
+		sb.WriteString(theme.ModalFooter.Render("Enter save prefix · Esc cancel"))
+
+	default:
+		sampleFile := fmt.Sprintf("%s-YYYY-MM-DD_HH-MM-SS.log", prefix)
+		if m.fpPurpose == fpPurposeSaveLog {
+			sb.WriteString("  " + theme.Muted.Render("Save to:   ") + theme.Accent.Bold(true).Render(currDir) + "\n")
+			sb.WriteString("  " + theme.Muted.Render("Filename:  ") + theme.Accent.Render(sampleFile) + theme.Muted.Render(" (press p to change prefix)") + "\n\n")
+		} else {
+			sb.WriteString("  " + theme.Muted.Render("Directory: ") + theme.Accent.Bold(true).Render(currDir) + "\n")
+			sb.WriteString("  " + theme.Muted.Render("Prefix:    ") + theme.Accent.Render(prefix) + theme.Muted.Render(" ("+sampleFile+")") + "\n\n")
+		}
+
+		sb.WriteString(m.filePicker.View())
+		sb.WriteString("\n\n")
+
+		if m.fpPurpose == fpPurposeSaveLog {
+			sb.WriteString(theme.ModalFooter.Render("Space save · Enter open/pick · : path · + folder · p prefix · Esc cancel"))
+		} else {
+			sb.WriteString(theme.ModalFooter.Render("Space confirm · Enter open/pick · : path · + folder · p prefix · Esc cancel"))
+		}
+	}
+
+	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+2, modalBox)
 }
 

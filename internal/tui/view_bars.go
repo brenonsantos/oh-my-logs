@@ -176,6 +176,10 @@ func (m Model) viewTitleBar() string {
 	padLeft := lipgloss.NewStyle().Background(theme.TitleBg).Render(" ")
 
 	content := padLeft + badge + " " + port + gap + baud + gap + connStr + sep + prof
+	if m.diskLogger != nil && m.diskLogger.IsActive() {
+		recBadge := theme.TitleConnErr.Render(fmt.Sprintf("🔴 REC: %s (%d lines)", m.diskLogger.Filename(), m.diskLogger.LinesWritten()))
+		content += sep + recBadge
+	}
 
 	// Fill the exact remainder of the terminal width with the background accent:
 	contentWidth := lipgloss.Width(content)
@@ -525,6 +529,7 @@ func (m Model) renderKeyBarContent() string {
 				hint("P", "profile"),
 				hint("F", "presets"),
 				hint(",", "⚙ cfg"),
+				hint("s", "save"),
 				hint("Space", pauseLabel),
 				hint("c", "clear"),
 				hint("i", "send"),

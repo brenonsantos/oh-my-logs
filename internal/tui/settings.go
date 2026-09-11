@@ -2,10 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
+	"github.com/charmbracelet/bubbles/filepicker"
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -19,6 +23,7 @@ const (
 	settingRowFormat
 	settingRowFollow
 	settingRowDirectToDisk
+	settingRowLogPath
 	settingRowTheme
 	settingRowCount
 )
@@ -65,6 +70,8 @@ func (m Model) settingRowName(row settingRow) string {
 		return "Auto-Follow on Launch"
 	case settingRowDirectToDisk:
 		return "Direct-to-Disk Stream"
+	case settingRowLogPath:
+		return "Logs Destination"
 	case settingRowTheme:
 		return "Theme Palette"
 	default:
@@ -87,7 +94,9 @@ func (m Model) settingRowDescription(row settingRow) string {
 	case settingRowFollow:
 		return "Automatically follow newest incoming logs upon startup"
 	case settingRowDirectToDisk:
-		return "Continuous unbuffered disk tee for overnight soak tests"
+		return "Continuous unbuffered disk tee for streaming and soak logging"
+	case settingRowLogPath:
+		return "Default folder and destination for log exports and direct-to-disk logging"
 	case settingRowTheme:
 		return "Active color scheme across all tables, bars, modals, and tabs"
 	default:
@@ -166,6 +175,18 @@ func (m Model) settingValueLabel(row settingRow) string {
 			return "Enabled"
 		}
 		return "Disabled"
+
+	case settingRowLogPath:
+		if m.diskLogger != nil && m.diskLogger.IsActive() {
+			return m.diskLogger.Filename()
+		}
+		if m.directToDiskPath != "" {
+			return filepath.Base(m.directToDiskPath)
+		}
+		if s.LogDir != "" {
+			return filepath.Base(s.LogDir)
+		}
+		return "(auto in logs/)"
 
 	case settingRowTheme:
 		if s.Theme != "" {
@@ -280,9 +301,15 @@ func (m Model) adjustSetting(row settingRow, delta int) Model {
 	case settingRowDirectToDisk:
 		m.settings.DirectToDisk = !m.settings.DirectToDisk
 		if m.settings.DirectToDisk {
-			m.message = "Direct-to-disk overnight stream enabled"
+			if err := m.StartDiskLogger(m.directToDiskPath); err != nil {
+				m.message = fmt.Sprintf("Failed to start disk logger: %v", err)
+				m.settings.DirectToDisk = false
+			} else {
+				m.message = fmt.Sprintf("Direct-to-disk stream started: %s", m.diskLogger.Filename())
+			}
 		} else {
-			m.message = "Direct-to-disk overnight stream disabled"
+			m.StopDiskLogger()
+			m.message = "Direct-to-disk stream disabled"
 		}
 
 	case settingRowTheme:
@@ -309,6 +336,104 @@ func (m Model) adjustSetting(row settingRow, delta int) Model {
 	return m
 }
 
+// currentFilePickerPrefix returns the active prefix based on modal purpose.
+func (m Model) currentFilePickerPrefix() string {
+	if m.fpPurpose == fpPurposeSaveLog {
+		if m.saveLogPrefix != "" {
+			return m.saveLogPrefix
+		}
+		return "oml"
+	}
+	if m.directToDiskPrefix != "" {
+		return m.directToDiskPrefix
+	}
+	return "oml"
+}
+
+// filePickerModalWidth computes a responsive width for the file picker modal based on terminal width.
+func (m Model) filePickerModalWidth() int {
+	target := int(float64(m.width) * 0.72)
+	if target < 86 {
+		target = 86
+	}
+	if target > 116 {
+		target = 116
+	}
+	if target > m.width-4 {
+		target = m.width - 4
+	}
+	if target < 40 {
+		target = 40
+	}
+	return target
+}
+
+// filePickerHeight computes a responsive height for the file list based on available vertical space.
+func (m Model) filePickerHeight() int {
+	avail := m.tableHeight + 2
+	if m.height > 0 && m.height-14 > avail {
+		avail = m.height - 14
+	}
+	fpH := avail - 11
+	if fpH < 8 {
+		fpH = 8
+	}
+	if fpH > 26 {
+		fpH = 26
+	}
+	return fpH
+}
+
+// openFilePickerWithPurpose initializes and displays the file/folder browser modal for the specified purpose.
+func (m Model) openFilePickerWithPurpose(purpose filePickerPurpose) (Model, tea.Cmd) {
+	fp := filepicker.New()
+	dir := ""
+	if purpose == fpPurposeSaveLog {
+		// Log export snapshot always starts at the current launch / working directory
+		dir, _ = os.Getwd()
+	} else {
+		// Direct-to-disk continuous logging starts at stable configured settings
+		if m.directToDiskPath != "" {
+			dir = filepath.Dir(m.directToDiskPath)
+		} else if m.settings != nil && m.settings.LogDir != "" {
+			dir = m.settings.LogDir
+		} else if m.appConfig != nil && m.appConfig.LogsDir != "" {
+			dir = m.appConfig.LogsDir
+		}
+	}
+	if dir == "" {
+		dir, _ = os.Getwd()
+	}
+	if dir == "" {
+		dir = "."
+	}
+	_ = os.MkdirAll(dir, 0o755)
+	fp.CurrentDirectory = dir
+	fp.DirAllowed = false
+	fp.FileAllowed = true
+	fp.ShowHidden = false
+	fp.AutoHeight = false
+	fp.SetHeight(m.filePickerHeight())
+	fp.KeyMap.Back = key.NewBinding(key.WithKeys("h", "backspace", "left"), key.WithHelp("h/←", "back"))
+	m.filePicker = fp
+	m.fpPurpose = purpose
+	m.fpSubMode = fpModeBrowse
+	m.fpMatches = nil
+	m.fpMatchIndex = -1
+	m.mode = modeFilePicker
+	return m, m.filePicker.Init()
+}
+
+// openFilePicker initializes and displays the file/folder browser modal for direct-to-disk logging.
+func (m Model) openFilePicker() (Model, tea.Cmd) {
+	return m.openFilePickerWithPurpose(fpPurposeDirectToDisk)
+}
+
+// openSaveLogPicker initializes and displays the file/folder browser modal for exporting/saving logs.
+func (m Model) openSaveLogPicker() (Model, tea.Cmd) {
+	return m.openFilePickerWithPurpose(fpPurposeSaveLog)
+}
+
 // handleSettingsKey handles keyboard navigation and option selection in the Settings modal.
 func (m Model) handleSettingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
@@ -331,14 +456,23 @@ func (m Model) handleSettingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case msg.Type == tea.KeyLeft || msg.String() == "h":
+		if settingRow(m.settingsCursor) == settingRowLogPath {
+			return m.openFilePicker()
+		}
 		m = m.adjustSetting(settingRow(m.settingsCursor), -1)
 		return m, nil
 
 	case msg.Type == tea.KeyRight || msg.String() == "l" || msg.String() == " ":
+		if settingRow(m.settingsCursor) == settingRowLogPath {
+			return m.openFilePicker()
+		}
 		m = m.adjustSetting(settingRow(m.settingsCursor), 1)
 		return m, nil
 
 	case msg.Type == tea.KeyEnter || msg.String() == "enter":
+		if settingRow(m.settingsCursor) == settingRowLogPath {
+			return m.openFilePicker()
+		}
 		m.mode = modeNormal
 		return m, nil
 	}
@@ -438,6 +572,7 @@ func (m Model) saveSettings() {
 	if m.settings != nil {
 		s.DefaultFollow = m.settings.DefaultFollow
 		s.DirectToDisk = m.settings.DirectToDisk
+		s.LogDir = m.settings.LogDir
 		s.Theme = m.settings.Theme
 	}
 	_ = m.appConfig.SaveSettings(s)

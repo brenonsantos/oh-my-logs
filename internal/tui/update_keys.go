@@ -36,6 +36,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleTXKey(msg)
 	case modeSettings:
 		return m.handleSettingsKey(msg)
+	case modeFilePicker:
+		return m.handleFilePickerKey(msg)
 	default:
 		return m.handleNormalKey(msg)
 	}
@@ -45,6 +47,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case keyMatches(msg, m.keys.Quit):
 		m.saveSettings()
+		m.StopDiskLogger()
 		if m.source != nil {
 			m.source.Stop()
 		}
@@ -575,7 +578,8 @@ func (m Model) handleActionKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 		return m, nil, true
 
 	case keyMatches(msg, m.keys.SaveLog):
-		return m, m.cmdSaveLog(), true
+		resM, cmd := m.openSaveLogPicker()
+		return resM, cmd, true
 
 	case keyMatches(msg, m.keys.Disconnect):
 		resM, cmd := m.disconnect()

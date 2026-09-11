@@ -22,6 +22,7 @@ type Settings struct {
 	DefaultFollow  bool     `json:"default_follow"`
 	DirectToDisk   bool     `json:"direct_to_disk"`
 	LogDir         string   `json:"log_dir,omitempty"`
+	LogPrefix      string   `json:"log_prefix,omitempty"`
 	Theme          string   `json:"theme,omitempty"`
 	DisplayFormat  string   `json:"display_format,omitempty"`
 }

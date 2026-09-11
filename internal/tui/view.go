@@ -39,6 +39,8 @@ func (m Model) View() string {
 		sb.WriteString(m.viewSavePresetModal())
 	} else if m.mode == modeSettings {
 		sb.WriteString(m.viewSettingsModal())
+	} else if m.mode == modeFilePicker {
+		sb.WriteString(m.viewFilePickerModal())
 	} else if m.mode == modeHelp {
 		sb.WriteString(m.viewHelpModal())
 	} else if m.mode == modeGame {

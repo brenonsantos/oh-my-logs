@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
@@ -11,6 +12,7 @@ import (
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
 	"github.com/brenoniehues/oh-my-logs/internal/timing"
+	"github.com/charmbracelet/bubbles/filepicker"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -29,6 +31,23 @@ const (
 	modeGame
 	modeTXInput
 	modeSettings
+	modeFilePicker
+)
+
+type filePickerPurpose int
+
+const (
+	fpPurposeDirectToDisk filePickerPurpose = iota
+	fpPurposeSaveLog
+)
+
+type filePickerSubMode int
+
+const (
+	fpModeBrowse filePickerSubMode = iota
+	fpModeTypeDir
+	fpModeTypePrefix
+	fpModeNewFolder
 )
 
 // ProfileItem represents an entry in the profile switcher list.
@@ -56,6 +75,13 @@ type ErrorMsg struct{ Err error }
 type ConnStateMsg struct {
 	State  ConnState
 	Detail string
+}
+
+// LogSavedMsg signals the outcome of saving log records to a file.
+type LogSavedMsg struct {
+	Path  string
+	Count int
+	Err   error
 }
 
 // ViewportState encapsulates the scroll, search, selection, and viewport rendering
@@ -212,6 +238,21 @@ type Model struct {
 	cursorCol    int // character cursor column (-1 if none)
 	charSelStart int // character selection start (-1 if none)
 	charSelEnd   int // character selection end (-1 if none)
+
+	// Direct-to-disk continuous logging & file picker
+	diskLogger          *DiskLogger
+	directToDiskPath    string
+	directToDiskPrefix  string
+	saveLogPrefix       string
+	filePicker          filepicker.Model
+	fpPurpose           filePickerPurpose
+	fpSubMode           filePickerSubMode
+	fpDirInput          TextInput
+	fpPrefixInput       TextInput
+	fpNewFolderInput    TextInput
+	fpMatches           []string
+	fpMatchPrefix       string
+	fpMatchIndex        int
 }
 
 // New creates a new Model with sensible defaults.
@@ -357,6 +398,15 @@ func New(
 		syncScroll:          true,
 	}
 
+	initPrefix := "oml"
+	if savedSettings != nil && savedSettings.LogPrefix != "" {
+		initPrefix = savedSettings.LogPrefix
+	}
+	m.directToDiskPrefix = initPrefix
+	m.fpDirInput = NewTextInput(false)
+	m.fpPrefixInput = NewTextInput(false)
+	m.fpNewFolderInput = NewTextInput(false)
+
 	m.txInput.History = txHist
 	m.loadFilters()
 
@@ -392,7 +442,103 @@ func New(
 	m.cursorCol = -1
 	m.charSelStart = -1
 	m.charSelEnd = -1
+
+	if savedSettings != nil && savedSettings.DirectToDisk {
+		targetPath := ""
+		if savedSettings.LogDir != "" {
+			targetPath = GenerateTimestampLogPathWithPrefix(savedSettings.LogDir, initPrefix)
+		} else if appCfg != nil && appCfg.LogsDir != "" {
+			targetPath = GenerateTimestampLogPathWithPrefix(appCfg.LogsDir, initPrefix)
+		}
+		_ = m.StartDiskLogger(targetPath)
+	}
+
 	return m
+}
+
+// StartDiskLogger begins direct-to-disk streaming to targetPath.
+// If targetPath is empty, a timestamped file in the logs directory is used.
+func (m *Model) StartDiskLogger(targetPath string) error {
+	if m.diskLogger != nil {
+		m.diskLogger.Close()
+		m.diskLogger = nil
+	}
+	if targetPath == "" {
+		logsDir := ""
+		if m.appConfig != nil && m.appConfig.LogsDir != "" {
+			logsDir = m.appConfig.LogsDir
+		} else if m.settings != nil && m.settings.LogDir != "" {
+			logsDir = m.settings.LogDir
+		}
+		if logsDir == "" {
+			logsDir = "."
+		}
+		prefix := m.directToDiskPrefix
+		if prefix == "" && m.settings != nil && m.settings.LogPrefix != "" {
+			prefix = m.settings.LogPrefix
+		}
+		if prefix == "" {
+			prefix = "oml"
+		}
+		targetPath = GenerateTimestampLogPathWithPrefix(logsDir, prefix)
+	}
+	dl, err := NewDiskLogger(targetPath)
+	if err != nil {
+		return err
+	}
+	m.diskLogger = dl
+	m.directToDiskPath = targetPath
+	if m.settings != nil {
+		m.settings.DirectToDisk = true
+		m.settings.LogDir = filepath.Dir(targetPath)
+		if m.directToDiskPrefix != "" {
+			m.settings.LogPrefix = m.directToDiskPrefix
+		}
+	}
+	return nil
+}
+
+// StopDiskLogger closes the active disk logger if running.
+func (m *Model) StopDiskLogger() {
+	if m.diskLogger != nil {
+		m.diskLogger.Close()
+		m.diskLogger = nil
+	}
+	if m.settings != nil {
+		m.settings.DirectToDisk = false
+	}
+}
+
+// DiskLogger returns the active disk logger (if any).
+func (m *Model) DiskLogger() *DiskLogger {
+	return m.diskLogger
+}
+
+// DirectToDiskPath returns the configured or active log file path.
+func (m *Model) DirectToDiskPath() string {
+	return m.directToDiskPath
+}
+
+// DirectToDiskPrefix returns the configured log filename prefix.
+func (m *Model) DirectToDiskPrefix() string {
+	if m.directToDiskPrefix != "" {
+		return m.directToDiskPrefix
+	}
+	if m.settings != nil && m.settings.LogPrefix != "" {
+		return m.settings.LogPrefix
+	}
+	return "oml"
+}
+
+// SetDirectToDiskPrefix updates the log filename prefix.
+func (m *Model) SetDirectToDiskPrefix(prefix string) {
+	if prefix == "" {
+		prefix = "oml"
+	}
+	m.directToDiskPrefix = prefix
+	if m.settings != nil {
+		m.settings.LogPrefix = prefix
+	}
 }
 
 // currentTab returns a pointer to the currently active/focused tab.
