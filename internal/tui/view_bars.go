@@ -27,8 +27,8 @@ func renderHScrollTrack(scrollX int, maxContentW int, trackW int) string {
 	}
 
 	thumbW := trackW * trackW / maxContentW
-	if thumbW < 6 {
-		thumbW = 6
+	if thumbW < 3 {
+		thumbW = 3
 	}
 	if thumbW > trackW {
 		thumbW = trackW
@@ -47,12 +47,7 @@ func renderHScrollTrack(scrollX int, maxContentW int, trackW int) string {
 	}
 
 	leftTrack := strings.Repeat("─", thumbLeft)
-	var thumb string
-	if thumbW >= 6 {
-		thumb = "◀" + strings.Repeat("━", thumbW-2) + "▶"
-	} else {
-		thumb = strings.Repeat("━", thumbW)
-	}
+	thumb := strings.Repeat("▀", thumbW)
 	rightTrack := strings.Repeat("─", trackW-thumbLeft-thumbW)
 
 	return theme.Divider.Render(leftTrack) + theme.Accent.Bold(true).Render(thumb) + theme.Divider.Render(rightTrack)

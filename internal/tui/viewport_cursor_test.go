@@ -398,8 +398,11 @@ func TestInteractiveHorizontalScrollbarClick(t *testing.T) {
 	if lipgloss.Width(track) != 60 {
 		t.Errorf("expected horizontal track width 60, got %d", lipgloss.Width(track))
 	}
-	if !strings.Contains(track, "◀") || !strings.Contains(track, "▶") {
-		t.Errorf("expected thumb markers ◀ and ▶ in track, got %s", track)
+	if !strings.Contains(track, "▀") {
+		t.Errorf("expected thumb marker ▀ in track, got %s", track)
+	}
+	if strings.Contains(track, "◀") || strings.Contains(track, "▶") {
+		t.Errorf("expected no arrow markers in track, got %s", track)
 	}
 
 	longMsg := "Testing horizontal scrollbar click across a very long line that exceeds the standard screen width easily"
@@ -438,7 +441,7 @@ func TestNoHorizontalScrollbarWhenNotNeeded(t *testing.T) {
 	}
 
 	divider := m.viewHorizontalScrollbarDivider()
-	if strings.Contains(divider, "◀") || strings.Contains(divider, "▶") {
+	if strings.Contains(divider, "▀") {
 		t.Errorf("scrollbar thumb should NOT be rendered when all content fits on screen, got %s", divider)
 	}
 
