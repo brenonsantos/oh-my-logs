@@ -1,0 +1,58 @@
+name: Logcat
+
+# Android Logcat profile (threadtime & standard Android Studio format)
+# Supports:
+#   08-10 05:34:48.669   559   559 I SystemServerTiming: Initializing system service
+#   08-10 12:00:00.123  1000  1001 D WifiService: Connected to network
+#   05:34:48.670   559   620 E AudioFlinger: cannot open hw device
+#   12:34:56.789  1234  1234 W ActivityManager: Slow delivery of broadcast
+#   01-01 00:00:01.000   100   100 V BatteryService: level=100 scale=100
+parser:
+  type: regex
+  pattern: '^(?:(?P<time>(?:\d{2}-\d{2}\s+)?\d{2}:\d{2}:\d{2}\.\d{3}))\s+(?P<pid>\d+)\s+(?P<tid>\d+)\s+(?P<level>[VDIWEAFvdiweaf])\s+(?:(?P<tag>[^:\r\n]+?):\s+)?(?P<message>.*)$'
+
+columns:
+  - field: time
+    title: Time
+    width: 18
+    style: uptime
+
+  - field: pid
+    title: PID
+    width: 6
+    style: muted
+
+  - field: tid
+    title: TID
+    width: 6
+    style: muted
+
+  - field: level
+    title: Lvl
+    width: 5
+    style: level
+    colors:
+      V: gray
+      v: gray
+      D: cyan
+      d: cyan
+      I: green
+      i: green
+      W: yellow
+      w: yellow
+      E: red
+      e: red
+      A: purple
+      a: purple
+      F: red
+      f: red
+
+  - field: tag
+    title: Tag
+    width: 20
+    style: identifier
+
+  - field: message
+    title: Message
+    width: 0
+    style: primary
