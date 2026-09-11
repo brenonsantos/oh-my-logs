@@ -133,6 +133,13 @@ func TestDetectAndFormatPayload_YAML(t *testing.T) {
 			wantLabel: "YAML",
 			wantSub:   "database: postgres",
 		},
+		{
+			name:      "prefixed log line with embedded yaml",
+			input:     `2026-09-11 11:30:02.180 [INF] config: manifest:\n  version: "1.2.0"\n  environment: production\n  services:\n    telemetry:\n      enabled: true`,
+			wantType:  PayloadYAML,
+			wantLabel: "YAML",
+			wantSub:   `version: "1.2.0"`,
+		},
 	}
 
 	for _, tc := range tests {

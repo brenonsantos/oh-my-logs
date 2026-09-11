@@ -286,46 +286,92 @@ func formatAndColorizeXMLTokens(tokens []xml.Token, p Palette) (string, []string
 
 // ── YAML Formatting ───────────────────────────────────────────────────────────
 
-func detectAndFormatYAML(s string, p Palette) (PayloadDetection, bool) {
-	candidate := s
-	if !strings.Contains(candidate, "\n") && strings.Contains(candidate, `\n`) {
-		candidate = strings.ReplaceAll(candidate, `\n`, "\n")
-	}
-	trimmed := strings.TrimSpace(candidate)
+func tryParseYAML(str string) (*yaml.Node, bool) {
+	trimmed := strings.TrimSpace(str)
 	// Must contain at least one newline or ": " key-value delimiter or list item
 	if !strings.Contains(trimmed, ": ") && !strings.Contains(trimmed, ":\n") && !strings.HasPrefix(trimmed, "- ") {
-		return PayloadDetection{}, false
+		return nil, false
 	}
 
 	lines := strings.Split(trimmed, "\n")
 	// Single line text without sequence bullet is rejected to avoid false positives on normal logs (e.g. "error: connection reset")
 	if len(lines) < 2 && !strings.HasPrefix(trimmed, "- ") {
-		return PayloadDetection{}, false
+		return nil, false
 	}
 
 	var node yaml.Node
 	if err := yaml.Unmarshal([]byte(trimmed), &node); err != nil {
-		return PayloadDetection{}, false
+		return nil, false
 	}
 
 	// Ensure document root has children and is a mapping or sequence
 	if len(node.Content) == 0 {
-		return PayloadDetection{}, false
+		return nil, false
 	}
 	root := node.Content[0]
 	if root.Kind != yaml.MappingNode && root.Kind != yaml.SequenceNode {
-		return PayloadDetection{}, false
+		return nil, false
 	}
 
 	// For mappings, require at least 2 pairs or a nested structure
 	if root.Kind == yaml.MappingNode {
 		if len(root.Content) < 4 {
 			if len(root.Content) < 2 || (root.Content[1].Kind != yaml.MappingNode && root.Content[1].Kind != yaml.SequenceNode) {
-				return PayloadDetection{}, false
+				return nil, false
 			}
 		}
 	}
 
+	return root, true
+}
+
+func detectAndFormatYAML(s string, p Palette) (PayloadDetection, bool) {
+	candidate := s
+	if !strings.Contains(candidate, "\n") && strings.Contains(candidate, `\n`) {
+		candidate = strings.ReplaceAll(candidate, `\n`, "\n")
+	}
+
+	trimmed := strings.TrimSpace(candidate)
+
+	// 1. Check if the full string is YAML
+	if root, ok := tryParseYAML(trimmed); ok {
+		return buildYAMLDetection(root, "", trimmed, p)
+	}
+
+	// 2. Check for embedded YAML with a log prefix (e.g. "2026-09-11 [INF] config: manifest:\n  version: 1.0")
+	newlineIdx := strings.IndexByte(candidate, '\n')
+	if newlineIdx > 0 {
+		firstLine := candidate[:newlineIdx]
+
+		// Check after ": " separators on the first line
+		searchStart := 0
+		for {
+			colonIdx := strings.Index(firstLine[searchStart:], ": ")
+			if colonIdx < 0 {
+				break
+			}
+			absColonIdx := searchStart + colonIdx
+			prefix := strings.TrimSpace(candidate[:absColonIdx+1])
+			payloadSub := strings.TrimSpace(candidate[absColonIdx+2:])
+
+			if root, ok := tryParseYAML(payloadSub); ok {
+				return buildYAMLDetection(root, prefix, payloadSub, p)
+			}
+			searchStart = absColonIdx + 2
+		}
+
+		// Check starting from line 1 (e.g. "2026-09-11 [INF] config:\nmanifest:\n  version: 1.0")
+		prefix := strings.TrimSpace(firstLine)
+		payloadSub := strings.TrimSpace(candidate[newlineIdx+1:])
+		if root, ok := tryParseYAML(payloadSub); ok {
+			return buildYAMLDetection(root, prefix, payloadSub, p)
+		}
+	}
+
+	return PayloadDetection{}, false
+}
+
+func buildYAMLDetection(root *yaml.Node, prefix, rawPayload string, p Palette) (PayloadDetection, bool) {
 	var out bytes.Buffer
 	enc := yaml.NewEncoder(&out)
 	enc.SetIndent(2)
@@ -344,8 +390,8 @@ func detectAndFormatYAML(s string, p Palette) (PayloadDetection, bool) {
 	return PayloadDetection{
 		Type:           PayloadYAML,
 		TypeLabel:      "YAML",
-		Prefix:         "",
-		RawPayload:     trimmed,
+		Prefix:         prefix,
+		RawPayload:     rawPayload,
 		Suffix:         "",
 		FormattedText:  formatted,
 		ColorizedLines: colorized,

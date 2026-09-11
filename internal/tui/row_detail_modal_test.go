@@ -355,5 +355,18 @@ func TestRowDetailModal_MultiFormatRendering(t *testing.T) {
 	if !strings.Contains(viewLogfmt, "LOGFMT FORMATTED") {
 		t.Errorf("expected '[LOGFMT FORMATTED]' in View for Logfmt, got:\n%s", viewLogfmt)
 	}
+
+	// Prefixed YAML record (from sample_inspect.log row 4)
+	prefixedYamlRec := record.Record{
+		ID:  204,
+		Raw: `2026-09-11 11:30:02.180 [INF] config: manifest:\n  version: "1.2.0"\n  environment: production\n  services:\n    telemetry:\n      enabled: true\n      port: 9090\n      protocol: udp\n    ingest:\n      buffer_size: 50000\n      flush_ms: 250\n  tags:\n    - embedded\n    - serial\n    - zephyr`,
+	}
+	m = newTestModelWithRecords([]record.Record{prefixedYamlRec})
+	m.selectedRow = 0
+	m.mode = modeRowDetail
+	viewPrefixedYAML := m.View()
+	if !strings.Contains(viewPrefixedYAML, "YAML FORMATTED") {
+		t.Errorf("expected '[YAML FORMATTED]' in View for prefixed YAML, got:\n%s", viewPrefixedYAML)
+	}
 }
 
