@@ -9,8 +9,11 @@ param(
     [string]$Version = "latest"
 )
 
-if ($Nightly) {
+if ($env:OML_NIGHTLY -eq "1" -or $env:OML_NIGHTLY -eq "true" -or $Nightly) {
+    $Nightly = $true
     $Version = "nightly"
+} elseif ($env:OML_VERSION -and $Version -eq "latest") {
+    $Version = $env:OML_VERSION
 }
 
 $ErrorActionPreference = "Stop"

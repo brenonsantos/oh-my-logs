@@ -48,7 +48,7 @@ To install the latest rolling build built automatically from `main`:
 curl -fsSL https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.sh | bash -s -- --nightly
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.ps1 | iex -Nightly
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.ps1))) -Nightly
 ```
 
 ---
@@ -72,7 +72,7 @@ oml --uninstall        # Remove oml binary from system PATH
 curl -fsSL https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.sh | bash -s -- --version v1.2.0
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.ps1 | iex -Version v1.2.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/brenonsantos/oh-my-logs/main/install.ps1))) -Version v1.2.0
 ```
 
 #### Binary Self-Install (`--install`)
