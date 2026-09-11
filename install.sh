@@ -223,6 +223,8 @@ mkdir -p "$PROFILES_DIR"
 SRC_EXAMPLES=""
 if [ -n "$EXTRACTED_PROFILES" ] && [ -d "$EXTRACTED_PROFILES" ]; then
     SRC_EXAMPLES="$EXTRACTED_PROFILES"
+elif [ -n "$SCRIPT_DIR" ] && [ -d "$SCRIPT_DIR/examples/profiles" ]; then
+    SRC_EXAMPLES="$SCRIPT_DIR/examples/profiles"
 elif [ -n "$SCRIPT_DIR" ] && [ -d "$SCRIPT_DIR/profiles/examples" ]; then
     SRC_EXAMPLES="$SCRIPT_DIR/profiles/examples"
 fi

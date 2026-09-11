@@ -108,7 +108,11 @@ func FindAllProfilePaths(c *AppConfig) []string {
 	}
 
 	// 2. Local profiles and subdirectories
-	localDirs := []string{"profiles", filepath.Join("profiles", "examples")}
+	localDirs := []string{
+		filepath.Join("examples", "profiles"),
+		"profiles",
+		filepath.Join("profiles", "examples"),
+	}
 	for _, dir := range localDirs {
 		entries, err := os.ReadDir(dir)
 		if err != nil {

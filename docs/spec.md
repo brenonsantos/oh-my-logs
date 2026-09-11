@@ -1,4 +1,4 @@
-# Serial Monitor TUI
+# oh-my-logs (oml) — Technical Specification & Architecture
 
 Build a cross-platform terminal UI (TUI) application in Go for monitoring, filtering, searching, and recording serial output from embedded systems.
 
@@ -182,59 +182,41 @@ The TUI should consume application state/events.
 
 ---
 
-# 5. Suggested project structure
+# 5. Project structure
 
-Use a structure similar to:
+The production structure of `oh-my-logs` decouples protocol framing, data structures, syntax analysis, and UI views:
 
 ```text
-serialmon/
+oh-my-logs/
 ├── cmd/
-│   └── serialmon/
-│       └── main.go
+│   └── oml/
+│       └── main.go           # CLI entry point, argument flags, profile bootstrapping
 │
 ├── internal/
-│   ├── serial/
-│   │   ├── port.go
-│   │   ├── reader.go
-│   │   └── config.go
-│   │
-│   ├── record/
-│   │   ├── record.go
-│   │   ├── buffer.go
-│   │   └── columns.go
-│   │
-│   ├── parser/
-│   │   ├── parser.go
-│   │   ├── regex.go
-│   │   ├── raw.go
-│   │   └── profile.go
-│   │
-│   ├── filter/
-│   │   ├── filter.go
-│   │   ├── expression.go
-│   │   └── matcher.go
-│   │
-│   ├── config/
-│   │   ├── config.go
-│   │   └── loader.go
-│   │
-│   └── tui/
-│       ├── model.go
-│       ├── update.go
-│       ├── view.go
-│       ├── keys.go
-│       └── styles.go
+│   ├── clipboard/            # Cross-platform clipboard integration (macOS/Linux/Windows)
+│   ├── config/               # App configuration, profiles loader, and installer
+│   ├── filter/               # Dynamic query engine (search, field filters, exclusions)
+│   ├── game/                 # Terminal mini-games (Easter eggs)
+│   ├── parser/               # Regex and profile-driven stream framing
+│   ├── payload/              # Multi-format payload detection (JSON, XML, YAML, Logfmt)
+│   ├── record/               # Generic Record model, ring buffer, dynamic columns
+│   ├── serial/               # Hardware COM ports & simulated file reader
+│   ├── timing/               # Arrival timestamping & microsecond delta calculations
+│   └── tui/                  # Bubble Tea state machine, multi-modal layout, themes
 │
-├── profiles/
-│   └── examples/
+├── examples/
+│   ├── logs/                 # Sample raw log captures for testing and demo
+│   └── profiles/             # Ready-to-use device profiles (raw.yaml, zephyr.yaml)
 │
-├── testdata/
-│
+├── docs/                     # Specifications, guides, profile references, cheatsheets
+├── scripts/                  # CI/CD and release automation scripts
+├── .github/workflows/        # Automated tests, nightly builds, and releases
 ├── go.mod
+├── go.sum
 └── README.md
 ```
 
-Adjust this structure if a better Go architecture is appropriate, but preserve the separation of responsibilities.
+This ensures strict separation of concerns, testability with the Go race detector, and modularity.
 
 ---
 
@@ -1232,3 +1214,45 @@ and:
 15. Run successfully under the Go race detector.
 
 The implementation should be idiomatic Go, reasonably documented, and structured so that a future GUI frontend could reuse the core serial/parser/filter/storage packages without rewriting them.
+
+---
+
+# 34. Modern Capabilities & Architectural Evolution (v1.2.x)
+
+Since the original MVP specification, `oh-my-logs` has evolved into a high-performance, embedded-grade observability workstation. The architecture has expanded to incorporate several advanced subsystems:
+
+### 34.1 2D Viewport & Horizontal Panning
+- **Horizontal Scrolling**: Hardware logs and memory dumps frequently exceed 120+ columns. The viewport supports bi-directional 2D panning via `←` / `→` (or `H` / `L`) with auto-clamp and column header synchronisation.
+- **Character Cursor**: Fine-grained horizontal and vertical cursor positioning (`h`/`l`, `w`/`b`, `0`/`$`) allows rapid visual inspection of individual tokens.
+
+### 34.2 Virtual Tabs (Severity & Bookmarks)
+- **Top-Level Navigation**: Dedicated virtual tabs (`[1] All`, `[2] Error`, `[3] Warn`, `[4] Info`, `[5] Bookmarks`) enable instantaneous switching between severity streams without needing to reconstruct filter queries.
+- **Dynamic Pinning**: Individual rows can be bookmarked (`b` or `m`), aggregating into the Bookmarks tab for post-mortem analysis.
+
+### 34.3 Split Dual View
+- **Dual Pane Correlation**: Triggered via `|` or `Ctrl+S`, split dual view divides the terminal into two independent panes with synchronized or decoupled cursors.
+- **Multi-Format Analysis**: Facilitates side-by-side comparisons, such as monitoring live formatted ASCII logs in Pane A while observing raw hex dumps or bookmarked anomalies in Pane B.
+
+### 34.4 Delta Timing & Firmware Latency Analysis
+- **Relative Duration**: Toggleable via `t`, converts absolute arrival timestamps into microsecond/millisecond elapsed delta ($\Delta t$) between consecutive records.
+- **Benchmarking**: Crucial for measuring ISR execution times, RTOS task context switches, and sensor communication timeouts directly from UART output.
+
+### 34.5 Decoupled Multi-Format Payload Inspector
+- **Automatic Format Detection**: Implemented in `internal/payload`, the inspector autonomously detects embedded structured formats (JSON, XML, YAML, Logfmt, and Hex dumps).
+- **Interactive Modal Drawer**: Hitting `Enter` on any record reveals an overlay drawer displaying syntax-highlighted payloads, aligned field tables, and a 64-byte hex preview.
+- **Structured Clipboard Export**: Formatted payloads can be copied directly to the OS clipboard (`y`) ready for paste into issue trackers or IDEs.
+
+### 34.6 Direct-to-Disk Continuous Soak Logging (`--tee <path>`)
+- **Zero-Drop Persistence**: Ingests serial bytes directly to a background disk writer concurrently with ring-buffer storage, ensuring days-long soak tests capture millions of events without memory exhaustion.
+
+### 34.7 Flashing-Friendly COM Port Control
+- **Explicit Port Release**: Pressing `D` disconnects and releases the host serial COM port, allowing tools such as `west flash`, `openocd`, or `esptool.py` to claim the UART without closing `oml`.
+- **Hot Reconnection**: Pressing `r` instantly reopens the port, resuming streaming without resetting filters, bookmarks, or view state.
+
+### 34.8 Interactive TX Send Prompt
+- **Interactive Transmission**: Pressing `i` or `:` opens an embedded transmission prompt supporting CRLF (`\r\n`), LF (`\n`), CR (`\r`), and raw byte sequences.
+- **Command History**: Preserves input history across sessions (`↑` / `↓`) and echoes sent transmissions directly into the stream view with dedicated styling.
+
+### 34.9 Theming & Visual Aesthetics
+- **Theme Palette Engine**: Fully customizable color themes (Dark Slate, Nord, Monokai, Gruvbox, Tokyo Night, Catppuccin) configurable via settings modal (`,` or `C`).
+- **Terminal Mini-Games**: Integrated Easter eggs (`snake`, etc.) in `internal/game` for idle compile and test waits.

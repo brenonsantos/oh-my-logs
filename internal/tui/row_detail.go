@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/brenoniehues/oh-my-logs/internal/payload"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/timing"
 )
@@ -153,8 +154,8 @@ func FormattedRecordDetail(r record.Record, tsField string, bookmarked bool) str
 
 	if msg != "" {
 		sb.WriteString("\nMessage:\n")
-		det := DetectAndFormatPayload(msg, Palette{})
-		if det.Type != PayloadNone {
+		det := payload.DetectAndFormat(msg, payload.ColorPalette{})
+		if det.Type != payload.None {
 			if det.Prefix != "" {
 				sb.WriteString(det.Prefix + "\n")
 			}

@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"github.com/brenoniehues/oh-my-logs/internal/payload"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	"github.com/charmbracelet/lipgloss"
@@ -604,5 +605,18 @@ func (t Theme) colorByName(name string) lipgloss.Style {
 		return t.Content
 	default:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color(name))
+	}
+}
+
+// PayloadPalette converts Palette into payload.ColorPalette.
+func (p Palette) PayloadPalette() payload.ColorPalette {
+	return payload.ColorPalette{
+		Cyan:   p.Cyan,
+		Yellow: p.Yellow,
+		Green:  p.Green,
+		Purple: p.Purple,
+		Accent: p.Accent,
+		Muted:  p.Muted,
+		Fg:     p.Fg,
 	}
 }

@@ -76,7 +76,10 @@ jobs:
           
           # Copy docs and profiles
           cp README.md LICENSE "${STAGE_DIR}/"
-          cp -r profiles/examples "${STAGE_DIR}/profiles/"
+          mkdir -p "${STAGE_DIR}/examples"
+          cp -r examples/profiles "${STAGE_DIR}/examples/"
+          mkdir -p "${STAGE_DIR}/profiles"
+          cp -r examples/profiles "${STAGE_DIR}/profiles/examples"
           
           mkdir -p out
           if [ "${{ matrix.archive }}" = "zip" ]; then

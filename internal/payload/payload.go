@@ -1,7 +1,8 @@
-package tui
+package payload
 
 import (
 	"bytes"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -17,30 +18,41 @@ import (
 type PayloadType int
 
 const (
-	PayloadNone PayloadType = iota
-	PayloadJSON
-	PayloadXML
-	PayloadYAML
-	PayloadLogfmt
+	None PayloadType = iota
+	JSON
+	XML
+	YAML
+	Logfmt
 )
 
 func (t PayloadType) String() string {
 	switch t {
-	case PayloadJSON:
+	case JSON:
 		return "JSON"
-	case PayloadXML:
+	case XML:
 		return "XML"
-	case PayloadYAML:
+	case YAML:
 		return "YAML"
-	case PayloadLogfmt:
+	case Logfmt:
 		return "LOGFMT"
 	default:
 		return ""
 	}
 }
 
-// PayloadDetection encapsulates the result of payload inspection.
-type PayloadDetection struct {
+// ColorPalette defines the colors used for syntax beautification.
+type ColorPalette struct {
+	Cyan   lipgloss.Color
+	Yellow lipgloss.Color
+	Green  lipgloss.Color
+	Purple lipgloss.Color
+	Accent lipgloss.Color
+	Muted  lipgloss.Color
+	Fg     lipgloss.Color
+}
+
+// Detection encapsulates the result of payload inspection.
+type Detection struct {
 	Type           PayloadType
 	TypeLabel      string // e.g. "JSON", "XML", "YAML", "LOGFMT"
 	Prefix         string // any text before the structured payload
@@ -50,20 +62,20 @@ type PayloadDetection struct {
 	ColorizedLines []string
 }
 
-// DetectAndFormatPayload inspects a string for JSON, XML, YAML, or Logfmt structured data,
-// formats it with indentation, and colorizes it according to the provided theme palette.
-func DetectAndFormatPayload(s string, p Palette) PayloadDetection {
+// DetectAndFormat inspects a string for JSON, XML, YAML, or Logfmt structured data,
+// formats it with indentation, and colorizes it according to the provided color palette.
+func DetectAndFormat(s string, p ColorPalette) Detection {
 	trimmed := strings.TrimSpace(s)
 	if len(trimmed) < 2 {
-		return PayloadDetection{Type: PayloadNone}
+		return Detection{Type: None}
 	}
 
 	// 1. Check for JSON (highest precision and common in modern logs)
 	jsonDet := DetectAndFormatJSON(s)
 	if jsonDet.HasJSON {
 		colorized := ColorizeJSON(jsonDet.IndentedJSON, p)
-		return PayloadDetection{
-			Type:           PayloadJSON,
+		return Detection{
+			Type:           JSON,
 			TypeLabel:      "JSON",
 			Prefix:         jsonDet.Prefix,
 			RawPayload:     jsonDet.RawJSON,
@@ -91,26 +103,185 @@ func DetectAndFormatPayload(s string, p Palette) PayloadDetection {
 		return logfmtDet
 	}
 
-	return PayloadDetection{Type: PayloadNone}
+	return Detection{Type: None}
+}
+
+// ── JSON Formatting ───────────────────────────────────────────────────────────
+
+// JSONDetection contains the results of inspecting a string for JSON payloads.
+type JSONDetection struct {
+	HasJSON      bool
+	Prefix       string
+	RawJSON      string
+	Suffix       string
+	IndentedJSON string
+}
+
+// DetectAndFormatJSON inspects a string to see if it is a JSON object/array
+// or contains an embedded JSON object/array.
+func DetectAndFormatJSON(s string) JSONDetection {
+	trimmed := strings.TrimSpace(s)
+	if len(trimmed) < 2 {
+		return JSONDetection{HasJSON: false}
+	}
+
+	// Direct JSON (object or array)
+	if (strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")) ||
+		(strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]")) {
+		if json.Valid([]byte(trimmed)) {
+			var out bytes.Buffer
+			if err := json.Indent(&out, []byte(trimmed), "", "  "); err == nil {
+				return JSONDetection{
+					HasJSON:      true,
+					RawJSON:      trimmed,
+					IndentedJSON: out.String(),
+				}
+			}
+		}
+	}
+
+	// Embedded JSON in a prefixed log line
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if ch != '{' && ch != '[' {
+			continue
+		}
+		closeChar := byte('}')
+		if ch == '[' {
+			closeChar = ']'
+		}
+		lastIdx := strings.LastIndexByte(s, closeChar)
+		for lastIdx > i {
+			candidate := s[i : lastIdx+1]
+			if json.Valid([]byte(candidate)) {
+				var out bytes.Buffer
+				if err := json.Indent(&out, []byte(candidate), "", "  "); err == nil {
+					return JSONDetection{
+						HasJSON:      true,
+						Prefix:       strings.TrimSpace(s[:i]),
+						RawJSON:      candidate,
+						Suffix:       strings.TrimSpace(s[lastIdx+1:]),
+						IndentedJSON: out.String(),
+					}
+				}
+			}
+			lastIdx = strings.LastIndexByte(s[:lastIdx], closeChar)
+		}
+	}
+
+	return JSONDetection{HasJSON: false}
+}
+
+// ColorizeJSON applies theme colors to an indented JSON string.
+func ColorizeJSON(indentedJSON string, p ColorPalette) string {
+	styleKey := lipgloss.NewStyle().Foreground(p.Cyan).Bold(true)
+	styleString := lipgloss.NewStyle().Foreground(p.Green)
+	styleNumber := lipgloss.NewStyle().Foreground(p.Yellow)
+	styleBoolNull := lipgloss.NewStyle().Foreground(p.Purple)
+	styleBrace := lipgloss.NewStyle().Foreground(p.Accent)
+	stylePunct := lipgloss.NewStyle().Foreground(p.Muted)
+
+	var sb strings.Builder
+	runes := []rune(indentedJSON)
+	n := len(runes)
+	i := 0
+
+	for i < n {
+		ch := runes[i]
+
+		if unicode.IsSpace(ch) {
+			sb.WriteRune(ch)
+			i++
+			continue
+		}
+
+		if ch == '"' {
+			start := i
+			i++
+			for i < n {
+				if runes[i] == '\\' && i+1 < n {
+					i += 2
+					continue
+				}
+				if runes[i] == '"' {
+					i++
+					break
+				}
+				i++
+			}
+			strLiteral := string(runes[start:i])
+
+			lookahead := i
+			for lookahead < n && unicode.IsSpace(runes[lookahead]) {
+				lookahead++
+			}
+			if lookahead < n && runes[lookahead] == ':' {
+				sb.WriteString(styleKey.Render(strLiteral))
+			} else {
+				sb.WriteString(styleString.Render(strLiteral))
+			}
+			continue
+		}
+
+		if ch == '{' || ch == '}' || ch == '[' || ch == ']' {
+			sb.WriteString(styleBrace.Render(string(ch)))
+			i++
+			continue
+		}
+
+		if ch == ':' || ch == ',' {
+			sb.WriteString(stylePunct.Render(string(ch)))
+			i++
+			continue
+		}
+
+		if unicode.IsDigit(ch) || ch == '-' {
+			start := i
+			for i < n && (unicode.IsDigit(runes[i]) || runes[i] == '.' || runes[i] == 'e' || runes[i] == 'E' || runes[i] == '+' || runes[i] == '-') {
+				i++
+			}
+			numStr := string(runes[start:i])
+			sb.WriteString(styleNumber.Render(numStr))
+			continue
+		}
+
+		if unicode.IsLetter(ch) {
+			start := i
+			for i < n && unicode.IsLetter(runes[i]) {
+				i++
+			}
+			ident := string(runes[start:i])
+			if ident == "true" || ident == "false" || ident == "null" {
+				sb.WriteString(styleBoolNull.Render(ident))
+			} else {
+				sb.WriteString(ident)
+			}
+			continue
+		}
+
+		sb.WriteRune(ch)
+		i++
+	}
+
+	return sb.String()
 }
 
 // ── XML Formatting ────────────────────────────────────────────────────────────
 
-func detectAndFormatXML(s string, p Palette) (PayloadDetection, bool) {
+func detectAndFormatXML(s string, p ColorPalette) (Detection, bool) {
 	startIdx := strings.IndexByte(s, '<')
 	lastIdx := strings.LastIndexByte(s, '>')
 	if startIdx < 0 || lastIdx <= startIdx+2 {
-		return PayloadDetection{}, false
+		return Detection{}, false
 	}
 
 	candidate := strings.TrimSpace(s[startIdx : lastIdx+1])
 	if len(candidate) < 3 || candidate[0] != '<' || candidate[len(candidate)-1] != '>' {
-		return PayloadDetection{}, false
+		return Detection{}, false
 	}
 
-	// Quick rejection if not looking like a tag
 	if candidate[1] == ' ' || candidate[1] == '\t' || candidate[1] == '\n' {
-		return PayloadDetection{}, false
+		return Detection{}, false
 	}
 
 	decoder := xml.NewDecoder(strings.NewReader(candidate))
@@ -124,7 +295,7 @@ func detectAndFormatXML(s string, p Palette) (PayloadDetection, bool) {
 			break
 		}
 		if err != nil {
-			return PayloadDetection{}, false
+			return Detection{}, false
 		}
 		switch tok.(type) {
 		case xml.StartElement:
@@ -136,18 +307,17 @@ func detectAndFormatXML(s string, p Palette) (PayloadDetection, bool) {
 		tokens = append(tokens, xml.CopyToken(tok))
 	}
 
-	// Require balanced XML elements and at least one element
 	if elementCount == 0 || openElements != 0 {
-		return PayloadDetection{}, false
+		return Detection{}, false
 	}
 
 	formatted, colorized := formatAndColorizeXMLTokens(tokens, p)
 	if len(formatted) == 0 {
-		return PayloadDetection{}, false
+		return Detection{}, false
 	}
 
-	return PayloadDetection{
-		Type:           PayloadXML,
+	return Detection{
+		Type:           XML,
 		TypeLabel:      "XML",
 		Prefix:         strings.TrimSpace(s[:startIdx]),
 		RawPayload:     candidate,
@@ -157,7 +327,7 @@ func detectAndFormatXML(s string, p Palette) (PayloadDetection, bool) {
 	}, true
 }
 
-func formatAndColorizeXMLTokens(tokens []xml.Token, p Palette) (string, []string) {
+func formatAndColorizeXMLTokens(tokens []xml.Token, p ColorPalette) (string, []string) {
 	styleTag := lipgloss.NewStyle().Foreground(p.Cyan).Bold(true)
 	styleAttrKey := lipgloss.NewStyle().Foreground(p.Yellow)
 	styleAttrVal := lipgloss.NewStyle().Foreground(p.Green)
@@ -217,7 +387,6 @@ func formatAndColorizeXMLTokens(tokens []xml.Token, p Palette) (string, []string
 		case xml.StartElement:
 			pad := getIndent()
 
-			// Check for compact empty element: <tag ...></tag>
 			if i+1 < n {
 				if endEl, ok := tokens[i+1].(xml.EndElement); ok && endEl.Name.Local == el.Name.Local {
 					plainStart, styledStart := renderStartTag(el, true)
@@ -228,7 +397,6 @@ func formatAndColorizeXMLTokens(tokens []xml.Token, p Palette) (string, []string
 				}
 			}
 
-			// Check for compact leaf node: <tag ...>text</tag>
 			if i+2 < n {
 				charTok, isChar := tokens[i+1].(xml.CharData)
 				endEl, isEnd := tokens[i+2].(xml.EndElement)
@@ -243,7 +411,6 @@ func formatAndColorizeXMLTokens(tokens []xml.Token, p Palette) (string, []string
 				}
 			}
 
-			// Multiline element
 			plainStart, styledStart := renderStartTag(el, false)
 			plainLines = append(plainLines, pad+plainStart)
 			styledLines = append(styledLines, pad+styledStart)
@@ -288,13 +455,11 @@ func formatAndColorizeXMLTokens(tokens []xml.Token, p Palette) (string, []string
 
 func tryParseYAML(str string) (*yaml.Node, bool) {
 	trimmed := strings.TrimSpace(str)
-	// Must contain at least one newline or ": " key-value delimiter or list item
 	if !strings.Contains(trimmed, ": ") && !strings.Contains(trimmed, ":\n") && !strings.HasPrefix(trimmed, "- ") {
 		return nil, false
 	}
 
 	lines := strings.Split(trimmed, "\n")
-	// Single line text without sequence bullet is rejected to avoid false positives on normal logs (e.g. "error: connection reset")
 	if len(lines) < 2 && !strings.HasPrefix(trimmed, "- ") {
 		return nil, false
 	}
@@ -304,7 +469,6 @@ func tryParseYAML(str string) (*yaml.Node, bool) {
 		return nil, false
 	}
 
-	// Ensure document root has children and is a mapping or sequence
 	if len(node.Content) == 0 {
 		return nil, false
 	}
@@ -313,7 +477,6 @@ func tryParseYAML(str string) (*yaml.Node, bool) {
 		return nil, false
 	}
 
-	// For mappings, require at least 2 pairs or a nested structure
 	if root.Kind == yaml.MappingNode {
 		if len(root.Content) < 4 {
 			if len(root.Content) < 2 || (root.Content[1].Kind != yaml.MappingNode && root.Content[1].Kind != yaml.SequenceNode) {
@@ -325,7 +488,7 @@ func tryParseYAML(str string) (*yaml.Node, bool) {
 	return root, true
 }
 
-func detectAndFormatYAML(s string, p Palette) (PayloadDetection, bool) {
+func detectAndFormatYAML(s string, p ColorPalette) (Detection, bool) {
 	candidate := s
 	if !strings.Contains(candidate, "\n") && strings.Contains(candidate, `\n`) {
 		candidate = strings.ReplaceAll(candidate, `\n`, "\n")
@@ -333,17 +496,16 @@ func detectAndFormatYAML(s string, p Palette) (PayloadDetection, bool) {
 
 	trimmed := strings.TrimSpace(candidate)
 
-	// 1. Check if the full string is YAML
+	// 1. Full string
 	if root, ok := tryParseYAML(trimmed); ok {
 		return buildYAMLDetection(root, "", trimmed, p)
 	}
 
-	// 2. Check for embedded YAML with a log prefix (e.g. "2026-09-11 [INF] config: manifest:\n  version: 1.0")
+	// 2. Embedded YAML with log prefix
 	newlineIdx := strings.IndexByte(candidate, '\n')
 	if newlineIdx > 0 {
 		firstLine := candidate[:newlineIdx]
 
-		// Check after ": " separators on the first line
 		searchStart := 0
 		for {
 			colonIdx := strings.Index(firstLine[searchStart:], ": ")
@@ -360,7 +522,6 @@ func detectAndFormatYAML(s string, p Palette) (PayloadDetection, bool) {
 			searchStart = absColonIdx + 2
 		}
 
-		// Check starting from line 1 (e.g. "2026-09-11 [INF] config:\nmanifest:\n  version: 1.0")
 		prefix := strings.TrimSpace(firstLine)
 		payloadSub := strings.TrimSpace(candidate[newlineIdx+1:])
 		if root, ok := tryParseYAML(payloadSub); ok {
@@ -368,27 +529,27 @@ func detectAndFormatYAML(s string, p Palette) (PayloadDetection, bool) {
 		}
 	}
 
-	return PayloadDetection{}, false
+	return Detection{}, false
 }
 
-func buildYAMLDetection(root *yaml.Node, prefix, rawPayload string, p Palette) (PayloadDetection, bool) {
+func buildYAMLDetection(root *yaml.Node, prefix, rawPayload string, p ColorPalette) (Detection, bool) {
 	var out bytes.Buffer
 	enc := yaml.NewEncoder(&out)
 	enc.SetIndent(2)
 	if err := enc.Encode(root); err != nil {
-		return PayloadDetection{}, false
+		return Detection{}, false
 	}
 	_ = enc.Close()
 
 	formatted := strings.TrimRight(out.String(), "\n")
 	if len(formatted) == 0 {
-		return PayloadDetection{}, false
+		return Detection{}, false
 	}
 
 	colorized := colorizeYAML(formatted, p)
 
-	return PayloadDetection{
-		Type:           PayloadYAML,
+	return Detection{
+		Type:           YAML,
 		TypeLabel:      "YAML",
 		Prefix:         prefix,
 		RawPayload:     rawPayload,
@@ -398,7 +559,7 @@ func buildYAMLDetection(root *yaml.Node, prefix, rawPayload string, p Palette) (
 	}, true
 }
 
-func colorizeYAML(yamlStr string, p Palette) []string {
+func colorizeYAML(yamlStr string, p ColorPalette) []string {
 	styleKey := lipgloss.NewStyle().Foreground(p.Cyan).Bold(true)
 	styleString := lipgloss.NewStyle().Foreground(p.Green)
 	styleNumber := lipgloss.NewStyle().Foreground(p.Yellow)
@@ -474,15 +635,15 @@ type parsedLogfmt struct {
 	endByte   int
 }
 
-func detectAndFormatLogfmt(s string, p Palette) (PayloadDetection, bool) {
+func detectAndFormatLogfmt(s string, p ColorPalette) (Detection, bool) {
 	trimmed := strings.TrimSpace(s)
 	if strings.Count(trimmed, "=") < 2 {
-		return PayloadDetection{}, false
+		return Detection{}, false
 	}
 
 	res := parseLogfmtStrict(s)
 	if len(res.pairs) < 2 {
-		return PayloadDetection{}, false
+		return Detection{}, false
 	}
 
 	maxKeyLen := 0
@@ -530,8 +691,8 @@ func detectAndFormatLogfmt(s string, p Palette) (PayloadDetection, bool) {
 	}
 	rawPayload := s[res.startByte:res.endByte]
 
-	return PayloadDetection{
-		Type:           PayloadLogfmt,
+	return Detection{
+		Type:           Logfmt,
 		TypeLabel:      "LOGFMT",
 		Prefix:         prefix,
 		RawPayload:     rawPayload,
@@ -558,9 +719,7 @@ func parseLogfmtStrict(s string) parsedLogfmt {
 		}
 
 		keyStart := i
-		// Key must start with letter or underscore
 		if !unicode.IsLetter(runes[i]) && runes[i] != '_' {
-			// Skip to next whitespace
 			for i < n && !unicode.IsSpace(runes[i]) {
 				i++
 			}
@@ -577,7 +736,6 @@ func parseLogfmtStrict(s string) parsedLogfmt {
 		}
 
 		if !validKey || i >= n || runes[i] != '=' {
-			// Skip invalid token
 			for i < n && !unicode.IsSpace(runes[i]) {
 				i++
 			}
@@ -585,7 +743,7 @@ func parseLogfmtStrict(s string) parsedLogfmt {
 		}
 
 		key := string(runes[keyStart:i])
-		i++ // skip '='
+		i++
 
 		if firstStart < 0 {
 			firstStart = keyStart
@@ -600,7 +758,7 @@ func parseLogfmtStrict(s string) parsedLogfmt {
 		valStart := i
 		var val string
 		if runes[i] == '"' {
-			i++ // skip opening quote
+			i++
 			valStart = i
 			for i < n {
 				if runes[i] == '\\' && i+1 < n {
@@ -609,7 +767,7 @@ func parseLogfmtStrict(s string) parsedLogfmt {
 				}
 				if runes[i] == '"' {
 					val = string(runes[valStart:i])
-					i++ // skip closing quote
+					i++
 					break
 				}
 				i++
@@ -645,4 +803,52 @@ func parseLogfmtStrict(s string) parsedLogfmt {
 		startByte: startByte,
 		endByte:   endByte,
 	}
+}
+
+func padOrTrunc(s string, width int) string {
+	if len(s) > width {
+		return s[:width]
+	}
+	return s + strings.Repeat(" ", width-len(s))
+}
+
+// WrapTextLines breaks multi-line text cleanly across maxWidth boundaries,
+// respecting words when possible.
+func WrapTextLines(text string, maxWidth int) []string {
+	if maxWidth < 10 {
+		maxWidth = 10
+	}
+	var result []string
+	rawLines := strings.Split(text, "\n")
+
+	for _, line := range rawLines {
+		line = strings.TrimRight(line, "\r")
+		if len([]rune(line)) <= maxWidth {
+			result = append(result, line)
+			continue
+		}
+
+		remaining := line
+		for len([]rune(remaining)) > maxWidth {
+			runes := []rune(remaining)
+			breakIdx := -1
+			for j := maxWidth; j >= 0; j-- {
+				if j < len(runes) && unicode.IsSpace(runes[j]) {
+					breakIdx = j
+					break
+				}
+			}
+
+			if breakIdx <= 0 {
+				breakIdx = maxWidth
+			}
+
+			result = append(result, string(runes[:breakIdx]))
+			remaining = strings.TrimLeft(string(runes[breakIdx:]), " ")
+		}
+		if len(remaining) > 0 {
+			result = append(result, remaining)
+		}
+	}
+	return result
 }
