@@ -389,4 +389,76 @@ func TestSelectionBatchDelta(t *testing.T) {
 	}
 }
 
+func TestLogcatTimestampAndDelta(t *testing.T) {
+	m := newTestModel()
+	m.tsField = "time"
+	m.tsMode = TSModeBoth
+	m.showTimestamp = true
+	m.columns = []record.Column{
+		{Field: "time", Title: "Time", Width: 18, Style: "timestamp"},
+		{Field: "pid", Title: "PID", Width: 6, Style: "muted"},
+		{Field: "tid", Title: "TID", Width: 6, Style: "muted"},
+		{Field: "level", Title: "Lvl", Width: 5, Style: "level"},
+		{Field: "tag", Title: "Tag", Width: 20, Style: "identifier"},
+		{Field: "message", Title: "Message", Width: 0, Style: "primary"},
+	}
+
+	// Ingest two records with Logcat time format
+	r1 := record.Record{
+		Raw: "08-10 05:34:48.669   559   559 I SyntheticService: initialized",
+		Fields: map[string]string{
+			"time":    "08-10 05:34:48.669",
+			"pid":     "559",
+			"tid":     "559",
+			"level":   "I",
+			"tag":     "SyntheticService",
+			"message": "initialized",
+		},
+	}
+	m.ingestRecord(r1)
+
+	r2 := record.Record{
+		Raw: "08-10 05:34:48.719   559   559 I SyntheticService: ready",
+		Fields: map[string]string{
+			"time":    "08-10 05:34:48.719",
+			"pid":     "559",
+			"tid":     "559",
+			"level":   "I",
+			"tag":     "SyntheticService",
+			"message": "ready",
+		},
+	}
+	m.ingestRecord(r2)
+
+	// Record 0 timestamp should be parsed from "08-10 05:34:48.669"
+	if m.visible[0].Timestamp.Month() != 8 || m.visible[0].Timestamp.Day() != 10 {
+		t.Errorf("expected record 0 to parse month 8, day 10, got %v", m.visible[0].Timestamp)
+	}
+
+	// Delta between .669 and .719 is exactly 50ms
+	if m.visible[1].Delta != 50*time.Millisecond {
+		t.Errorf("expected delta 50ms, got %v", m.visible[1].Delta)
+	}
+	if m.visible[1].Fields["_delta"] != "+50.0ms" {
+		t.Errorf("expected formatted delta '+50.0ms', got %q", m.visible[1].Fields["_delta"])
+	}
+
+	// Columns should retain width 18 for Time
+	cols := m.effectiveColumns()
+	var timeCol *record.Column
+	for i := range cols {
+		if cols[i].Field == "time" {
+			timeCol = &cols[i]
+			break
+		}
+	}
+	if timeCol == nil {
+		t.Fatalf("expected effectiveColumns to contain 'time' column")
+	}
+	if timeCol.Width != 18 {
+		t.Errorf("expected Time column width 18, got %d", timeCol.Width)
+	}
+}
+
+
 

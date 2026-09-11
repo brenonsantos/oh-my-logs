@@ -15,7 +15,7 @@ columns:
   - field: time
     title: Time
     width: 18
-    style: uptime
+    style: timestamp
 
   - field: pid
     title: PID

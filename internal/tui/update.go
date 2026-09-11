@@ -400,9 +400,24 @@ var timestampLayouts = []string{
 	"15:04:05.000000",
 	"15:04:05.000",
 	"15:04:05",
+	"01-02 15:04:05.000000000",
+	"01-02 15:04:05.000000",
+	"01-02 15:04:05.000",
+	"01-02 15:04:05",
+	"01/02 15:04:05.000000",
+	"01/02 15:04:05.000",
+	"01/02 15:04:05",
+	"2006-01-02 15:04:05.000000000",
 	"2006-01-02 15:04:05.000000",
 	"2006-01-02 15:04:05.000",
 	"2006-01-02 15:04:05",
+	"2006/01/02 15:04:05.000000",
+	"2006/01/02 15:04:05.000",
+	"2006/01/02 15:04:05",
+	"2006-01-02T15:04:05.000000000",
+	"2006-01-02T15:04:05.000000",
+	"2006-01-02T15:04:05.000",
+	"2006-01-02T15:04:05",
 	time.RFC3339Nano,
 	time.RFC3339,
 }
@@ -419,6 +434,9 @@ func parseTimeString(s string) time.Time {
 
 	// Normalize comma-separated milliseconds/microseconds (e.g. "00:00:03.165,977" -> "00:00:03.165977")
 	normalized := strings.ReplaceAll(s, ",", ".")
+	for strings.Contains(normalized, "  ") {
+		normalized = strings.ReplaceAll(normalized, "  ", " ")
+	}
 
 	for _, layout := range timestampLayouts {
 		if t, err := time.Parse(layout, normalized); err == nil {
@@ -487,7 +505,11 @@ func (m *Model) ingestRecord(r record.Record) {
 		r.Fields[m.tsField] = nowStr
 	}
 	if r.Fields["_ts"] == "" {
-		r.Fields["_ts"] = nowStr
+		if r.Fields[m.tsField] != "" {
+			r.Fields["_ts"] = r.Fields[m.tsField]
+		} else {
+			r.Fields["_ts"] = nowStr
+		}
 	}
 
 	m.nextRecordID++
