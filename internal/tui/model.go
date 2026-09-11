@@ -319,9 +319,9 @@ func New(
 	if src != nil {
 		initState = ConnConnected
 	}
-	reconn := false
-	if src == nil && cfg.Port != "" && !isFile {
-		reconn = true
+	manualDisc := false
+	if src == nil && !isFile {
+		manualDisc = true
 	}
 
 	txEnd := serial.EndingCRLF
@@ -372,7 +372,8 @@ func New(
 		serialCfg:           cfg,
 		source:              src,
 		connState:           initState,
-		reconnecting:        reconn,
+		manualDisconnect:    manualDisc,
+		reconnecting:        false,
 		isFileSource:        isFile,
 		profile:             profile,
 		parser:              p,
@@ -687,13 +688,11 @@ func (m *Model) switchTab(newIdx int) {
 	m.clampScroll()
 }
 
-// Init starts the source reader goroutines or triggers auto-reconnect if disconnected.
+// Init starts the source reader goroutines if connected on launch.
+// When disconnected, it waits cleanly for user action (e.g. pressing 'r' to connect).
 func (m Model) Init() tea.Cmd {
 	if m.source != nil {
 		return tea.Batch(listenToSource(m.source), listenToSourceErrors(m.source))
-	}
-	if m.serialCfg.Port != "" && !m.isFileSource {
-		return scheduleReconnectTick()
 	}
 	return nil
 }

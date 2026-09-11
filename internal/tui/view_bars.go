@@ -207,9 +207,15 @@ func (m Model) viewEmptyState() string {
 				theme.Muted.Render(" to select a port   ·   Press ") +
 				theme.KeyName.Render("?") + theme.Muted.Render(" for shortcuts")
 		} else if m.serialCfg.Port != "" && !m.isFileSource {
-			subtitle = theme.Muted.Render("Port released (") + theme.Accent.Render(m.serialCfg.Port) +
+			statusPrefix := "Ready to connect ("
+			actionText := " to connect"
+			if m.connDetail == "Port released" {
+				statusPrefix = "Port released ("
+				actionText = " to reconnect"
+			}
+			subtitle = theme.Muted.Render(statusPrefix) + theme.Accent.Render(m.serialCfg.Port) +
 				theme.Muted.Render(")   ·   Press ") + theme.KeyName.Render("r") +
-				theme.Muted.Render(" to reconnect   ·   Press ") +
+				theme.Muted.Render(actionText) + theme.Muted.Render("   ·   Press ") +
 				theme.KeyName.Render("p") + theme.Muted.Render(" to select port")
 		} else {
 			subtitle = theme.Muted.Render("Press ") + theme.KeyName.Render("p") +
