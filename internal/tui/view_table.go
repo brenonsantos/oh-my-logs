@@ -158,6 +158,9 @@ func (m Model) viewTable() string {
 			case "_ascii":
 				val = FormatASCII(r.Raw)
 			}
+			if (col.Field == "uptime" || strings.EqualFold(col.Style, "uptime")) && val == "" {
+				val = r.Fields["_ts"]
+			}
 			var rowDelta time.Duration
 			if col.Field == "_delta" || col.Style == "delta" {
 				if i > 0 && !rows[i-1].Timestamp.IsZero() && !r.Timestamp.IsZero() {

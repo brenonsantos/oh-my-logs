@@ -512,6 +512,21 @@ func (m *Model) ingestRecord(r record.Record) {
 		}
 	}
 
+	hasUptimeCol := false
+	for _, c := range m.columns {
+		if c.Field == "uptime" || strings.EqualFold(c.Style, "uptime") {
+			hasUptimeCol = true
+			break
+		}
+	}
+	if hasUptimeCol && r.Fields["uptime"] == "" {
+		if r.Fields["_ts"] != "" {
+			r.Fields["uptime"] = r.Fields["_ts"]
+		} else {
+			r.Fields["uptime"] = nowStr
+		}
+	}
+
 	m.nextRecordID++
 	r.ID = m.nextRecordID
 	m.buffer.Add(r)

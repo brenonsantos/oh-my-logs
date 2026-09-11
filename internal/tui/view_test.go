@@ -441,6 +441,53 @@ func TestUptimeAndTimestampDistinct(t *testing.T) {
 	}
 }
 
+func TestUptimeFallbackToArrivalTimestamp(t *testing.T) {
+	prof := &parser.Profile{
+		Name: "Zephyr",
+		Columns: []parser.ColumnConfig{
+			{Field: "uptime", Title: "Uptime (s)", Width: 14, Style: "uptime"},
+			{Field: "level", Title: "Level", Width: 7, Style: "level"},
+			{Field: "message", Title: "Message", Width: 0, Style: "primary"},
+		},
+	}
+	p, err := parser.NewRegexParser(`^(?P<level>[DIWE]):\s+(?P<message>.*)$`)
+	if err != nil {
+		t.Fatalf("failed to build parser: %v", err)
+	}
+
+	cfg := serial.Config{Port: "COM1", Baud: 115200}
+	buf := record.NewBuffer(100)
+	m := New(cfg, prof, p, buf, nil, &config.AppConfig{})
+	m.width = 120
+	m.height = 30
+	m.recalcLayout()
+
+	// Ingest a minimal Zephyr line with NO device uptime
+	line := "D: pmhw: wkup_pin_config"
+	updated, _ := m.Update(lineMsg(line))
+	m = updated.(Model)
+
+	if len(m.visible) != 1 {
+		t.Fatalf("expected 1 visible record, got %d", len(m.visible))
+	}
+	rec := m.visible[0]
+	if rec.Fields["uptime"] == "" {
+		t.Errorf("expected uptime field to fallback to arrival timestamp, got empty")
+	}
+	if rec.Fields["_ts"] == "" {
+		t.Errorf("expected _ts to be populated")
+	}
+	if rec.Fields["uptime"] != rec.Fields["_ts"] {
+		t.Errorf("expected uptime %q to match _ts %q", rec.Fields["uptime"], rec.Fields["_ts"])
+	}
+
+	// Rendered view must contain the arrival timestamp in the Uptime column
+	v := m.View()
+	if !strings.Contains(v, rec.Fields["uptime"]) {
+		t.Errorf("expected rendered view to display fallback arrival timestamp %q", rec.Fields["uptime"])
+	}
+}
+
 func TestPortPickerModalRendering(t *testing.T) {
 	m := newTestModel()
 	m.mode = modePortPicker
