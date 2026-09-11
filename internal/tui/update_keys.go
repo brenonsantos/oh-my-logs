@@ -74,333 +74,6 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeFilterPresets
 		return m, nil
 
-	case keyMatches(msg, m.keys.Clear):
-		m.buffer.Clear()
-		for i := range m.tabs {
-			m.tabs[i].Visible = nil
-			m.tabs[i].ScrollOffset = 0
-			m.tabs[i].SearchMatches = nil
-		}
-		m.visible = nil
-		m.searchMatches = nil
-		m.scrollOffset = 0
-		m.bookmarks = make(map[uint64]struct{})
-		m.message = "Cleared"
-		return m, nil
-
-	case keyMatches(msg, m.keys.Pause):
-		if m.buffer.Len() == 0 {
-			m.activeGame = game.RandomMiniGame()
-			m.logsDuringGame = 0
-			m.mode = modeGame
-			return m, m.activeGame.Init()
-		}
-		m.paused = !m.paused
-		if !m.paused {
-			m.rebuildVisible()
-			if m.follow {
-				m.scrollToBottom()
-			}
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.ScrollUp):
-		m.selectionStart = -1
-		m.selectionEnd = -1
-		m.charSelStart = -1
-		m.charSelEnd = -1
-		wasFollow := m.follow
-		m.follow = false
-		h := m.activeDataHeight()
-		if len(m.visible) > 0 {
-			if m.selectedRow < 0 {
-				if wasFollow {
-					m.selectedRow = len(m.visible) - 2
-					if m.selectedRow < 0 {
-						m.selectedRow = 0
-					}
-				} else {
-					m.selectedRow = m.scrollOffset + h - 1
-					if m.selectedRow >= len(m.visible) {
-						m.selectedRow = len(m.visible) - 1
-					}
-				if m.selectedRow > 0 {
-					m.selectedRow--
-				}
-			}
-		} else if m.selectedRow > 0 {
-			m.selectedRow--
-		}
-		if m.selectedRow >= 0 && m.selectedRow < len(m.visible) && m.cursorCol >= 0 {
-			rowLen := len([]rune(m.selectedRowPlainText(m.selectedRow)))
-			if rowLen > 0 && m.cursorCol >= rowLen {
-				m.cursorCol = rowLen - 1
-			}
-		}
-		if m.selectedRow < m.scrollOffset {
-			m.scrollOffset = m.selectedRow
-		}
-	} else {
-		m.scrollOffset--
-	}
-	m.clampScroll()
-	if m.splitMode != SplitNone && m.syncScroll {
-		m.syncOtherPaneChronologically()
-	}
-	return m, nil
-
-	case keyMatches(msg, m.keys.ScrollDown):
-		m.selectionStart = -1
-		m.selectionEnd = -1
-		m.charSelStart = -1
-		m.charSelEnd = -1
-		h := m.activeDataHeight()
-		if len(m.visible) > 0 {
-			if m.selectedRow < 0 {
-				m.selectedRow = m.scrollOffset
-				if m.selectedRow < len(m.visible)-1 {
-					m.selectedRow++
-				}
-			} else if m.selectedRow < len(m.visible)-1 {
-				m.selectedRow++
-			}
-			if m.selectedRow >= 0 && m.selectedRow < len(m.visible) && m.cursorCol >= 0 {
-				rowLen := len([]rune(m.selectedRowPlainText(m.selectedRow)))
-				if rowLen > 0 && m.cursorCol >= rowLen {
-					m.cursorCol = rowLen - 1
-				}
-			}
-			if m.selectedRow >= m.scrollOffset+h {
-				m.scrollOffset = m.selectedRow - h + 1
-			}
-			if m.selectedRow >= len(m.visible)-1 {
-				m.follow = true
-			} else {
-				m.follow = false
-			}
-		} else {
-			m.scrollOffset++
-			if m.scrollOffset >= len(m.visible)-h {
-				m.follow = true
-			}
-		}
-		m.clampScroll()
-		if m.splitMode != SplitNone && m.syncScroll {
-			m.syncOtherPaneChronologically()
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.ScrollLeft):
-		if m.scrollX > 0 {
-			m.scrollX -= 8
-			m.clampScrollX()
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.ScrollRight):
-		m.scrollX += 8
-		m.clampScrollX()
-		return m, nil
-
-	case keyMatches(msg, m.keys.CursorLeft):
-		if len(m.visible) == 0 {
-			return m, nil
-		}
-		if m.selectedRow < 0 {
-			m.selectedRow = m.scrollOffset
-			if m.selectedRow >= len(m.visible) {
-				m.selectedRow = len(m.visible) - 1
-			}
-			m.cursorCol = 0
-		} else if m.cursorCol > 0 {
-			m.cursorCol--
-		} else if m.cursorCol < 0 {
-			m.cursorCol = 0
-		}
-		m.charSelStart = -1
-		m.charSelEnd = -1
-		if m.cursorCol < m.scrollX+2 {
-			m.scrollX = m.cursorCol - 2
-			m.clampScrollX()
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.CursorRight):
-		if len(m.visible) == 0 {
-			return m, nil
-		}
-		if m.selectedRow < 0 {
-			m.selectedRow = m.scrollOffset
-			if m.selectedRow >= len(m.visible) {
-				m.selectedRow = len(m.visible) - 1
-			}
-			m.cursorCol = 0
-		} else {
-			rowLen := len([]rune(m.selectedRowPlainText(m.selectedRow)))
-			if rowLen > 0 && m.cursorCol >= rowLen-1 {
-				m.cursorCol = rowLen - 1
-			} else if m.cursorCol < 0 {
-				m.cursorCol = 1
-			} else {
-				m.cursorCol++
-			}
-		}
-		m.charSelStart = -1
-		m.charSelEnd = -1
-		availW := m.tableWidth() - 3
-		if m.splitMode == SplitVertical {
-			availW = (m.tableWidth() - 1) / 2 - 3
-		}
-		if availW > 4 && m.cursorCol >= m.scrollX+availW-2 {
-			m.scrollX = m.cursorCol - availW + 3
-			m.clampScrollX()
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.CharSelectLeft), msg.String() == "shift+left":
-		if len(m.visible) == 0 {
-			return m, nil
-		}
-		if m.selectedRow < 0 {
-			m.selectedRow = m.scrollOffset
-			if m.selectedRow >= len(m.visible) {
-				m.selectedRow = len(m.visible) - 1
-			}
-			m.cursorCol = 0
-		}
-		if m.cursorCol < 0 {
-			m.cursorCol = 0
-		}
-		if m.charSelStart < 0 {
-			m.charSelStart = m.cursorCol
-		}
-		if m.cursorCol > 0 {
-			m.cursorCol--
-		}
-		m.charSelEnd = m.cursorCol
-		if m.cursorCol < m.scrollX+2 {
-			m.scrollX = m.cursorCol - 2
-			m.clampScrollX()
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.CharSelectRight), msg.String() == "shift+right":
-		if len(m.visible) == 0 {
-			return m, nil
-		}
-		if m.selectedRow < 0 {
-			m.selectedRow = m.scrollOffset
-			if m.selectedRow >= len(m.visible) {
-				m.selectedRow = len(m.visible) - 1
-			}
-			m.cursorCol = 0
-		}
-		if m.cursorCol < 0 {
-			m.cursorCol = 0
-		}
-		if m.charSelStart < 0 {
-			m.charSelStart = m.cursorCol
-		}
-		rowLen := len([]rune(m.selectedRowPlainText(m.selectedRow)))
-		if rowLen > 0 && m.cursorCol >= rowLen {
-			m.cursorCol = rowLen
-		} else {
-			m.cursorCol++
-		}
-		m.charSelEnd = m.cursorCol
-		availW := m.tableWidth() - 3
-		if m.splitMode == SplitVertical {
-			availW = (m.tableWidth() - 1) / 2 - 3
-		}
-		if availW > 4 && m.cursorCol >= m.scrollX+availW-2 {
-			m.scrollX = m.cursorCol - availW + 3
-			m.clampScrollX()
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.PageUp):
-		m.charSelStart = -1
-		m.charSelEnd = -1
-		h := m.activeDataHeight()
-		m.follow = false
-		m.scrollOffset -= h
-		if m.selectedRow >= 0 {
-			m.selectedRow -= h
-			if m.selectedRow < 0 {
-				m.selectedRow = 0
-			}
-		}
-		m.clampScroll()
-		if m.splitMode != SplitNone && m.syncScroll {
-			m.syncOtherPaneChronologically()
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.PageDown):
-		m.charSelStart = -1
-		m.charSelEnd = -1
-		h := m.activeDataHeight()
-		m.scrollOffset += h
-		if m.selectedRow >= 0 {
-			m.selectedRow += h
-			if m.selectedRow >= len(m.visible) {
-				m.selectedRow = len(m.visible) - 1
-			}
-		}
-		if m.scrollOffset >= len(m.visible)-h {
-			m.follow = true
-		}
-		m.clampScroll()
-		if m.splitMode != SplitNone && m.syncScroll {
-			m.syncOtherPaneChronologically()
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.GoToBottom):
-		m.follow = true
-		m.scrollToBottom()
-		m.selectedRow = -1
-		m.selectionStart = -1
-		m.selectionEnd = -1
-		m.cursorCol = -1
-		m.charSelStart = -1
-		m.charSelEnd = -1
-		m.scrollX = 0
-		if m.splitMode != SplitNone && m.syncScroll {
-			m.syncOtherPaneChronologically()
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.GoToTop):
-		m.cursorCol = -1
-		m.charSelStart = -1
-		m.charSelEnd = -1
-		m.scrollX = 0
-		if m.buffer.Len() == 0 {
-			m.activeGame = game.RandomMiniGame()
-			m.logsDuringGame = 0
-			m.mode = modeGame
-			return m, m.activeGame.Init()
-		}
-		m.follow = false
-		m.scrollOffset = 0
-		if len(m.visible) > 0 {
-			m.selectedRow = 0
-		}
-		if m.splitMode != SplitNone && m.syncScroll {
-			m.syncOtherPaneChronologically()
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.Game):
-		m.activeGame = game.RandomMiniGame()
-		m.logsDuringGame = 0
-		m.mode = modeGame
-		return m, m.activeGame.Init()
-
-	case keyMatches(msg, m.keys.SaveLog):
-		return m, m.cmdSaveLog()
-
 	case keyMatches(msg, m.keys.Port):
 		ports, _ := serial.ListPorts()
 		m.portList = ports
@@ -460,120 +133,15 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeSettings
 		return m, nil
 
-	case keyMatches(msg, m.keys.Disconnect):
-		return m.disconnect()
-
-	case keyMatches(msg, m.keys.Reconnect):
-		if m.serialCfg.Port == "" {
-			m.message = "No port configured — press p to pick one"
-			return m, nil
-		}
-		if m.isFileSource {
-			m.message = "Replay of offline log file — cannot reconnect"
-			return m, nil
-		}
-		if m.source != nil {
-			m.source.Stop()
-			m.source = nil
-		}
-		m.manualDisconnect = false
-		m.connState = ConnDisconnected
-		m.connDetail = ""
-		m.reconnecting = true
-		m.message = fmt.Sprintf("Reconnecting to %s…", m.serialCfg.Port)
-		return m, tryReconnectCmd(m.serialCfg)
-
-	case keyMatches(msg, m.keys.ToggleTimestamp):
-		m.tsMode = m.tsMode.Next()
-		m.showTimestamp = (m.tsMode != TSModeOff)
-		m.saveSettings()
-		switch m.tsMode {
-		case TSModeClock:
-			m.message = fmt.Sprintf("⏱ Timestamp: Clock (%s)", m.tsField)
-		case TSModeDelta:
-			m.message = "⏱ Timestamp: Delta-Time (Δt)"
-		case TSModeBoth:
-			m.message = "⏱ Timestamp: Both (Clock + Δt)"
-		case TSModeOff:
-			m.message = "⏱ Timestamp: OFF"
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.ToggleFormat):
-		curTab := m.currentTab()
-		curTab.DisplayFormat = curTab.DisplayFormat.Next()
-		m.displayFormat = curTab.DisplayFormat
-		m.recalcLayout()
-		m.clampScroll()
-		m.message = fmt.Sprintf("Display format: %s", curTab.DisplayFormat.Label())
-		return m, nil
-
 	case keyMatches(msg, m.keys.Help):
 		m.mode = modeHelp
 		return m, nil
 
-	case keyMatches(msg, m.keys.NextMatch):
-		m.nextSearchMatch()
-		return m, nil
-
-	case keyMatches(msg, m.keys.PrevMatch):
-		m.prevSearchMatch()
-		return m, nil
-
-	case keyMatches(msg, m.keys.NextTab):
-		if len(m.tabs) > 1 {
-			m.switchTab((m.activeTabIdx() + 1) % len(m.tabs))
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.PrevTab):
-		if len(m.tabs) > 1 {
-			m.switchTab((m.activeTabIdx() - 1 + len(m.tabs)) % len(m.tabs))
-		}
-		return m, nil
-
-	case keyMatches(msg, m.keys.SplitVertical):
-		m.toggleSplit(SplitVertical)
-		return m, nil
-
-	case keyMatches(msg, m.keys.SplitHorizontal):
-		m.toggleSplit(SplitHorizontal)
-		return m, nil
-
-	case keyMatches(msg, m.keys.SwitchPane):
-		m.switchPaneFocus()
-		return m, nil
-
-	case keyMatches(msg, m.keys.ToggleSyncScroll):
-		m.toggleSyncScroll()
-		return m, nil
-
-	case keyMatches(msg, m.keys.NewTab):
-		return m.handleCreateNewTab()
-
-	case keyMatches(msg, m.keys.CloseTab):
-		return m.handleCloseActiveTab()
-
-	case keyMatches(msg, m.keys.ToggleBookmark):
-		return m.handleToggleBookmark()
-
-	case keyMatches(msg, m.keys.NextBookmark):
-		return m.handleNextBookmark()
-
-	case keyMatches(msg, m.keys.PrevBookmark):
-		return m.handlePrevBookmark()
-
-	case keyMatches(msg, m.keys.BookmarksOnly):
-		return m.handleToggleBookmarksOnly()
-
-	case keyMatches(msg, m.keys.CopyRow), keyMatches(msg, m.keys.CopyRaw):
-		return m.handleCopyKey()
-
-	case keyMatches(msg, m.keys.SelectUp), msg.String() == "shift+up":
-		return m.handleSelectUp()
-
-	case keyMatches(msg, m.keys.SelectDown), msg.String() == "shift+down":
-		return m.handleSelectDown()
+	case keyMatches(msg, m.keys.Game):
+		m.activeGame = game.RandomMiniGame()
+		m.logsDuringGame = 0
+		m.mode = modeGame
+		return m, m.activeGame.Init()
 
 	case keyMatches(msg, m.keys.Cancel):
 		if m.charSelStart >= 0 && m.charSelEnd >= 0 && m.charSelStart != m.charSelEnd {
@@ -590,6 +158,355 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchInput.Clear()
 		m.searchMatches = nil
 		return m, nil
+	}
+
+	if newM, cmd, ok := m.handleNavigationKey(msg); ok {
+		return newM, cmd
+	}
+	if newM, cmd, ok := m.handleTabKey(msg); ok {
+		return newM, cmd
+	}
+	if newM, cmd, ok := m.handleSplitKey(msg); ok {
+		return newM, cmd
+	}
+	if newM, cmd, ok := m.handleActionKey(msg); ok {
+		return newM, cmd
+	}
+
+	return m, nil
+}
+
+func (m Model) handleNavigationKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
+	switch {
+	case keyMatches(msg, m.keys.ScrollUp):
+		m.selectionStart = -1
+		m.selectionEnd = -1
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		wasFollow := m.follow
+		m.follow = false
+		h := m.activeDataHeight()
+		if len(m.visible) > 0 {
+			if m.selectedRow < 0 {
+				if wasFollow {
+					m.selectedRow = len(m.visible) - 2
+					if m.selectedRow < 0 {
+						m.selectedRow = 0
+					}
+				} else {
+					m.selectedRow = m.scrollOffset + h - 1
+					if m.selectedRow >= len(m.visible) {
+						m.selectedRow = len(m.visible) - 1
+					}
+					if m.selectedRow > 0 {
+						m.selectedRow--
+					}
+				}
+			} else if m.selectedRow > 0 {
+				m.selectedRow--
+			}
+			if m.selectedRow >= 0 && m.selectedRow < len(m.visible) && m.cursorCol >= 0 {
+				rowLen := len([]rune(m.selectedRowPlainText(m.selectedRow)))
+				if rowLen > 0 && m.cursorCol >= rowLen {
+					m.cursorCol = rowLen - 1
+				}
+			}
+			if m.selectedRow < m.scrollOffset {
+				m.scrollOffset = m.selectedRow
+			}
+		} else {
+			m.scrollOffset--
+		}
+		m.clampScroll()
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.ScrollDown):
+		m.selectionStart = -1
+		m.selectionEnd = -1
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		h := m.activeDataHeight()
+		if len(m.visible) > 0 {
+			if m.selectedRow < 0 {
+				m.selectedRow = m.scrollOffset
+				if m.selectedRow < len(m.visible)-1 {
+					m.selectedRow++
+				}
+			} else if m.selectedRow < len(m.visible)-1 {
+				m.selectedRow++
+			}
+			if m.selectedRow >= 0 && m.selectedRow < len(m.visible) && m.cursorCol >= 0 {
+				rowLen := len([]rune(m.selectedRowPlainText(m.selectedRow)))
+				if rowLen > 0 && m.cursorCol >= rowLen {
+					m.cursorCol = rowLen - 1
+				}
+			}
+			if m.selectedRow >= m.scrollOffset+h {
+				m.scrollOffset = m.selectedRow - h + 1
+			}
+			if m.selectedRow >= len(m.visible)-1 {
+				m.follow = true
+			} else {
+				m.follow = false
+			}
+		} else {
+			m.scrollOffset++
+			if m.scrollOffset >= len(m.visible)-h {
+				m.follow = true
+			}
+		}
+		m.clampScroll()
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.ScrollLeft):
+		if m.scrollX > 0 {
+			m.scrollX -= 8
+			m.clampScrollX()
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.ScrollRight):
+		m.scrollX += 8
+		m.clampScrollX()
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.CursorLeft):
+		if len(m.visible) == 0 {
+			return m, nil, true
+		}
+		if m.selectedRow < 0 {
+			m.selectedRow = m.scrollOffset
+			if m.selectedRow >= len(m.visible) {
+				m.selectedRow = len(m.visible) - 1
+			}
+			m.cursorCol = 0
+		} else if m.cursorCol > 0 {
+			m.cursorCol--
+		} else if m.cursorCol < 0 {
+			m.cursorCol = 0
+		}
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		if m.cursorCol < m.scrollX+2 {
+			m.scrollX = m.cursorCol - 2
+			m.clampScrollX()
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.CursorRight):
+		if len(m.visible) == 0 {
+			return m, nil, true
+		}
+		if m.selectedRow < 0 {
+			m.selectedRow = m.scrollOffset
+			if m.selectedRow >= len(m.visible) {
+				m.selectedRow = len(m.visible) - 1
+			}
+			m.cursorCol = 0
+		} else {
+			rowLen := len([]rune(m.selectedRowPlainText(m.selectedRow)))
+			if rowLen > 0 && m.cursorCol >= rowLen-1 {
+				m.cursorCol = rowLen - 1
+			} else if m.cursorCol < 0 {
+				m.cursorCol = 1
+			} else {
+				m.cursorCol++
+			}
+		}
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		availW := m.tableWidth() - 3
+		if m.splitMode == SplitVertical {
+			availW = (m.tableWidth() - 1) / 2 - 3
+		}
+		if availW > 4 && m.cursorCol >= m.scrollX+availW-2 {
+			m.scrollX = m.cursorCol - availW + 3
+			m.clampScrollX()
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.CharSelectLeft), msg.String() == "shift+left":
+		if len(m.visible) == 0 {
+			return m, nil, true
+		}
+		if m.selectedRow < 0 {
+			m.selectedRow = m.scrollOffset
+			if m.selectedRow >= len(m.visible) {
+				m.selectedRow = len(m.visible) - 1
+			}
+			m.cursorCol = 0
+		}
+		if m.cursorCol < 0 {
+			m.cursorCol = 0
+		}
+		if m.charSelStart < 0 {
+			m.charSelStart = m.cursorCol
+		}
+		if m.cursorCol > 0 {
+			m.cursorCol--
+		}
+		m.charSelEnd = m.cursorCol
+		if m.cursorCol < m.scrollX+2 {
+			m.scrollX = m.cursorCol - 2
+			m.clampScrollX()
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.CharSelectRight), msg.String() == "shift+right":
+		if len(m.visible) == 0 {
+			return m, nil, true
+		}
+		if m.selectedRow < 0 {
+			m.selectedRow = m.scrollOffset
+			if m.selectedRow >= len(m.visible) {
+				m.selectedRow = len(m.visible) - 1
+			}
+			m.cursorCol = 0
+		}
+		if m.cursorCol < 0 {
+			m.cursorCol = 0
+		}
+		if m.charSelStart < 0 {
+			m.charSelStart = m.cursorCol
+		}
+		rowLen := len([]rune(m.selectedRowPlainText(m.selectedRow)))
+		if rowLen > 0 && m.cursorCol >= rowLen {
+			m.cursorCol = rowLen
+		} else {
+			m.cursorCol++
+		}
+		m.charSelEnd = m.cursorCol
+		availW := m.tableWidth() - 3
+		if m.splitMode == SplitVertical {
+			availW = (m.tableWidth() - 1) / 2 - 3
+		}
+		if availW > 4 && m.cursorCol >= m.scrollX+availW-2 {
+			m.scrollX = m.cursorCol - availW + 3
+			m.clampScrollX()
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.PageUp):
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		h := m.activeDataHeight()
+		m.follow = false
+		m.scrollOffset -= h
+		if m.selectedRow >= 0 {
+			m.selectedRow -= h
+			if m.selectedRow < 0 {
+				m.selectedRow = 0
+			}
+		}
+		m.clampScroll()
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.PageDown):
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		h := m.activeDataHeight()
+		m.scrollOffset += h
+		if m.selectedRow >= 0 {
+			m.selectedRow += h
+			if m.selectedRow >= len(m.visible) {
+				m.selectedRow = len(m.visible) - 1
+			}
+		}
+		if m.scrollOffset >= len(m.visible)-h {
+			m.follow = true
+		}
+		m.clampScroll()
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.GoToBottom):
+		m.follow = true
+		m.scrollToBottom()
+		m.selectedRow = -1
+		m.selectionStart = -1
+		m.selectionEnd = -1
+		m.cursorCol = -1
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		m.scrollX = 0
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.GoToTop):
+		m.cursorCol = -1
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		m.scrollX = 0
+		if m.buffer.Len() == 0 {
+			m.activeGame = game.RandomMiniGame()
+			m.logsDuringGame = 0
+			m.mode = modeGame
+			return m, m.activeGame.Init(), true
+		}
+		m.follow = false
+		m.scrollOffset = 0
+		if len(m.visible) > 0 {
+			m.selectedRow = 0
+		}
+		if m.splitMode != SplitNone && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.NextMatch):
+		m.nextSearchMatch()
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.PrevMatch):
+		m.prevSearchMatch()
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.SelectUp), msg.String() == "shift+up":
+		resM, cmd := m.handleSelectUp()
+		return resM.(Model), cmd, true
+
+	case keyMatches(msg, m.keys.SelectDown), msg.String() == "shift+down":
+		resM, cmd := m.handleSelectDown()
+		return resM.(Model), cmd, true
+	}
+
+	return m, nil, false
+}
+
+func (m Model) handleTabKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
+	switch {
+	case keyMatches(msg, m.keys.NextTab):
+		if len(m.tabs) > 1 {
+			m.switchTab((m.activeTabIdx() + 1) % len(m.tabs))
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.PrevTab):
+		if len(m.tabs) > 1 {
+			m.switchTab((m.activeTabIdx() - 1 + len(m.tabs)) % len(m.tabs))
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.NewTab):
+		resM, cmd := m.handleCreateNewTab()
+		return resM.(Model), cmd, true
+
+	case keyMatches(msg, m.keys.CloseTab):
+		resM, cmd := m.handleCloseActiveTab()
+		return resM.(Model), cmd, true
 
 	default:
 		s := msg.String()
@@ -597,12 +514,139 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			idx := int(s[0] - '1')
 			if idx < len(m.tabs) {
 				m.switchTab(idx)
-				return m, nil
+				return m, nil, true
 			}
 		}
 	}
+	return m, nil, false
+}
 
-	return m, nil
+func (m Model) handleSplitKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
+	switch {
+	case keyMatches(msg, m.keys.SplitVertical):
+		m.toggleSplit(SplitVertical)
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.SplitHorizontal):
+		m.toggleSplit(SplitHorizontal)
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.SwitchPane):
+		m.switchPaneFocus()
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.ToggleSyncScroll):
+		m.toggleSyncScroll()
+		return m, nil, true
+	}
+	return m, nil, false
+}
+
+func (m Model) handleActionKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
+	switch {
+	case keyMatches(msg, m.keys.Clear):
+		m.buffer.Clear()
+		for i := range m.tabs {
+			m.tabs[i].Visible = nil
+			m.tabs[i].ScrollOffset = 0
+			m.tabs[i].SearchMatches = nil
+		}
+		m.visible = nil
+		m.searchMatches = nil
+		m.scrollOffset = 0
+		m.bookmarks = make(map[uint64]struct{})
+		m.message = "Cleared"
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.Pause):
+		if m.buffer.Len() == 0 {
+			m.activeGame = game.RandomMiniGame()
+			m.logsDuringGame = 0
+			m.mode = modeGame
+			return m, m.activeGame.Init(), true
+		}
+		m.paused = !m.paused
+		if !m.paused {
+			m.rebuildVisible()
+			if m.follow {
+				m.scrollToBottom()
+			}
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.SaveLog):
+		return m, m.cmdSaveLog(), true
+
+	case keyMatches(msg, m.keys.Disconnect):
+		resM, cmd := m.disconnect()
+		return resM, cmd, true
+
+	case keyMatches(msg, m.keys.Reconnect):
+		if m.serialCfg.Port == "" {
+			m.message = "No port configured — press p to pick one"
+			return m, nil, true
+		}
+		if m.isFileSource {
+			m.message = "Replay of offline log file — cannot reconnect"
+			return m, nil, true
+		}
+		if m.source != nil {
+			m.source.Stop()
+			m.source = nil
+		}
+		m.manualDisconnect = false
+		m.connState = ConnDisconnected
+		m.connDetail = ""
+		m.reconnecting = true
+		m.message = fmt.Sprintf("Reconnecting to %s…", m.serialCfg.Port)
+		return m, tryReconnectCmd(m.serialCfg), true
+
+	case keyMatches(msg, m.keys.ToggleTimestamp):
+		m.tsMode = m.tsMode.Next()
+		m.showTimestamp = (m.tsMode != TSModeOff)
+		m.saveSettings()
+		switch m.tsMode {
+		case TSModeClock:
+			m.message = fmt.Sprintf("⏱ Timestamp: Clock (%s)", m.tsField)
+		case TSModeDelta:
+			m.message = "⏱ Timestamp: Delta-Time (Δt)"
+		case TSModeBoth:
+			m.message = "⏱ Timestamp: Both (Clock + Δt)"
+		case TSModeOff:
+			m.message = "⏱ Timestamp: OFF"
+		}
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.ToggleFormat):
+		curTab := m.currentTab()
+		curTab.DisplayFormat = curTab.DisplayFormat.Next()
+		m.displayFormat = curTab.DisplayFormat
+		m.recalcLayout()
+		m.clampScroll()
+		m.message = fmt.Sprintf("Display format: %s", curTab.DisplayFormat.Label())
+		return m, nil, true
+
+	case keyMatches(msg, m.keys.ToggleBookmark):
+		resM, cmd := m.handleToggleBookmark()
+		return resM.(Model), cmd, true
+
+	case keyMatches(msg, m.keys.NextBookmark):
+		resM, cmd := m.handleNextBookmark()
+		return resM.(Model), cmd, true
+
+	case keyMatches(msg, m.keys.PrevBookmark):
+		resM, cmd := m.handlePrevBookmark()
+		return resM.(Model), cmd, true
+
+	case keyMatches(msg, m.keys.BookmarksOnly):
+		resM, cmd := m.handleToggleBookmarksOnly()
+		return resM.(Model), cmd, true
+
+	case keyMatches(msg, m.keys.CopyRow), keyMatches(msg, m.keys.CopyRaw):
+		resM, cmd := m.handleCopyKey()
+		return resM.(Model), cmd, true
+	}
+	return m, nil, false
 }
 
 func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
