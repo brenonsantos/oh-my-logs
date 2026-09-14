@@ -159,9 +159,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── New line from source ─────────────────────────────────────────────────
 	case lineMsg:
-		r, _ := m.parser.Parse(string(msg))
+		line := string(msg)
+		if m.lineStripRe != nil {
+			line = m.lineStripRe.ReplaceAllLiteralString(line, "")
+			line = strings.TrimSpace(line)
+		}
+		if line == "" {
+			return m, listenToSource(m.source)
+		}
+		r, _ := m.parser.Parse(line)
 		m.ingestRecord(r)
 		return m, listenToSource(m.source)
+
 
 	// ── Log save completed ───────────────────────────────────────────────────
 	case LogSavedMsg:
@@ -461,8 +470,10 @@ func parseTimeString(s string) time.Time {
 	if s == "" {
 		return time.Time{}
 	}
-	// Try parsing as float seconds (e.g. uptime "5.182" or "123.456789")
-	if sec, err := strconv.ParseFloat(s, 64); err == nil && sec >= 0 {
+	// Try parsing as float seconds (e.g. UNIX epoch timestamp "1694646514.123")
+	// Note: We only treat float values as wall-clock timestamps if they are >= 1,000,000,000 (after Sep 2001).
+	// Smaller values are monotonic device uptimes (like "5.182" or "356.432") and should not be parsed as clock dates.
+	if sec, err := strconv.ParseFloat(s, 64); err == nil && sec >= 1000000000 {
 		return time.Unix(0, int64(sec*float64(time.Second)))
 	}
 
@@ -481,7 +492,7 @@ func parseTimeString(s string) time.Time {
 }
 
 func tryParseRecordTimestamp(r record.Record, configuredField string) time.Time {
-	candidates := []string{configuredField, "time", "timestamp", "ts", "_ts", "uptime"}
+	candidates := []string{configuredField, "time", "timestamp", "ts", "_ts"}
 	for _, k := range candidates {
 		if k == "" {
 			continue
@@ -546,21 +557,6 @@ func (m *Model) ingestRecord(r record.Record) {
 		}
 	}
 
-	hasUptimeCol := false
-	for _, c := range m.columns {
-		if c.Field == "uptime" || strings.EqualFold(c.Style, "uptime") {
-			hasUptimeCol = true
-			break
-		}
-	}
-	if hasUptimeCol && r.Fields["uptime"] == "" {
-		if r.Fields["_ts"] != "" {
-			r.Fields["uptime"] = r.Fields["_ts"]
-		} else {
-			r.Fields["uptime"] = nowStr
-		}
-	}
-
 	m.nextRecordID++
 	r.ID = m.nextRecordID
 	m.buffer.Add(r)
@@ -574,7 +570,12 @@ func (m *Model) ingestRecord(r record.Record) {
 			raw = r.Fields["message"]
 		}
 		if raw != "" {
-			m.diskLogger.WriteLine(raw)
+			line := raw
+			if !r.Timestamp.IsZero() {
+				const saveTimestampFmt = "2006-01-02T15:04:05.000"
+				line = "[" + r.Timestamp.Format(saveTimestampFmt) + "] " + raw
+			}
+			m.diskLogger.WriteLine(line)
 		}
 	}
 

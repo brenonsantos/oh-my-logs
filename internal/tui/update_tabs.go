@@ -253,7 +253,9 @@ func (m *Model) recalcLayout() {
 }
 
 // cmdSaveLogToPath saves all raw lines in the buffer to the specified file path.
+// Every saved line is prefixed with the timestamp: "[2006-01-02T15:04:05.000] <raw>".
 func (m *Model) cmdSaveLogToPath(path string) tea.Cmd {
+	const saveTimestampFmt = "2006-01-02T15:04:05.000"
 	return func() tea.Msg {
 		all := m.buffer.All()
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -265,7 +267,11 @@ func (m *Model) cmdSaveLogToPath(path string) tea.Cmd {
 		}
 		defer f.Close()
 		for _, r := range all {
-			if _, err := fmt.Fprintln(f, r.Raw); err != nil {
+			line := r.Raw
+			if !r.Timestamp.IsZero() {
+				line = "[" + r.Timestamp.Format(saveTimestampFmt) + "] " + r.Raw
+			}
+			if _, err := fmt.Fprintln(f, line); err != nil {
 				return LogSavedMsg{Path: path, Err: fmt.Errorf("save log: %w", err)}
 			}
 		}

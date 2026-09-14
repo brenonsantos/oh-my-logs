@@ -177,3 +177,32 @@ func TestAnsiCutBehavior(t *testing.T) {
 		t.Errorf("expected width 8, got %d", lipgloss.Width(cut))
 	}
 }
+
+func TestSanitizeCellValue(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"empty", "", ""},
+		{"clean", "hello world", "hello world"},
+		{"newline", "foo\nbar", "foo·bar"},
+		{"carriage return", "foo\rbar", "foo·bar"},
+		{"tab", "foo\tbar", "foo·bar"},
+		{"NUL", "foo\x00bar", "foo·bar"},
+		{"multi control", "a\nb\rc\td", "a·b·c·d"},
+		{"DEL 0x7f", "foo\x7fbar", "foo·bar"},
+		// Real-world Zephyr binary garbage in Pattern field (bytes 0x07 0x18 etc.)
+		{"binary garbage", "i++: 1. Pattern: \x07\x18\xb3\x07", "i++: 1. Pattern: ····"},
+		// Strings with only printable content should be returned unchanged (fast path)
+		{"unicode printable", "café résumé", "café résumé"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sanitizeCellValue(tc.input)
+			if got != tc.want {
+				t.Errorf("sanitizeCellValue(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}

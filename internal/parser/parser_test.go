@@ -3,10 +3,12 @@ package parser_test
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
 )
+
 
 // ── RawParser ────────────────────────────────────────────────────────────────
 
@@ -650,4 +652,89 @@ func TestLoadProfile_Logcat(t *testing.T) {
 		t.Errorf("expected non-matching banner to fallback to message, got %q", rUnmatched.Fields["message"])
 	}
 }
+
+// ── IngestConfig.StripPrefix ─────────────────────────────────────────────────
+
+func TestIngestConfig_StripPrefix_ParsedFromYAML(t *testing.T) {
+	yaml := `
+name: TestStrip
+ingest:
+  strip_prefix: '^\w+:~\$\s*'
+parser:
+  type: raw
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "strip.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+	prof, err := parser.LoadProfile(path)
+	if err != nil {
+		t.Fatalf("failed to load profile: %v", err)
+	}
+	if prof.Ingest.StripPrefix != `^\w+:~\$\s*` {
+		t.Errorf("expected strip_prefix %q, got %q", `^\w+:~\$\s*`, prof.Ingest.StripPrefix)
+	}
+}
+
+func TestZephyrProfile_StripPrefixSet(t *testing.T) {
+	// Verify the strip_prefix compiles and correctly matches any Zephyr
+	// shell prompt ("<name>:~$ ") AND ANSI escape sequences, but not plain log lines.
+	yaml := `
+name: Zephyr
+ingest:
+  strip_prefix: '^(?:\w+:~\$\s*)?(?:\x1b\[\d*[A-Za-z]\s*)*'
+parser:
+  type: raw
+`
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "zephyr_strip.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
+		t.Fatalf("failed to write profile: %v", err)
+	}
+	prof, err := parser.LoadProfile(path)
+	if err != nil {
+		t.Fatalf("failed to load profile: %v", err)
+	}
+	if prof.Ingest.StripPrefix == "" {
+		t.Fatal("expected strip_prefix to be set in Zephyr profile")
+	}
+
+	re, err := regexp.Compile(prof.Ingest.StripPrefix)
+	if err != nil {
+		t.Fatalf("strip_prefix regex did not compile: %v", err)
+	}
+
+	type stripCase struct {
+		input string
+		after string // what remains after stripping
+	}
+	cases := []stripCase{
+		// Shell prompt only
+		{"myboard:~$ [   6.1] <inf> boot ok", "[   6.1] <inf> boot ok"},
+		{"nrf52840dk:~$ [   6.1] <inf> boot ok", "[   6.1] <inf> boot ok"},
+		{"board:~$[   6.1] <inf> boot ok", "[   6.1] <inf> boot ok"},
+		// ANSI only (no prompt) — the common case from real devices
+		{"\x1b[9D\x1b[J[    5.234] <inf> test", "[    5.234] <inf> test"},
+		// Prompt + ANSI combined
+		{"myboard:~$ \x1b[9D\x1b[J[   6.1] <inf> boot", "[   6.1] <inf> boot"},
+		// Bare prompt (should become empty → dropped by pipeline)
+		{"board:~$ ", ""},
+	}
+	for _, tc := range cases {
+		got := re.ReplaceAllLiteralString(tc.input, "")
+		if got != tc.after {
+			t.Errorf("after strip of %q: got %q, want %q", tc.input, got, tc.after)
+		}
+	}
+
+	// Must NOT strip a plain log line (no prefix).
+	noPrompt := "[   6.122] <inf> app: boot ok"
+	after := re.ReplaceAllLiteralString(noPrompt, "")
+	if after != noPrompt {
+		t.Errorf("strip_prefix incorrectly modified plain log line: got %q", after)
+	}
+}
+
+
 

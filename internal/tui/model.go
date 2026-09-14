@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
@@ -15,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/filepicker"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
 
 // inputMode tracks which text input is currently active.
 type inputMode int
@@ -200,8 +202,10 @@ type Model struct {
 	tsMode         TimestampMode   // clock, delta, both, or off
 	tsField        string          // field name for the arrival timestamp (e.g. "_ts" or "time")
 	tsFormat       string          // Go time layout for the timestamp
+	lineStripRe    *regexp.Regexp  // optional regex stripped from the start of each incoming line before parsing (e.g. Zephyr shell prompt)
 	deltaTracker   *timing.Tracker // dynamic EMA latency tracker
 	lastRecordTime time.Time       // arrival time of previous stream record
+
 
 	// Viewport dimensions (computed on resize)
 	tableHeight  int
@@ -367,6 +371,13 @@ func New(
 	}
 	tracker := timing.NewTracker(timingCfg)
 
+	// Compile the line-strip regex from the profile's ingest config (if any).
+	var lineStripRe *regexp.Regexp
+	if profile != nil && profile.Ingest.StripPrefix != "" {
+		lineStripRe, _ = regexp.Compile(profile.Ingest.StripPrefix)
+	}
+
+
 	initFollow := true
 	if savedSettings != nil {
 		if !savedSettings.DefaultFollow && savedSettings.BufferCapacity > 0 {
@@ -402,6 +413,7 @@ func New(
 		deltaTracker:        tracker,
 		tsField:             tsField,
 		tsFormat:            tsFormat,
+		lineStripRe:         lineStripRe,
 		appConfig:           appCfg,
 		settings:            savedSettings,
 		baudList:            bauds,

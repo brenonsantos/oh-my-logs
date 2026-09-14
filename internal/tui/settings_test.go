@@ -5,8 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
+	"github.com/brenoniehues/oh-my-logs/internal/parser"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
 	tea "github.com/charmbracelet/bubbletea"
@@ -676,5 +678,64 @@ func TestSaveLog_FilePicker_ModalAndSave(t *testing.T) {
 	}
 	if !strings.Contains(string(expContent), "SENSOR_INIT: OK") {
 		t.Fatalf("unexpected explicit file content: %s", string(expContent))
+	}
+}
+
+// TestSaveLog_IngestTimestamp_Prefix verifies that when a profile has
+// IngestTimestamp.Enabled=true, saved lines are prefixed with the wall-clock
+// arrival time in "[YYYY-MM-DDThh:mm:ss.mmm] " format.
+func TestSaveLog_IngestTimestamp_Prefix(t *testing.T) {
+	cfg := serial.Config{Port: "COM1", Baud: 115200}
+	prof := &parser.Profile{}
+	prof.Ingest.Timestamp.Enabled = true
+	buf := record.NewBuffer(100)
+	m := New(cfg, prof, parser.NewRawParser(), buf, nil, nil)
+
+	ts := time.Date(2026, 9, 14, 10, 30, 5, 123000000, time.UTC)
+	m.ingestRecord(record.Record{Raw: "boot ok", Timestamp: ts})
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "out.log")
+	cmd := m.cmdSaveLogToPath(path)
+	msg := cmd().(LogSavedMsg)
+	if msg.Err != nil {
+		t.Fatalf("unexpected error: %v", msg.Err)
+	}
+
+	content, _ := os.ReadFile(path)
+	got := strings.TrimSpace(string(content))
+	wantPrefix := "[2026-09-14T10:30:05.123] boot ok"
+	if got != wantPrefix {
+		t.Errorf("expected %q, got %q", wantPrefix, got)
+	}
+}
+
+// TestSaveLog_NoIngestTimestamp_HasPrefix verifies that even when a profile does NOT
+// have IngestTimestamp.Enabled, saved lines are still prefixed with the arrival
+// timestamp in "[YYYY-MM-DDThh:mm:ss.mmm] " format.
+func TestSaveLog_NoIngestTimestamp_HasPrefix(t *testing.T) {
+	cfg := serial.Config{Port: "COM1", Baud: 115200}
+	// Profile with NO ingest timestamp (uptime-style device like Zephyr).
+	prof := &parser.Profile{}
+	prof.Ingest.Timestamp.Enabled = false
+	buf := record.NewBuffer(100)
+	m := New(cfg, prof, parser.NewRawParser(), buf, nil, nil)
+
+	ts := time.Date(2026, 9, 14, 10, 30, 5, 123000000, time.UTC)
+	m.ingestRecord(record.Record{Raw: "[00:00:05.000] <inf> app: boot ok", Timestamp: ts})
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "out.log")
+	cmd := m.cmdSaveLogToPath(path)
+	msg := cmd().(LogSavedMsg)
+	if msg.Err != nil {
+		t.Fatalf("unexpected error: %v", msg.Err)
+	}
+
+	content, _ := os.ReadFile(path)
+	got := strings.TrimSpace(string(content))
+	want := "[2026-09-14T10:30:05.123] [00:00:05.000] <inf> app: boot ok"
+	if got != want {
+		t.Errorf("expected raw line %q, got %q", want, got)
 	}
 }

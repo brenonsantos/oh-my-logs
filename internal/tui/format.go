@@ -3,7 +3,39 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"unicode"
 )
+
+// sanitizeCellValue replaces control characters (newlines, carriage returns,
+// tabs, NUL, and any other byte < 0x20 or == 0x7F) with a middle dot (·) so
+// that binary garbage in log messages cannot break the single-row table layout.
+// This is a rendering-only transform; the original data in the buffer is kept intact.
+func sanitizeCellValue(s string) string {
+	if s == "" {
+		return s
+	}
+	var needsSanitize bool
+	for _, r := range s {
+		if r < 0x20 || r == 0x7F || r == unicode.ReplacementChar || (r > 0x7F && !unicode.IsPrint(r)) {
+			needsSanitize = true
+			break
+		}
+	}
+	if !needsSanitize {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r < 0x20 || r == 0x7F || r == unicode.ReplacementChar || (r > 0x7F && !unicode.IsPrint(r)) {
+			b.WriteRune('·')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 
 // DisplayFormat defines how serial records are visually presented in the table.
 type DisplayFormat int

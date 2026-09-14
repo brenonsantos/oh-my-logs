@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/brenoniehues/oh-my-logs/internal/clipboard"
@@ -14,6 +15,7 @@ import (
 	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
 
 // handlePortPickerKey handles navigation and selection inside the port & baud modal.
 func (m Model) handlePortPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -141,6 +143,12 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.parser = newParser
 			m.columns = prof.ToColumns()
 
+			// Update line-strip regex from new profile.
+			m.lineStripRe = nil
+			if prof.Ingest.StripPrefix != "" {
+				m.lineStripRe, _ = regexp.Compile(prof.Ingest.StripPrefix)
+			}
+
 			// Update timestamp settings if configured
 			if prof.Ingest.Timestamp.Enabled {
 				m.tsField = prof.Ingest.Timestamp.TimestampField()
@@ -162,7 +170,15 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if old.Fields["level"] == "TX" {
 				return old
 			}
-			newRec, _ := m.parser.Parse(old.Raw)
+			parseLine := old.Raw
+			if m.lineStripRe != nil {
+				parseLine = strings.TrimSpace(m.lineStripRe.ReplaceAllLiteralString(parseLine, ""))
+			}
+			if parseLine == "" {
+				return old // preserve bare-prompt records as-is (rare edge case)
+			}
+			newRec, _ := m.parser.Parse(parseLine)
+			newRec.Raw = old.Raw // keep the original raw
 			newRec.ID = old.ID
 			newRec.Timestamp = old.Timestamp
 			newRec.Delta = old.Delta
