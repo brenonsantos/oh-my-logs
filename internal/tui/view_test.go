@@ -484,20 +484,17 @@ func TestUptimeFallbackToArrivalTimestamp(t *testing.T) {
 		t.Fatalf("expected 1 visible record, got %d", len(m.visible))
 	}
 	rec := m.visible[0]
-	if rec.Fields["uptime"] == "" {
-		t.Errorf("expected uptime field to fallback to arrival timestamp, got empty")
+	if rec.Fields["uptime"] != "" {
+		t.Errorf("expected empty/blank uptime field, got %q", rec.Fields["uptime"])
 	}
 	if rec.Fields["_ts"] == "" {
 		t.Errorf("expected _ts to be populated")
 	}
-	if rec.Fields["uptime"] != rec.Fields["_ts"] {
-		t.Errorf("expected uptime %q to match _ts %q", rec.Fields["uptime"], rec.Fields["_ts"])
-	}
 
-	// Rendered view must contain the arrival timestamp in the Uptime column
+	// Rendered view must NOT contain the arrival timestamp in the Uptime column
 	v := m.View()
-	if !strings.Contains(v, rec.Fields["uptime"]) {
-		t.Errorf("expected rendered view to display fallback arrival timestamp %q", rec.Fields["uptime"])
+	if strings.Contains(v, rec.Fields["_ts"]) {
+		t.Errorf("expected rendered view to NOT display fallback arrival timestamp %q when uptime is empty", rec.Fields["_ts"])
 	}
 }
 

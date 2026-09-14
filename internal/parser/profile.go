@@ -55,8 +55,10 @@ func (t IngestTimestamp) TimestampFormat() string {
 // IngestConfig controls what the pipeline automatically adds to every record,
 // independent of what the parser extracts from the raw line.
 type IngestConfig struct {
-	Timestamp IngestTimestamp `yaml:"timestamp"`
+	Timestamp   IngestTimestamp `yaml:"timestamp"`
+	StripPrefix string          `yaml:"strip_prefix"` // regex matched at the start of each line and removed before parsing (e.g. `^\w+:~\$\s*`)
 }
+
 
 // TimingConfig defines profile-level latency thresholds and moving-average parameters.
 type TimingConfig struct {

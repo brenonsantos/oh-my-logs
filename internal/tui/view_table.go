@@ -158,9 +158,6 @@ func (m Model) viewTable() string {
 			case "_ascii":
 				val = FormatASCII(r.Raw)
 			}
-			if (col.Field == "uptime" || strings.EqualFold(col.Style, "uptime")) && val == "" {
-				val = r.Fields["_ts"]
-			}
 			var rowDelta time.Duration
 			if col.Field == "_delta" || col.Style == "delta" {
 				if i > 0 && !rows[i-1].Timestamp.IsZero() && !r.Timestamp.IsZero() {
@@ -179,7 +176,7 @@ func (m Model) viewTable() string {
 			if colIdx < len(colWidths) {
 				w = colWidths[colIdx]
 			}
-			cellText := padOrFlex(val, w, col.Width == 0)
+			cellText := padOrFlex(sanitizeCellValue(val), w, col.Width == 0)
 
 			cellStyle := theme.ResolveCellStyle(col, val)
 			if col.Field == "_delta" || col.Style == "delta" {

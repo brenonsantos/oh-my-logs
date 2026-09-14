@@ -13,7 +13,21 @@ name: Zephyr
 #   E: failed to create directory (-17)
 #   # With optional host timestamp:
 #   14:17:31:258 -> D: pmhw: wkup_pin_config
+#   # With Zephyr shell prompt prefix (any device name):
+#   myboard:~$ [      6.122] <inf> app: boot ok
+
+ingest:
+  # The Zephyr shell emits two kinds of noise on the shared logging UART:
+  #   1. Its interactive prompt: `<name>:~$ ` (any board name)
+  #   2. ANSI cursor/erase sequences it uses to redraw the prompt line,
+  #      e.g. ESC[9D (cursor-left) + ESC[J (erase-to-end).
+  # Both can appear together or separately, and in either order.
+  # This regex strips all of them before the line reaches the parser.
+  strip_prefix: '^(?:\w+:~\$\s*)?(?:\x1b\[\d*[A-Za-z]\s*)*'
+
+
 parser:
+
   type: regex
   patterns:
     # 1. Standard Zephyr with bracketed module: [uptime] <level> [module]: message
