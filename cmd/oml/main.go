@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	version  = "1.2.0"
-	codename = "Taubateano"
+	version  = "1.3.0"
+	codename = "Araquariense"
 )
 
 func main() {
@@ -319,4 +319,3 @@ func openControllingTTY() (*os.File, error) {
 	}
 	return os.OpenFile("/dev/tty", os.O_RDWR, 0)
 }
-
