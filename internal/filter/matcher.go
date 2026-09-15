@@ -52,12 +52,16 @@ func matchContains(r record.Record, e Expr) bool {
 }
 
 
-// matchFieldEqual checks whether the named field equals any of the target values.
+// matchFieldEqual checks whether the named field contains or equals any of the target values.
 func matchFieldEqual(r record.Record, e Expr) bool {
-	fieldVal := strings.ToLower(r.Fields[e.Field])
+	rawVal, ok := r.Fields[e.Field]
+	if !ok {
+		return e.Negate
+	}
+	fieldVal := strings.ToLower(rawVal)
 	matched := false
 	for _, v := range e.Values {
-		if fieldVal == v {
+		if strings.Contains(fieldVal, v) {
 			matched = true
 			break
 		}

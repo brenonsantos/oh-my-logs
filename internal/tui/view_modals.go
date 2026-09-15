@@ -744,6 +744,15 @@ func (m Model) viewRowDetailModal() string {
 		contentLines = append(contentLines, "")
 	}
 
+	// ── Section 2.5: Original Message (when decoded) ─────────────────────────
+	if rawMsg := r.Get("_raw_message"); rawMsg != "" && rawMsg != msg {
+		contentLines = append(contentLines, theme.ModalSection.Render("ORIGINAL MESSAGE"))
+		for _, rml := range payload.WrapTextLines(rawMsg, contentWidth-2) {
+			contentLines = append(contentLines, "  "+theme.Muted.Render(rml))
+		}
+		contentLines = append(contentLines, "")
+	}
+
 	// ── Section 3: Raw Log ───────────────────────────────────────────────────
 	if r.Raw != "" && (len(r.Fields) > 0 || r.Raw != msg) {
 		contentLines = append(contentLines, theme.ModalSection.Render(fmt.Sprintf("RAW LOG (%d bytes)", len(r.Raw))))
