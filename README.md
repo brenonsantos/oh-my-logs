@@ -146,6 +146,7 @@ Explore the dedicated documentation guides for in-depth tutorials and configurat
 | Guide | Description |
 |-------|-------------|
 | [**Profile Configuration**](docs/profiles.md) | YAML schema, regex capture groups, semantic column styles, custom colors, timing thresholds, and global profile management. |
+| [**Payload Decoders & Terminal Sanitization**](docs/decoders.md) | Project-local decoders (`.oml.yaml`), declarative & scripted telemetry decoders, and universal VT100 prompt/erase sanitization. |
 | [**Filtering & Search**](docs/filtering.md) | Logcat syntax reference, substring queries, exclusions, multi-condition logic, filter presets modal, and history navigation. |
 | [**Delta-Time & Latency**](docs/timing-and-latency.md) | Moving average (EMA) cadence baseline, burst/hiccup/anomaly classification, 4-state cycling, and batch selection stopwatch. |
 | [**Dual-Pane Split Views**](docs/split-views.md) | Vertical and horizontal split layouts, pane focus switching, and synchronized chronological scrolling (`S`). |

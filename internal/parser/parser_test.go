@@ -736,5 +736,49 @@ parser:
 	}
 }
 
+func TestCheckExactUserLog(t *testing.T) {
+	const yamlProfile = `name: Zephyr
+ingest:
+  strip_prefix: '^(?:\w+:~\$\s*)?(?:\x1b\[\d*[A-Za-z]\s*)*'
+parser:
+  type: regex
+  pattern: '^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?P<module>[a-zA-Z0-9_.-]+):\s*(?P<message>.*)$'
+`
+	tmp := filepath.Join(t.TempDir(), "zephyr.yaml")
+	if err := os.WriteFile(tmp, []byte(yamlProfile), 0o644); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	prof, err := parser.LoadProfile(tmp)
+	if err != nil {
+		t.Fatalf("LoadProfile error: %v", err)
+	}
+	re, err := regexp.Compile(prof.Ingest.StripPrefix)
+	if err != nil {
+		t.Fatalf("regex compile error: %v", err)
+	}
+
+	line := "board:~$ \x1b[9D\x1b[J[   5208.360] <inf> os_msg: CS:Vd/BzS6(JL)CGvXa=MQAAAA,CFph3=LQUAAA"
+	stripped := re.ReplaceAllLiteralString(line, "")
+	expected := "[   5208.360] <inf> os_msg: CS:Vd/BzS6(JL)CGvXa=MQAAAA,CFph3=LQUAAA"
+	if stripped != expected {
+		t.Fatalf("expected stripped %q, got %q", expected, stripped)
+	}
+
+	bp, err := prof.BuildParser()
+	if err != nil {
+		t.Fatalf("BuildParser error: %v", err)
+	}
+	r, err := bp.Parse(stripped)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if r.Fields["uptime"] != "5208.360" || r.Fields["level"] != "inf" || r.Fields["module"] != "os_msg" {
+		t.Errorf("unexpected fields: %+v", r.Fields)
+	}
+}
+
+
+
 
 

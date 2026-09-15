@@ -174,8 +174,14 @@ func main() {
 
 	savedSettings, _ := appCfg.LoadSettings()
 
+	// ── Project-local config (.oml.yaml) ─────────────────────────────────────
+	projectCfg, _ := config.FindProjectConfig("")
+
 	// ── Resolve profile ───────────────────────────────────────────────────────
 	targetProfile := *flagProfile
+	if targetProfile == "" && projectCfg != nil && projectCfg.Profile != "" {
+		targetProfile = projectCfg.Profile
+	}
 	if targetProfile == "" && savedSettings != nil && savedSettings.Profile != "" {
 		targetProfile = savedSettings.Profile
 	}
@@ -212,6 +218,8 @@ func main() {
 	})
 	if baudProvided {
 		serialCfg.Baud = *flagBaud
+	} else if projectCfg != nil && projectCfg.Baud > 0 {
+		serialCfg.Baud = projectCfg.Baud
 	} else if savedSettings != nil && savedSettings.Baud > 0 {
 		serialCfg.Baud = savedSettings.Baud
 	} else {
@@ -247,6 +255,8 @@ func main() {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
+	} else if projectCfg != nil && projectCfg.Port != "" {
+		serialCfg.Port = projectCfg.Port
 	} else if savedSettings != nil && savedSettings.Port != "" {
 		serialCfg.Port = savedSettings.Port
 		// Keep last used port pre-configured in settings, but start in clean
@@ -266,6 +276,15 @@ func main() {
 		tui.SetCurrentTheme(savedSettings.Theme)
 	}
 	model := tui.New(serialCfg, profile, p, buf, src, appCfg)
+
+	if projectCfg != nil {
+		if len(projectCfg.Decoders) > 0 {
+			model.SetProjectDecoders(projectCfg.Decoders)
+		}
+		if projectCfg.StripPrefix != "" {
+			model.SetProjectStripPrefix(projectCfg.StripPrefix)
+		}
+	}
 
 	if *flagPrefix != "" {
 		model.SetDirectToDiskPrefix(*flagPrefix)
@@ -299,7 +318,11 @@ func main() {
 		teaOpts...,
 	)
 
-	if _, err := prog.Run(); err != nil {
+	finalModel, err := prog.Run()
+	if m, ok := finalModel.(tui.Model); ok {
+		_ = m.Close()
+	}
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}

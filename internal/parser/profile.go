@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/brenoniehues/oh-my-logs/internal/decoder"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	"gopkg.in/yaml.v3"
@@ -71,11 +72,12 @@ type TimingConfig struct {
 // Profile is a parsed YAML profile file. It defines how serial output from a
 // particular architecture is parsed and displayed.
 type Profile struct {
-	Name    string         `yaml:"name"`
-	Parser  ParserConfig   `yaml:"parser"`
-	Columns []ColumnConfig `yaml:"columns"`
-	Ingest  IngestConfig   `yaml:"ingest"`
-	Timing  TimingConfig   `yaml:"timing"`
+	Name     string           `yaml:"name"`
+	Parser   ParserConfig     `yaml:"parser"`
+	Columns  []ColumnConfig   `yaml:"columns"`
+	Ingest   IngestConfig     `yaml:"ingest"`
+	Timing   TimingConfig     `yaml:"timing"`
+	Decoders []decoder.Config `yaml:"decoders,omitempty"`
 }
 
 // TimingParameters converts TimingConfig to timing.Config, parsing duration strings.

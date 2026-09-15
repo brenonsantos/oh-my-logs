@@ -34,7 +34,7 @@ func OrderedRecordFields(fields map[string]string) [][2]string {
 	var pairs [][2]string
 	for k, v := range fields {
 		lowerK := strings.ToLower(k)
-		if lowerK == "message" || lowerK == "msg" {
+		if lowerK == "message" || lowerK == "msg" || lowerK == "_raw_message" {
 			continue
 		}
 		pairs = append(pairs, [2]string{k, v})
@@ -166,6 +166,11 @@ func FormattedRecordDetail(r record.Record, tsField string, bookmarked bool) str
 		} else {
 			sb.WriteString(msg + "\n")
 		}
+	}
+
+	if rawMsg := r.Get("_raw_message"); rawMsg != "" && rawMsg != msg {
+		sb.WriteString("\nOriginal Message:\n")
+		sb.WriteString("  " + rawMsg + "\n")
 	}
 
 	if r.Raw != "" && (len(r.Fields) > 0 || r.Raw != msg) {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
+	"github.com/brenoniehues/oh-my-logs/internal/decoder"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/game"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -264,6 +265,10 @@ type Model struct {
 
 	// Row detail inspector modal
 	detailScrollOffset int
+
+	// Decoders pipeline
+	decoders        *decoder.Pipeline
+	projectDecoders []decoder.Config
 }
 
 // New creates a new Model with sensible defaults.
@@ -486,7 +491,55 @@ func New(
 		_ = m.StartDiskLogger(targetPath)
 	}
 
+	if profile != nil && len(profile.Decoders) > 0 {
+		m.rebuildDecodersPipeline(profile.Decoders)
+	}
+
 	return m
+}
+
+// SetProjectDecoders configures project-level decoders and rebuilds the active pipeline.
+func (m *Model) SetProjectDecoders(decs []decoder.Config) {
+	m.projectDecoders = decs
+	var profDecs []decoder.Config
+	if m.profile != nil {
+		profDecs = m.profile.Decoders
+	}
+	m.rebuildDecodersPipeline(profDecs)
+}
+
+// SetProjectStripPrefix configures an optional line-strip regex from project-level config.
+func (m *Model) SetProjectStripPrefix(stripPrefix string) {
+	if stripPrefix != "" && m.lineStripRe == nil {
+		m.lineStripRe, _ = regexp.Compile(stripPrefix)
+	}
+}
+
+// rebuildDecodersPipeline rebuilds the active decoder pipeline from profile and project configs.
+func (m *Model) rebuildDecodersPipeline(profileDecoders []decoder.Config) {
+	if m.decoders != nil {
+		_ = m.decoders.Close()
+		m.decoders = nil
+	}
+	var all []decoder.Config
+	all = append(all, profileDecoders...)
+	all = append(all, m.projectDecoders...)
+	if len(all) > 0 {
+		pipe, _ := decoder.NewPipeline(all)
+		m.decoders = pipe
+	}
+}
+
+// Close gracefully terminates background resources including decoders and disk loggers.
+func (m *Model) Close() error {
+	if m.decoders != nil {
+		_ = m.decoders.Close()
+		m.decoders = nil
+	}
+	if m.diskLogger != nil {
+		_ = m.diskLogger.Close()
+	}
+	return nil
 }
 
 // StartDiskLogger begins direct-to-disk streaming to targetPath.

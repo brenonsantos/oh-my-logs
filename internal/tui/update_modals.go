@@ -12,6 +12,7 @@ import (
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
+	"github.com/brenoniehues/oh-my-logs/internal/serial"
 	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -126,6 +127,7 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.profile = nil
 			m.parser = parser.NewRawParser()
 			m.columns = []record.Column{{Field: "message", Title: "Message", Width: 0}}
+			m.rebuildDecodersPipeline(nil)
 		} else {
 			prof, err := parser.LoadProfile(selected.Path)
 			if err != nil {
@@ -149,6 +151,9 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.lineStripRe, _ = regexp.Compile(prof.Ingest.StripPrefix)
 			}
 
+			// Update decoders from new profile + project decoders
+			m.rebuildDecodersPipeline(prof.Decoders)
+
 			// Update timestamp settings if configured
 			if prof.Ingest.Timestamp.Enabled {
 				m.tsField = prof.Ingest.Timestamp.TimestampField()
@@ -170,7 +175,7 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if old.Fields["level"] == "TX" {
 				return old
 			}
-			parseLine := old.Raw
+			parseLine := serial.CleanTerminalLine(old.Raw)
 			if m.lineStripRe != nil {
 				parseLine = strings.TrimSpace(m.lineStripRe.ReplaceAllLiteralString(parseLine, ""))
 			}
@@ -203,6 +208,9 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if newRec.Fields["_ts"] == "" {
 					newRec.Fields["_ts"] = prevTS
 				}
+			}
+			if m.decoders != nil {
+				newRec = m.decoders.Decode(newRec)
 			}
 			return newRec
 		})

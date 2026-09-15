@@ -159,7 +159,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── New line from source ─────────────────────────────────────────────────
 	case lineMsg:
-		line := string(msg)
+		line := serial.CleanTerminalLine(string(msg))
 		if m.lineStripRe != nil {
 			line = m.lineStripRe.ReplaceAllLiteralString(line, "")
 			line = strings.TrimSpace(line)
@@ -555,6 +555,10 @@ func (m *Model) ingestRecord(r record.Record) {
 		} else {
 			r.Fields["_ts"] = nowStr
 		}
+	}
+
+	if m.decoders != nil {
+		r = m.decoders.Decode(r)
 	}
 
 	m.nextRecordID++

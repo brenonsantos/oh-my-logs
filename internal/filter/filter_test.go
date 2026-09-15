@@ -165,6 +165,14 @@ func TestFilter_FieldEqual_CaseInsensitive(t *testing.T) {
 	}
 }
 
+func TestFilter_FieldSubstring(t *testing.T) {
+	f, _ := filter.New("topic:res_sensor")
+	r := rec(map[string]string{"topic": "res_sensors"})
+	if !f.Matches(r) {
+		t.Error("topic:res_sensor should match topic='res_sensors' via substring")
+	}
+}
+
 func TestFilter_FieldEqual_MissingField(t *testing.T) {
 	f, _ := filter.New("module:CAN")
 	r := rec(map[string]string{"message": "no module field"})
