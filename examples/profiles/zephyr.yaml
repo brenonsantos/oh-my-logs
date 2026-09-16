@@ -1,4 +1,5 @@
 name: Zephyr
+version: 1.0.0
 
 # Zephyr RTOS log profile (Standard formatted and Minimal UART logging)
 # Supports:

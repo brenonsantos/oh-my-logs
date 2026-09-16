@@ -18,8 +18,11 @@
 - **Serial Send (TX)**: Send text commands (`i`) with selectable line endings and input history.
 - **TX Echo**: Echo sent commands into the log stream for filtering and bookmarking.
 - **Bookmarking**: Pin rows (`b`), jump between pins (`[`/`]`), and filter to pinned rows (`B`).
-- **Parsing Profiles**: Define column layouts and regex patterns via YAML profiles.
+- **Parsing Profiles & Subcommands**: Define column layouts and regex patterns via YAML profiles. First-class `oml profile` CLI (`list`, `install`, `update`, `uninstall`, `show`, `export`, `path`) with numeric IDs (`#1`), versioning, and upstream upgrades from URLs or Git repositories.
 - **Zephyr RTOS Profile**: Built-in parser for Zephyr uptime, log levels, module tags, and messages.
+- **Dual-Engine Payload Decoders**: Declarative regex/template formatters and procedural worker processes (`exec`) with persistent stdio streaming, auto-restart, and timeout protection.
+- **Companion Decoder Bundles**: Install profiles with companion scripts/databases into isolated namespaces (`~/.config/oml/decoders/<profile>/`) with automatic `$PATH` and interpreter script resolution.
+- **Universal Interactive Terminal Cleaner**: Automatically strips shell prompt noise (`uart:~$ `, `device:~$ `) and terminal cursor erasure sequences (`\x1b[9D\x1b[J`) emitted by RTOS shells without corrupting colors.
 - **Port & Baud Picker**: List serial ports and set baud rates (`p`).
 - **Profile Switcher**: Switch profiles on the fly (`P`) and re-parse buffered logs.
 - **Row Selection & Copy**: Select rows with mouse or `Shift+↑`/`↓` and copy to clipboard (`y`/`Y`).

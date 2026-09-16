@@ -15,6 +15,8 @@ type AppConfig struct {
 	ConfigDir string
 	// ProfilesDir is the directory where profile YAML files are stored.
 	ProfilesDir string
+	// DecodersDir is the directory where companion decoder scripts and binaries are stored.
+	DecodersDir string
 	// LogsDir is the default directory for saved logs.
 	LogsDir string
 }
@@ -29,11 +31,12 @@ func Load() (*AppConfig, error) {
 	cfg := &AppConfig{
 		ConfigDir:   dir,
 		ProfilesDir: filepath.Join(dir, "profiles"),
+		DecodersDir: filepath.Join(dir, "decoders"),
 		LogsDir:     filepath.Join(dir, "logs"),
 	}
 
 	// Ensure directories exist.
-	for _, d := range []string{cfg.ProfilesDir, cfg.LogsDir} {
+	for _, d := range []string{cfg.ProfilesDir, cfg.DecodersDir, cfg.LogsDir} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return nil, fmt.Errorf("config: cannot create directory %q: %w", d, err)
 		}

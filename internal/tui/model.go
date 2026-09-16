@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"time"
@@ -525,6 +526,23 @@ func (m *Model) rebuildDecodersPipeline(profileDecoders []decoder.Config) {
 	all = append(all, profileDecoders...)
 	all = append(all, m.projectDecoders...)
 	if len(all) > 0 {
+		var searchDirs []string
+		if m.appConfig != nil && m.appConfig.DecodersDir != "" {
+			searchDirs = append(searchDirs, m.appConfig.DecodersDir)
+			if entries, err := os.ReadDir(m.appConfig.DecodersDir); err == nil {
+				for _, e := range entries {
+					if e.IsDir() {
+						searchDirs = append(searchDirs, filepath.Join(m.appConfig.DecodersDir, e.Name()))
+					}
+				}
+			}
+		}
+		for i := range all {
+			if len(searchDirs) > 0 {
+				all[i].ExtraPaths = append(all[i].ExtraPaths, searchDirs...)
+			}
+		}
+
 		pipe, _ := decoder.NewPipeline(all)
 		m.decoders = pipe
 	}

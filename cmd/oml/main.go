@@ -20,28 +20,82 @@ var (
 )
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "profile" || os.Args[1] == "profiles") {
+		appCfg, err := config.Load()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: config: %v\n", err)
+		}
+		os.Exit(runProfileCommand(appCfg, os.Args[2:]))
+	}
+
 	var (
-		flagPort          = flag.String("port", "", "serial port (e.g. /dev/ttyACM0 or COM3)")
-		flagBaud          = flag.Int("baud", 115200, "baud rate")
-		flagProfile       = flag.String("profile", "", "profile name or path (.yaml)")
-		flagFile          = flag.String("file", "", "replay a saved log file instead of a serial port")
-		flagCmd           = flag.String("cmd", "", "run external shell command as live log stream (alias: --exec)")
-		flagExec          = flag.String("exec", "", "run external shell command as live log stream (alias: --cmd)")
-		flagStdin         = flag.Bool("stdin", false, "read log stream from standard input")
-		flagVersion       = flag.Bool("version", false, "print version and exit")
-		flagImportProfile = flag.String("import-profile", "", "import a YAML profile into the user profiles directory")
-		flagExportProfile = flag.String("export-profile", "", "export a profile by name (prints YAML to stdout or saves to --out)")
-		flagListProfiles  = flag.Bool("list-profiles", false, "list all available profiles and their locations")
-		flagProfilesDir   = flag.Bool("profiles-dir", false, "print the global OS profiles directory path")
-		flagOut           = flag.String("out", "", "output file path for --export-profile")
-		flagInstall       = flag.Bool("install", false, "install oml binary into system/user PATH")
-		flagUninstall     = flag.Bool("uninstall", false, "uninstall oml binary from system/user PATH")
-		flagUpdate        = flag.Bool("update", false, "check for and install latest oml release")
-		flagNightly       = flag.Bool("nightly", false, "use nightly build channel")
-		flagTee           = flag.String("tee", "", "stream raw incoming lines directly to specified log file")
-		flagDirectToDisk  = flag.Bool("direct-to-disk", false, "enable direct-to-disk continuous logging")
-		flagPrefix        = flag.String("prefix", "", "filename prefix for direct-to-disk logs (default: oml)")
+		flagPort             = flag.String("port", "", "serial port (e.g. /dev/ttyACM0 or COM3)")
+		flagBaud             = flag.Int("baud", 115200, "baud rate")
+		flagProfile          = flag.String("profile", "", "profile name or path (.yaml)")
+		flagFile             = flag.String("file", "", "replay a saved log file instead of a serial port")
+		flagCmd              = flag.String("cmd", "", "run external shell command as live log stream (alias: --exec)")
+		flagExec             = flag.String("exec", "", "run external shell command as live log stream (alias: --cmd)")
+		flagStdin            = flag.Bool("stdin", false, "read log stream from standard input")
+		flagVersion          = flag.Bool("version", false, "print version and exit")
+		flagImportProfile    = flag.String("import-profile", "", "import a YAML profile into the user profiles directory")
+		flagInstallProfile   = flag.String("install-profile", "", "install profile from file, directory, or URL (alias: --import-profile)")
+		flagUninstallProfile = flag.String("uninstall-profile", "", "uninstall profile by ID (#1) or name")
+		flagRemoveProfile    = flag.String("remove-profile", "", "uninstall profile by ID (#1) or name (alias: --uninstall-profile)")
+		flagExportProfile    = flag.String("export-profile", "", "export a profile by name (prints YAML to stdout or saves to --out)")
+		flagListProfiles     = flag.Bool("list-profiles", false, "list all available profiles and their locations")
+		flagProfilesDir      = flag.Bool("profiles-dir", false, "print the global OS profiles directory path")
+		flagOut              = flag.String("out", "", "output file path for --export-profile")
+		flagInstall          = flag.Bool("install", false, "install oml binary into system/user PATH")
+		flagUninstall        = flag.Bool("uninstall", false, "uninstall oml binary from system/user PATH")
+		flagUpdate           = flag.Bool("update", false, "check for and install latest oml release")
+		flagNightly          = flag.Bool("nightly", false, "use nightly build channel")
+		flagTee              = flag.String("tee", "", "stream raw incoming lines directly to specified log file")
+		flagDirectToDisk     = flag.Bool("direct-to-disk", false, "enable direct-to-disk continuous logging")
+		flagPrefix           = flag.String("prefix", "", "filename prefix for direct-to-disk logs (default: oml)")
 	)
+	flag.BoolVar(flagVersion, "v", false, "print version and exit")
+
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, `oml (oh-my-logs) v%s - %s
+Fast, keyboard-centric terminal log viewer for embedded systems.
+
+Usage:
+  oml [flags]                      Launch interactive log viewer
+  oml profile <command> [options]  Manage parser profiles & companion decoders
+
+Stream Sources (mutually exclusive):
+  --port <device>       Serial port device (e.g. /dev/ttyACM0 or COM3)
+  --baud <rate>         Serial baud rate (default: 115200)
+  --file <path>         Replay a saved log file instead of a serial port
+  --cmd, --exec <cmd>   Run external shell command as live log stream
+  --stdin               Read log stream from standard input
+
+Configuration & Profiles:
+  --profile <name|path> Active profile (name or .yaml path)
+  oml profile list      List installed & local profiles (# ID, version, decoders)
+  oml profile install   Install profile/bundle from file, folder, URL, or git repo
+  oml profile update    Check for and install profile & decoder updates
+  oml profile show      Inspect profile parser, columns, and decoders
+  oml profile uninstall Remove installed profile and companion decoders
+
+Logging & Recording:
+  --tee <file>          Stream raw incoming lines directly to specified log file
+  --direct-to-disk      Enable continuous streaming directly to disk
+  --prefix <name>       Filename prefix for direct-to-disk logs (default: oml)
+
+App Management:
+  --update              Check for and install latest oml release
+  --nightly             Use nightly build channel for updates
+  --install             Install oml binary into system/user PATH
+  --uninstall           Uninstall oml binary from system/user PATH
+  -v, --version         Print version and exit
+  -h, --help            Show this help message
+
+For profile management commands and examples:
+  oml profile --help
+`, version, codename)
+	}
+
 	flag.Parse()
 
 	if *flagVersion {
@@ -120,56 +174,31 @@ func main() {
 		os.Exit(0)
 	}
 
+	if *flagImportProfile == "" && *flagInstallProfile != "" {
+		*flagImportProfile = *flagInstallProfile
+	}
+	if *flagUninstallProfile == "" && *flagRemoveProfile != "" {
+		*flagUninstallProfile = *flagRemoveProfile
+	}
+
 	if *flagListProfiles {
-		list := config.ListProfiles(appCfg)
-		if len(list) == 0 {
-			fmt.Println("No profiles found.")
-			if appCfg != nil {
-				fmt.Printf("Global profiles directory: %s\n", appCfg.ProfilesDir)
-			}
-			os.Exit(0)
-		}
-		fmt.Printf("Profiles (%d available):\n", len(list))
-		for _, p := range list {
-			loc := "local"
-			if p.IsGlobal {
-				loc = "global"
-			}
-			fmt.Printf("  • %-12s [%-6s]  %-8s  %s\n", p.Name, loc, p.ParserType, p.Path)
-		}
-		if appCfg != nil {
-			fmt.Printf("\nGlobal profiles directory: %s\n", appCfg.ProfilesDir)
-		}
-		os.Exit(0)
+		os.Exit(cmdProfileList(appCfg))
+	}
+
+	if *flagUninstallProfile != "" {
+		os.Exit(cmdProfileUninstall(appCfg, []string{*flagUninstallProfile}))
 	}
 
 	if *flagImportProfile != "" {
-		target, name, err := config.ImportProfile(appCfg, *flagImportProfile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error importing profile: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("✓ Successfully imported profile %q to:\n  %s\n", name, target)
-		fmt.Printf("\nYou can now run: oml --profile %s\n", name)
-		os.Exit(0)
+		os.Exit(cmdProfileInstall(appCfg, []string{"--force", *flagImportProfile}))
 	}
 
 	if *flagExportProfile != "" {
-		content, sourcePath, err := config.ExportProfile(appCfg, *flagExportProfile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error exporting profile: %v\n", err)
-			os.Exit(1)
-		}
+		args := []string{*flagExportProfile}
 		if *flagOut != "" {
-			if err := os.WriteFile(*flagOut, content, 0o644); err != nil {
-				fmt.Fprintf(os.Stderr, "error writing to %q: %v\n", *flagOut, err)
-				os.Exit(1)
-			}
-			fmt.Printf("✓ Exported profile %q from %s to %s\n", *flagExportProfile, sourcePath, *flagOut)
-		} else {
-			os.Stdout.Write(content)
+			args = append(args, "--out", *flagOut)
 		}
-		os.Exit(0)
+		os.Exit(cmdProfileExport(appCfg, args))
 	}
 
 	savedSettings, _ := appCfg.LoadSettings()

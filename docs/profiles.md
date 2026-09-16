@@ -53,6 +53,8 @@ columns:
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | `string` | **Required.** Display name of the profile (e.g. `Zephyr`, `STM32`, `CAN`). |
+| `version` | `string` | Optional semantic version string (e.g. `1.2.0`). Used by `oml profile update`. |
+| `source` | `string` | Optional origin URL or Git repository where the profile was downloaded from. |
 | `parser` | `object` | Parser configuration (see below). |
 | `columns` | `list` | Ordered list of table column definitions. |
 | `ingest` | `object` | Optional pipeline ingest settings (automatic timestamping). |
@@ -146,34 +148,81 @@ When set, fixed thresholds override dynamic moving-average ratios, making it ide
 
 ---
 
-## 4. CLI Profile Management
+## 4. First-Class CLI Profile Management (`oml profile`)
 
-`oml` provides built-in CLI commands to list, import, and export profiles:
+`oml` provides a powerful `oml profile` subcommand family to list, inspect, install, and uninstall profiles and companion decoders:
 
-### List All Profiles
+### List Profiles with Numeric IDs
 ```bash
-oml --list-profiles
+oml profile list
+# or legacy flag: oml --list-profiles
 ```
-Outputs all discovered profiles, their scope (`[global]` vs `[local]`), parser type, and absolute file path.
+Displays a numbered table with profile `# ID`, name, scope (`[global]`, `[local]`, `[builtin]`), parser type, decoders count (including bundles), and location.
 
-### Import a Profile
+### Install Profiles & Bundles
+Install from local files, folders, remote HTTP/HTTPS URLs, or Git repositories:
 ```bash
-oml --import-profile ./my-device.yaml
+# Local YAML file:
+oml profile install ./my-device.yaml
+
+# Folder containing profiles & companion decoders:
+oml profile install ./tools/firmware-profiles/
+
+# Remote URL (supports public or authenticated raw links):
+oml profile install https://raw.githubusercontent.com/org/repo/main/profile.yaml
+
+# Git repository (clones using your local SSH/Git credentials):
+oml profile install git@github.com:my-org/firmware-tools.git
+
+# Force overwrite existing profile:
+oml profile install -f ./updated-profile.yaml
 ```
-Validates the YAML syntax, verifies regex capture groups, and installs the profile into your global OS profiles directory.
+
+### Update Profiles (`oml profile update`)
+Keep installed profiles and companion decoders up to date with central upstream repositories:
+```bash
+# Check for available updates without applying them (dry run):
+oml profile update --check
+
+# Update all installed profiles that have a remote source:
+oml profile update
+
+# Update a specific profile by ID or name:
+oml profile update 1
+oml profile update appliance
+
+# Force re-download even if version matches:
+oml profile update appliance --force
+```
+
+### Inspect Profile Details
+Inspect parser configuration, column widths, styles, and registered decoders without opening the file:
+```bash
+oml profile show 1          # by numeric ID
+oml profile show zephyr     # by name
+```
+
+### Uninstall Profiles
+Remove globally installed profiles and their companion decoders:
+```bash
+oml profile uninstall 1          # by numeric ID
+oml profile uninstall zephyr     # by name
+```
 
 ### Export a Profile
 ```bash
 # Print YAML to stdout:
-oml --export-profile Zephyr
+oml profile export 1
+oml profile export zephyr
 
 # Save directly to a file:
-oml --export-profile Zephyr --out ./custom-zephyr.yaml
+oml profile export zephyr --out ./custom-zephyr.yaml
 ```
 
-### Show Global Profiles Path
+### Show Global Storage Directories
 ```bash
-oml --profiles-dir
+oml profile path
+# or legacy flag: oml --profiles-dir
 ```
 
 ---

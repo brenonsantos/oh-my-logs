@@ -107,10 +107,12 @@ oml --port /dev/ttyACM0 --profile Zephyr
 # Replay an offline saved log file
 oml --file demo.log --profile Zephyr
 
-# Manage profiles
-oml --list-profiles                      # List all global & local profiles
-oml --import-profile ./my-device.yaml    # Install into global profiles directory
-oml --export-profile Zephyr > copy.yaml  # Export profile template to customize
+# Manage profiles & companion decoders
+oml profile list                         # List available profiles with numeric IDs
+oml profile install ./my-device.yaml     # Install from file, folder, URL, or git repo
+oml profile show 1                       # Inspect profile parser & column layout
+oml profile uninstall 1                  # Uninstall profile and companion decoders
+oml profile export 1 > copy.yaml         # Export profile YAML to customize
 ```
 
 ---
