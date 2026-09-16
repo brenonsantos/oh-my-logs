@@ -131,3 +131,100 @@ func TestInstallSource_HTTP(t *testing.T) {
 		t.Errorf("unexpected results: %+v", results)
 	}
 }
+
+func TestInstallSource_Directory_NamespacedDecoders(t *testing.T) {
+	bundleDir := t.TempDir()
+	profilesDir := filepath.Join(bundleDir, "profiles")
+	decodersDir := filepath.Join(bundleDir, "decoders")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Profile A
+	profAYAML := `name: Alpha
+version: 1.0.0
+parser:
+  type: raw
+decoders:
+  - match: "^ALPHA:"
+    exec: "python3 alpha_dec.py"
+`
+	if err := os.WriteFile(filepath.Join(profilesDir, "alpha.yaml"), []byte(profAYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	alphaDecDir := filepath.Join(decodersDir, "alpha")
+	if err := os.MkdirAll(alphaDecDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(alphaDecDir, "alpha_dec.py"), []byte("#!/usr/bin/env python3\nprint('alpha')"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Profile B
+	profBYAML := `name: Beta
+version: 2.0.0
+parser:
+  type: raw
+decoders:
+  - match: "^BETA:"
+    exec: "python3 beta_dec.py"
+`
+	if err := os.WriteFile(filepath.Join(profilesDir, "beta.yaml"), []byte(profBYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	betaDecDir := filepath.Join(decodersDir, "beta")
+	if err := os.MkdirAll(betaDecDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(betaDecDir, "beta_dec.py"), []byte("#!/usr/bin/env python3\nprint('beta')"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	appCfg := &config.AppConfig{
+		ConfigDir:   t.TempDir(),
+		ProfilesDir: filepath.Join(t.TempDir(), "profiles"),
+		DecodersDir: filepath.Join(t.TempDir(), "decoders"),
+		LogsDir:     filepath.Join(t.TempDir(), "logs"),
+	}
+
+	results, err := config.InstallSource(appCfg, bundleDir, config.InstallOptions{})
+	if err != nil {
+		t.Fatalf("InstallSource failed: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+
+	// Verify Alpha has alpha_dec.py and NOT beta_dec.py
+	alphaDecInstalled := filepath.Join(appCfg.DecodersDir, "alpha", "alpha_dec.py")
+	if _, err := os.Stat(alphaDecInstalled); err != nil {
+		t.Errorf("expected %s to exist: %v", alphaDecInstalled, err)
+	}
+	alphaWrongFile := filepath.Join(appCfg.DecodersDir, "alpha", "beta_dec.py")
+	if _, err := os.Stat(alphaWrongFile); err == nil {
+		t.Errorf("expected %s NOT to exist in alpha decoder directory", alphaWrongFile)
+	}
+
+	// Verify Beta has beta_dec.py and NOT alpha_dec.py
+	betaDecInstalled := filepath.Join(appCfg.DecodersDir, "beta", "beta_dec.py")
+	if _, err := os.Stat(betaDecInstalled); err != nil {
+		t.Errorf("expected %s to exist: %v", betaDecInstalled, err)
+	}
+	betaWrongFile := filepath.Join(appCfg.DecodersDir, "beta", "alpha_dec.py")
+	if _, err := os.Stat(betaWrongFile); err == nil {
+		t.Errorf("expected %s NOT to exist in beta decoder directory", betaWrongFile)
+	}
+
+	// Verify InspectProfile reports companion directory and files
+	insp, err := config.InspectProfile(appCfg, "Alpha")
+	if err != nil {
+		t.Fatalf("InspectProfile failed: %v", err)
+	}
+	if insp.CompanionDir == "" {
+		t.Errorf("expected insp.CompanionDir to be populated")
+	}
+	if len(insp.CompanionFiles) != 1 || insp.CompanionFiles[0] != "alpha_dec.py" {
+		t.Errorf("unexpected CompanionFiles: %v", insp.CompanionFiles)
+	}
+}
+

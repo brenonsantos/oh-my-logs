@@ -190,10 +190,12 @@ func UninstallProfile(appCfg *AppConfig, idOrName string, removeDecoders bool) (
 
 // ProfileInspection holds structured inspection details for a profile.
 type ProfileInspection struct {
-	Info     ProfileInfo
-	Profile  *parser.Profile
-	RawYAML  string
-	FilePath string
+	Info           ProfileInfo
+	Profile        *parser.Profile
+	RawYAML        string
+	FilePath       string
+	CompanionDir   string
+	CompanionFiles []string
 }
 
 // InspectProfile loads and returns complete profile details for display.
@@ -213,11 +215,28 @@ func InspectProfile(appCfg *AppConfig, idOrName string) (*ProfileInspection, err
 		return nil, fmt.Errorf("cannot parse profile %q: %w", info.Path, err)
 	}
 
+	companionDir := ""
+	var companionFiles []string
+	if appCfg != nil && appCfg.DecodersDir != "" {
+		cleanName := strings.ToLower(strings.ReplaceAll(info.Name, " ", "-"))
+		decDir := filepath.Join(appCfg.DecodersDir, cleanName)
+		if fi, statErr := os.Stat(decDir); statErr == nil && fi.IsDir() {
+			companionDir = decDir
+			if entries, err := os.ReadDir(decDir); err == nil {
+				for _, e := range entries {
+					companionFiles = append(companionFiles, e.Name())
+				}
+			}
+		}
+	}
+
 	return &ProfileInspection{
-		Info:     *info,
-		Profile:  prof,
-		RawYAML:  string(data),
-		FilePath: info.Path,
+		Info:           *info,
+		Profile:        prof,
+		RawYAML:        string(data),
+		FilePath:       info.Path,
+		CompanionDir:   companionDir,
+		CompanionFiles: companionFiles,
 	}, nil
 }
 

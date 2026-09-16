@@ -232,16 +232,18 @@ func installFromFile(appCfg *AppConfig, filePath string, opts InstallOptions) ([
 		return nil, fmt.Errorf("cannot write profile to %q: %w", targetPath, err)
 	}
 
-	// Check if adjacent decoders directory exists
+	// Check if adjacent companion decoders directory exists
 	companionDir := ""
 	decodersInstalled := 0
-	adjacentDecoders := filepath.Join(filepath.Dir(filePath), "decoders")
-	if fi, statErr := os.Stat(adjacentDecoders); statErr == nil && fi.IsDir() && appCfg.DecodersDir != "" {
-		targetDecDir := filepath.Join(appCfg.DecodersDir, cleanName)
-		count, copyErr := copyDirectory(adjacentDecoders, targetDecDir)
-		if copyErr == nil && count > 0 {
-			companionDir = targetDecDir
-			decodersInstalled = count
+	if appCfg.DecodersDir != "" {
+		decSrc := findCompanionDecoderDir(filePath, cleanName)
+		if decSrc != "" {
+			targetDecDir := filepath.Join(appCfg.DecodersDir, cleanName)
+			count, copyErr := copyDirectory(decSrc, targetDecDir)
+			if copyErr == nil && count > 0 {
+				companionDir = targetDecDir
+				decodersInstalled = count
+			}
 		}
 	}
 
@@ -286,13 +288,6 @@ func installFromDirectory(appCfg *AppConfig, dirPath string, opts InstallOptions
 		return nil, fmt.Errorf("no profile YAML files found in directory %q", dirPath)
 	}
 
-	// Check for companion decoders in dirPath/decoders
-	hasCompanion := false
-	companionSrc := filepath.Join(dirPath, "decoders")
-	if fi, err := os.Stat(companionSrc); err == nil && fi.IsDir() {
-		hasCompanion = true
-	}
-
 	var results []InstallResult
 	for _, cand := range candidates {
 		res, err := installFromFile(appCfg, cand, opts)
@@ -304,14 +299,17 @@ func installFromDirectory(appCfg *AppConfig, dirPath string, opts InstallOptions
 		}
 		if len(res) > 0 {
 			single := res[0]
-			// If companion decoders exist at bundle root and weren't already installed:
-			if hasCompanion && single.CompanionDecoders == "" && appCfg.DecodersDir != "" {
+			// If companion decoders weren't resolved by installFromFile, attempt bundle root search
+			if single.CompanionDecoders == "" && appCfg.DecodersDir != "" {
 				cleanName := strings.ToLower(strings.ReplaceAll(single.Name, " ", "-"))
-				targetDecDir := filepath.Join(appCfg.DecodersDir, cleanName)
-				count, copyErr := copyDirectory(companionSrc, targetDecDir)
-				if copyErr == nil && count > 0 {
-					single.CompanionDecoders = targetDecDir
-					single.DecodersInstalled = count
+				decSrc := findCompanionDecoderDir(dirPath, cleanName)
+				if decSrc != "" {
+					targetDecDir := filepath.Join(appCfg.DecodersDir, cleanName)
+					count, copyErr := copyDirectory(decSrc, targetDecDir)
+					if copyErr == nil && count > 0 {
+						single.CompanionDecoders = targetDecDir
+						single.DecodersInstalled = count
+					}
 				}
 			}
 			results = append(results, single)
@@ -323,6 +321,67 @@ func installFromDirectory(appCfg *AppConfig, dirPath string, opts InstallOptions
 	}
 
 	return results, nil
+}
+
+// findCompanionDecoderDir searches for companion decoders matching cleanName.
+// Priority:
+// 1. decoders/<cleanName>/ (namespaced directory in repo or bundle)
+// 2. <cleanName>/ (if search directory is already a decoders folder)
+// 3. decoders/ (flat fallback ONLY if it contains no child subdirectories)
+func findCompanionDecoderDir(contextPath, cleanName string) string {
+	var searchBases []string
+
+	fi, err := os.Stat(contextPath)
+	if err == nil && fi.IsDir() {
+		searchBases = append(searchBases, contextPath, filepath.Dir(contextPath))
+	} else {
+		parent := filepath.Dir(contextPath)
+		grandParent := filepath.Dir(parent)
+		searchBases = append(searchBases, parent, grandParent)
+	}
+
+	// 1. Check for decoders/<cleanName>
+	for _, b := range searchBases {
+		cand := filepath.Join(b, "decoders", cleanName)
+		if info, err := os.Stat(cand); err == nil && info.IsDir() {
+			return cand
+		}
+	}
+
+	// 2. Check if a searchBase is already a "decoders" folder containing <cleanName>
+	for _, b := range searchBases {
+		if strings.EqualFold(filepath.Base(b), "decoders") {
+			cand := filepath.Join(b, cleanName)
+			if info, err := os.Stat(cand); err == nil && info.IsDir() {
+				return cand
+			}
+		}
+	}
+
+	// 3. Fallback: flat decoders/ directory without child subdirectories
+	for _, b := range searchBases {
+		cand := filepath.Join(b, "decoders")
+		if info, err := os.Stat(cand); err == nil && info.IsDir() {
+			if !dirHasSubdirectories(cand) {
+				return cand
+			}
+		}
+	}
+
+	return ""
+}
+
+func dirHasSubdirectories(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 func copyDirectory(src, dst string) (int, error) {

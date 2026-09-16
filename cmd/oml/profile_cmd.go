@@ -370,6 +370,13 @@ func cmdProfileShow(appCfg *config.AppConfig, args []string) int {
 		fmt.Printf("  Source:   %s\n", p.Source)
 	}
 	fmt.Printf("  Path:     %s\n", insp.FilePath)
+	if insp.CompanionDir != "" {
+		fileStr := fmt.Sprintf("%d files", len(insp.CompanionFiles))
+		if len(insp.CompanionFiles) > 0 {
+			fileStr += fmt.Sprintf(": %s", strings.Join(insp.CompanionFiles, ", "))
+		}
+		fmt.Printf("  Companion Decoders: %s (%s)\n", insp.CompanionDir, fileStr)
+	}
 	fmt.Printf("  Parser:   %s", p.Parser.Type)
 	if p.Parser.Pattern != "" {
 		fmt.Printf(" (pattern: %s)", p.Parser.Pattern)
