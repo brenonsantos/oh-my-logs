@@ -14,4 +14,7 @@ type Config struct {
 	// Incoming matching payloads are sent to stdin; decoded JSON lines are read from stdout.
 	// Example: "python3 .oml/smp_decoder.py"
 	Exec string `yaml:"exec,omitempty"`
+
+	// ExtraPaths contains additional search directories to prepend to PATH for the worker.
+	ExtraPaths []string `yaml:"extra_paths,omitempty"`
 }

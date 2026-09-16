@@ -1,4 +1,5 @@
 name: Logcat
+version: 1.0.0
 
 # Android Logcat profile (threadtime and -v time formats)
 # Supports:

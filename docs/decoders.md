@@ -78,7 +78,29 @@ decoders:
 
 ---
 
-## 4. Universal Interactive Terminal & ANSI Sanitizer
+## 4. Profile-Bundled Companion Decoders 📦
+
+In addition to project-local decoders defined in `.oml.yaml`, profiles can bundle companion decoders directly:
+
+```yaml
+name: TelemetryApp
+version: 1.0.0
+decoders:
+  - match: '^[A-Za-z0-9+/]{2}:[A-Za-z0-9+/]{2}/'
+    exec: 'python3 telemetry_decoder.py'
+```
+
+When installed via `oml profile install ./bundle` (or Git URL / archive):
+1. **Isolated Storage**: Companion scripts and schema databases are installed into `~/.config/oml/decoders/<profile-name>/`.
+2. **Automatic PATH Prepending**: When `oml` starts the worker process, `~/.config/oml/decoders/` and its subdirectories are automatically prepended to the subprocess environment `$PATH`.
+3. **Interpreter Script Resolution**: If `exec` specifies an interpreter command like `python3 oml_decoder.py`, `oml` automatically resolves `oml_decoder.py` within the companion decoders folder, regardless of your current working directory.
+4. **Lifecycle Management**:
+   - `oml profile update <name>` refreshes both the profile YAML and its companion decoder scripts.
+   - `oml profile uninstall <name>` cleanly deletes the profile and its companion decoder directory.
+
+---
+
+## 5. Universal Interactive Terminal & ANSI Sanitizer
 
 Embedded microcontrollers and RTOSes (e.g. Zephyr with `CONFIG_SHELL=y`, FreeRTOS CLI) often share a single UART between an interactive shell and asynchronous logging.
 
@@ -89,7 +111,7 @@ When an async log arrives while the shell prompt (`uart:~$ ` or `device:~$ `) is
 
 ---
 
-## 5. Inspector Drawer (`Enter` / `v`)
+## 6. Inspector Drawer (`Enter` / `v`)
 
 Pressing **`Enter`** or **`v`** on any decoded row opens the Inspector Drawer:
 - **`PARSED FIELDS`**: Displays extracted decoder fields alongside standard log fields.

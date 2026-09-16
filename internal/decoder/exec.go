@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -19,8 +21,9 @@ import (
 
 // ExecDecoder executes a persistent external process and streams payloads over stdin/stdout.
 type ExecDecoder struct {
-	re      *regexp.Regexp
-	command string
+	re         *regexp.Regexp
+	command    string
+	extraPaths []string
 
 	mu           sync.Mutex
 	cmd          *exec.Cmd
@@ -42,9 +45,10 @@ func NewExecDecoder(cfg Config) (*ExecDecoder, error) {
 		return nil, err
 	}
 	return &ExecDecoder{
-		re:      re,
-		command: cfg.Exec,
-		timeout: 800 * time.Millisecond,
+		re:         re,
+		command:    cfg.Exec,
+		extraPaths: cfg.ExtraPaths,
+		timeout:    800 * time.Millisecond,
 	}, nil
 }
 
@@ -152,11 +156,50 @@ func (e *ExecDecoder) readLineWithTimeoutLocked(timeout time.Duration) (string, 
 }
 
 func (e *ExecDecoder) startWorkerLocked() error {
+	resolvedCmd := e.command
+	parts := strings.Fields(e.command)
+	if len(parts) >= 2 && (parts[0] == "python" || parts[0] == "python3" || parts[0] == "sh" || parts[0] == "bash" || parts[0] == "node") {
+		script := parts[1]
+		if _, err := os.Stat(script); os.IsNotExist(err) {
+			for _, dir := range e.extraPaths {
+				cand := filepath.Join(dir, script)
+				if fi, err := os.Stat(cand); err == nil && !fi.IsDir() {
+					parts[1] = cand
+					resolvedCmd = strings.Join(parts, " ")
+					break
+				}
+			}
+		}
+	}
+
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd.exe", "/c", e.command)
+		cmd = exec.Command("cmd.exe", "/c", resolvedCmd)
 	} else {
-		cmd = exec.Command("sh", "-c", e.command)
+		cmd = exec.Command("sh", "-c", resolvedCmd)
+	}
+
+	if len(e.extraPaths) > 0 {
+		sep := string(os.PathListSeparator)
+		extraJoined := strings.Join(e.extraPaths, sep)
+		currentPath := os.Getenv("PATH")
+		newPath := extraJoined
+		if currentPath != "" {
+			newPath = extraJoined + sep + currentPath
+		}
+		env := os.Environ()
+		pathFound := false
+		for i, v := range env {
+			if strings.HasPrefix(strings.ToUpper(v), "PATH=") {
+				env[i] = "PATH=" + newPath
+				pathFound = true
+				break
+			}
+		}
+		if !pathFound {
+			env = append(env, "PATH="+newPath)
+		}
+		cmd.Env = env
 	}
 
 	stdin, err := cmd.StdinPipe()

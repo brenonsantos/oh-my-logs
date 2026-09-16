@@ -73,6 +73,8 @@ type TimingConfig struct {
 // particular architecture is parsed and displayed.
 type Profile struct {
 	Name     string           `yaml:"name"`
+	Version  string           `yaml:"version,omitempty"`
+	Source   string           `yaml:"source,omitempty"`
 	Parser   ParserConfig     `yaml:"parser"`
 	Columns  []ColumnConfig   `yaml:"columns"`
 	Ingest   IngestConfig     `yaml:"ingest"`
