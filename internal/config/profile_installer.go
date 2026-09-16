@@ -396,8 +396,12 @@ func copyDirectory(src, dst string) (int, error) {
 
 	count := 0
 	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
+		name := entry.Name()
+		if name == "__pycache__" || name == ".DS_Store" || strings.HasSuffix(name, ".pyc") {
+			continue
+		}
+		srcPath := filepath.Join(src, name)
+		dstPath := filepath.Join(dst, name)
 
 		if entry.IsDir() {
 			subCount, err := copyDirectory(srcPath, dstPath)
