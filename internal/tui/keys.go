@@ -26,6 +26,7 @@ type keyMap struct {
 	Cancel           key.Binding
 	ToggleTimestamp  key.Binding
 	ProfileSwitch    key.Binding
+	Columns          key.Binding
 	NextTab          key.Binding
 	PrevTab          key.Binding
 	NewTab           key.Binding
@@ -187,6 +188,10 @@ func defaultKeyMap() keyMap {
 		ProfileSwitch: key.NewBinding(
 			key.WithKeys("P"),
 			key.WithHelp("P", "profile"),
+		),
+		Columns: key.NewBinding(
+			key.WithKeys("o", "O", "ctrl+o"),
+			key.WithHelp("o", "columns"),
 		),
 		NextTab: key.NewBinding(
 			key.WithKeys("tab"),

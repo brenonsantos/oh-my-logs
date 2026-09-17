@@ -479,6 +479,9 @@ func (m Model) renderKeyBarContent() string {
 	case modeSettings:
 		return "  " + theme.Muted.Render("Settings: [↑/↓: select · ←/→: adjust · Space: toggle · Enter/Esc: close]")
 
+	case modeColumnModal:
+		return "  " + theme.Muted.Render("Columns: [↑/↓: select · Space: toggle · +/-: resize · r: reset · Enter/Esc: done]")
+
 	case modeHelp:
 		return "  " + theme.Muted.Render("Press ") + theme.KeyName.Render("?") + theme.Muted.Render(", ") + theme.KeyName.Render("Esc") + theme.Muted.Render(", or ") + theme.KeyName.Render("q") + theme.Muted.Render(" to close help")
 
@@ -588,6 +591,7 @@ func (m Model) renderKeyBarContent() string {
 				hint("P", "profile"),
 				hint("F", "presets"),
 				hint(",", "⚙ cfg"),
+				hint("o", "cols"),
 				hint("s", "save"),
 				hint("Space", pauseLabel),
 				hint("c", "clear"),

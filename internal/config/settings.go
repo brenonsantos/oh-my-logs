@@ -9,22 +9,29 @@ import (
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
 )
 
+// ColumnCustomization stores visibility and width preferences for a profile's columns.
+type ColumnCustomization struct {
+	HiddenColumns []string       `json:"hidden_columns,omitempty"`
+	ColumnWidths  map[string]int `json:"column_widths,omitempty"`
+}
+
 // Settings stores user configuration that persists across application restarts.
 type Settings struct {
-	Port           string   `json:"port,omitempty"`
-	Baud           int      `json:"baud,omitempty"`
-	Profile        string   `json:"profile,omitempty"`
-	ShowTimestamp  bool     `json:"show_timestamp"`
-	TimestampMode  string   `json:"timestamp_mode,omitempty"`
-	TXEnding       string   `json:"tx_ending,omitempty"`
-	TXHistory      []string `json:"tx_history,omitempty"`
-	BufferCapacity int      `json:"buffer_capacity,omitempty"`
-	DefaultFollow  bool     `json:"default_follow"`
-	DirectToDisk   bool     `json:"direct_to_disk"`
-	LogDir         string   `json:"log_dir,omitempty"`
-	LogPrefix      string   `json:"log_prefix,omitempty"`
-	Theme          string   `json:"theme,omitempty"`
-	DisplayFormat  string   `json:"display_format,omitempty"`
+	Port           string                         `json:"port,omitempty"`
+	Baud           int                            `json:"baud,omitempty"`
+	Profile        string                         `json:"profile,omitempty"`
+	ShowTimestamp  bool                           `json:"show_timestamp"`
+	TimestampMode  string                         `json:"timestamp_mode,omitempty"`
+	TXEnding       string                         `json:"tx_ending,omitempty"`
+	TXHistory      []string                       `json:"tx_history,omitempty"`
+	BufferCapacity int                            `json:"buffer_capacity,omitempty"`
+	DefaultFollow  bool                           `json:"default_follow"`
+	DirectToDisk   bool                           `json:"direct_to_disk"`
+	LogDir         string                         `json:"log_dir,omitempty"`
+	LogPrefix      string                         `json:"log_prefix,omitempty"`
+	Theme          string                         `json:"theme,omitempty"`
+	DisplayFormat  string                         `json:"display_format,omitempty"`
+	ProfileColumns map[string]ColumnCustomization `json:"profile_columns,omitempty"`
 }
 
 // SettingsPath returns the absolute path to settings.json in the config directory.
@@ -128,4 +135,32 @@ func ResolveProfilePath(appCfg *AppConfig, nameOrPath string) string {
 	}
 
 	return ""
+}
+
+// GetColumnCustomization returns the column customization for a profile (case-insensitive name).
+func (s *Settings) GetColumnCustomization(profileName string) ColumnCustomization {
+	if s == nil || s.ProfileColumns == nil {
+		return ColumnCustomization{}
+	}
+	key := strings.ToLower(strings.TrimSpace(profileName))
+	if custom, ok := s.ProfileColumns[key]; ok {
+		return custom
+	}
+	return ColumnCustomization{}
+}
+
+// SetColumnCustomization updates the column customization for a profile.
+func (s *Settings) SetColumnCustomization(profileName string, custom ColumnCustomization) {
+	if s == nil {
+		return
+	}
+	if s.ProfileColumns == nil {
+		s.ProfileColumns = make(map[string]ColumnCustomization)
+	}
+	key := strings.ToLower(strings.TrimSpace(profileName))
+	if len(custom.HiddenColumns) == 0 && len(custom.ColumnWidths) == 0 {
+		delete(s.ProfileColumns, key)
+		return
+	}
+	s.ProfileColumns[key] = custom
 }

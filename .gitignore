@@ -46,3 +46,4 @@ dist/
 # macOS
 .DS_Store
 plan.md
+PR_*.md

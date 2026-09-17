@@ -200,7 +200,27 @@ func (m Model) effectiveColumnsForTab(tab *Tab) []record.Column {
 	default: // FormatParsed
 		for _, col := range m.columns {
 			if !isTimestampCol(col, m.tsField) && !isDeltaCol(col) {
-				baseCols = append(baseCols, col)
+				if m.isColVisibleForTab(tab, col.Field) {
+					c := col
+					c.Width = m.getColWidthForTab(tab, col)
+					baseCols = append(baseCols, c)
+				}
+			}
+		}
+		if len(baseCols) == 0 && len(m.columns) > 0 {
+			// Safety fallback: if all columns were toggled off, preserve at least one column
+			for _, col := range m.columns {
+				if col.Width == 0 || col.Field == "message" || col.Field == "raw" {
+					c := col
+					c.Width = m.getColWidthForTab(tab, col)
+					baseCols = append(baseCols, c)
+					break
+				}
+			}
+			if len(baseCols) == 0 {
+				c := m.columns[0]
+				c.Width = m.getColWidthForTab(tab, c)
+				baseCols = append(baseCols, c)
 			}
 		}
 	}
