@@ -82,3 +82,62 @@ func TestSettingsSaveAndLoad(t *testing.T) {
 		t.Errorf("expected theme monokai, got %s", loaded.Theme)
 	}
 }
+
+func TestSettings_ColumnCustomization(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &AppConfig{
+		ConfigDir:   tempDir,
+		ProfilesDir: filepath.Join(tempDir, "profiles"),
+		LogsDir:     filepath.Join(tempDir, "logs"),
+	}
+
+	s, err := cfg.LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings failed: %v", err)
+	}
+
+	// Verify empty initially
+	emptyCust := s.GetColumnCustomization("CustomProfile")
+	if len(emptyCust.HiddenColumns) != 0 || len(emptyCust.ColumnWidths) != 0 {
+		t.Errorf("expected empty customization, got %+v", emptyCust)
+	}
+
+	// Set customization
+	s.SetColumnCustomization("CustomProfile", ColumnCustomization{
+		HiddenColumns: []string{"module"},
+		ColumnWidths:  map[string]int{"uptime": 25},
+	})
+
+	if err := cfg.SaveSettings(s); err != nil {
+		t.Fatalf("SaveSettings failed: %v", err)
+	}
+
+	// Reload from disk
+	loaded, err := cfg.LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings failed: %v", err)
+	}
+
+	cust := loaded.GetColumnCustomization("customprofile") // test case-insensitivity
+	if len(cust.HiddenColumns) != 1 || cust.HiddenColumns[0] != "module" {
+		t.Errorf("expected HiddenColumns [module], got %v", cust.HiddenColumns)
+	}
+	if cust.ColumnWidths["uptime"] != 25 {
+		t.Errorf("expected ColumnWidths[uptime] == 25, got %d", cust.ColumnWidths["uptime"])
+	}
+
+	// Clear customization
+	loaded.SetColumnCustomization("customprofile", ColumnCustomization{})
+	if err := cfg.SaveSettings(loaded); err != nil {
+		t.Fatalf("SaveSettings failed: %v", err)
+	}
+
+	reloaded, err := cfg.LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings failed: %v", err)
+	}
+	clearedCust := reloaded.GetColumnCustomization("CustomProfile")
+	if len(clearedCust.HiddenColumns) != 0 || len(clearedCust.ColumnWidths) != 0 {
+		t.Errorf("expected cleared customization, got %+v", clearedCust)
+	}
+}

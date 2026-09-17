@@ -37,6 +37,7 @@ const (
 	modeSettings
 	modeFilePicker
 	modeRowDetail
+	modeColumnModal
 )
 
 type filePickerPurpose int
@@ -110,9 +111,11 @@ type ViewportState struct {
 // Tab represents an independent virtual tab with its own filter, visible records,
 // scroll position, follow state, and search state.
 type Tab struct {
-	Name      string
-	FilterRaw string
-	Filter    *filter.Filter
+	Name              string
+	FilterRaw         string
+	Filter            *filter.Filter
+	ColVisibility     map[string]bool
+	ColWidthOverrides map[string]int
 	ViewportState
 }
 
@@ -185,6 +188,11 @@ type Model struct {
 	profileCursor int
 	appConfig     *config.AppConfig
 	settings      *config.Settings
+
+	// Column customization modal
+	colModalCursor    int
+	colVisibility     map[string]bool // profile-scoped: field -> visible (true/false)
+	colWidthOverrides map[string]int  // profile-scoped: field -> custom width
 
 	// Filter presets
 	filtersCfg          *config.FiltersConfig
@@ -448,6 +456,7 @@ func New(
 
 	m.txInput.History = txHist
 	m.loadFilters()
+	m.loadColumnCustomization()
 
 	// Start with an empty permissive filter.
 	initFilter, _ := filter.New("")

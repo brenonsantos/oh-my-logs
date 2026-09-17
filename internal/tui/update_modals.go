@@ -170,6 +170,12 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		m.loadColumnCustomization()
+		for i := range m.tabs {
+			m.tabs[i].ColVisibility = nil
+			m.tabs[i].ColWidthOverrides = nil
+		}
+
 		// Re-parse all existing records in the buffer using the new parser!
 		m.buffer.Transform(func(old record.Record) record.Record {
 			if old.Fields["level"] == "TX" {
@@ -851,3 +857,93 @@ func (m *Model) detailPrevRecord() {
 		m.message = "Already at oldest record"
 	}
 }
+
+// handleColumnModalKey processes keyboard navigation, visibility toggling, and width adjustments in the Column Modal.
+func (m Model) handleColumnModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	curTab := m.currentTab()
+
+	switch {
+	case keyMatches(msg, m.keys.Cancel) || keyMatches(msg, m.keys.Confirm) || msg.String() == "o" || msg.String() == "O":
+		m.saveColumnCustomization()
+		m.mode = modeNormal
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollUp) || msg.String() == "k":
+		if m.colModalCursor > 0 {
+			m.colModalCursor--
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.ScrollDown) || msg.String() == "j":
+		if m.colModalCursor < len(m.columns)-1 {
+			m.colModalCursor++
+		}
+		return m, nil
+
+	case msg.String() == " ":
+		if len(m.columns) == 0 || m.colModalCursor < 0 || m.colModalCursor >= len(m.columns) {
+			return m, nil
+		}
+		targetField := m.columns[m.colModalCursor].Field
+		curVis := m.isColVisibleForTab(curTab, targetField)
+		if curVis {
+			// Ensure at least one column remains visible
+			visibleCount := m.visibleColumnsCount(curTab)
+			if visibleCount <= 1 {
+				m.message = "At least one column must remain visible"
+				return m, nil
+			}
+			m.setColVisibility(curTab, targetField, false)
+		} else {
+			m.setColVisibility(curTab, targetField, true)
+		}
+		m.saveColumnCustomization()
+		return m, nil
+
+	case msg.String() == "+" || msg.String() == "=" || msg.String() == "]" || msg.String() == "right" || msg.String() == "l":
+		if len(m.columns) == 0 || m.colModalCursor < 0 || m.colModalCursor >= len(m.columns) {
+			return m, nil
+		}
+		targetCol := m.columns[m.colModalCursor]
+		curW := m.getColWidthForTab(curTab, targetCol)
+		if curW == 0 {
+			curW = 15 // First explicit width when expanding flex column
+		} else {
+			curW += 2
+			if curW > 120 {
+				curW = 120
+			}
+		}
+		m.setColWidth(curTab, targetCol.Field, curW)
+		m.saveColumnCustomization()
+		return m, nil
+
+	case msg.String() == "-" || msg.String() == "_" || msg.String() == "[" || msg.String() == "left" || msg.String() == "h":
+		if len(m.columns) == 0 || m.colModalCursor < 0 || m.colModalCursor >= len(m.columns) {
+			return m, nil
+		}
+		targetCol := m.columns[m.colModalCursor]
+		curW := m.getColWidthForTab(curTab, targetCol)
+		if curW > 3 {
+			curW -= 2
+			if curW < 3 {
+				curW = 3
+			}
+			m.setColWidth(curTab, targetCol.Field, curW)
+			m.saveColumnCustomization()
+		} else if curW == 3 && targetCol.Width == 0 {
+			// Restore back to auto-flex (width 0)
+			m.setColWidth(curTab, targetCol.Field, 0)
+			m.saveColumnCustomization()
+		}
+		return m, nil
+
+	case msg.String() == "r" || msg.String() == "R":
+		m.resetColumnCustomization(curTab)
+		m.message = "Reset columns to profile defaults"
+		return m, nil
+	}
+
+	return m, nil
+}
+

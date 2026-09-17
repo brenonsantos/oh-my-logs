@@ -133,6 +133,70 @@ func (m Model) viewProfilePickerModal() string {
 	return centerBox(m.width, m.tableHeight+2, modalBox)
 }
 
+// viewColumnModal renders the centered rounded modal for configuring column visibility and widths.
+func (m Model) viewColumnModal() string {
+	modalWidth := modalWidthColumns
+	if modalWidth > m.width-6 {
+		modalWidth = m.width - 6
+	}
+
+	curTab := m.currentTab()
+
+	var sb strings.Builder
+	sb.WriteString(theme.ModalTitle.Render("Table Columns"))
+	sb.WriteString("\n\n")
+
+	profName := "Raw"
+	if m.profile != nil && m.profile.Name != "" {
+		profName = m.profile.Name
+	}
+	sb.WriteString(theme.Muted.Render(fmt.Sprintf("Profile: %s · %d columns configured", profName, len(m.columns))))
+	sb.WriteString("\n\n")
+
+	if len(m.columns) == 0 {
+		sb.WriteString(theme.Muted.Render("  (no columns configured for current format)\n"))
+	} else {
+		for i, col := range m.columns {
+			vis := m.isColVisibleForTab(curTab, col.Field)
+			checkStr := "[ ]"
+			if vis {
+				checkStr = "[x]"
+			}
+
+			curW := m.getColWidthForTab(curTab, col)
+			widthDesc := ""
+			if curW == 0 {
+				widthDesc = "flex (auto)"
+			} else if curW != col.Width {
+				widthDesc = fmt.Sprintf("%d cols (custom)", curW)
+			} else {
+				widthDesc = fmt.Sprintf("%d cols (default)", curW)
+			}
+
+			cursorStr := "  "
+			if i == m.colModalCursor {
+				cursorStr = "› "
+			}
+
+			line := fmt.Sprintf("%s%s %-16s %s", cursorStr, checkStr, col.Title, widthDesc)
+			if i == m.colModalCursor {
+				sb.WriteString(theme.ModalSelected.Render(line))
+			} else if !vis {
+				sb.WriteString(theme.Muted.Render(line))
+			} else {
+				sb.WriteString(theme.ModalItem.Render(line))
+			}
+			sb.WriteString("\n")
+		}
+	}
+
+	sb.WriteString("\n")
+	sb.WriteString(theme.ModalFooter.Render("Space toggle · +/- resize · r reset · Esc/Enter done"))
+
+	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
+	return centerBox(m.width, m.tableHeight+2, modalBox)
+}
+
 // viewFilterPresetsModal renders the centered rounded modal for Filter Presets.
 func (m Model) viewFilterPresetsModal() string {
 	presets := m.filtersCfg.Presets
@@ -483,6 +547,7 @@ func (m Model) viewHelpModal() string {
 		renderItem("s", "Save log to file", colWidth),
 		renderItem("D, r", "Disconnect / Reconnect", colWidth),
 		renderItem("p, P", "Port / Profile select", colWidth),
+		renderItem("o", "Columns (hide/width)", colWidth),
 		renderItem("?, q", "Toggle help / Quit", colWidth),
 	}
 
