@@ -78,6 +78,9 @@ const (
 	// modalWidthColumns is the width for the columns configuration modal.
 	modalWidthColumns = 60
 
+	// modalWidthTheme is the width for the theme selection modal.
+	modalWidthTheme = 76
+
 	// modalWidthFilters is the width for the filter presets dialog.
 	modalWidthFilters = 56
 

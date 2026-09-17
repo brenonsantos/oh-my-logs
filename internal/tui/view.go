@@ -41,6 +41,8 @@ func (m Model) View() string {
 		sb.WriteString(m.viewSettingsModal())
 	} else if m.mode == modeColumnModal {
 		sb.WriteString(m.viewColumnModal())
+	} else if m.mode == modeThemeModal {
+		sb.WriteString(m.viewThemeModal())
 	} else if m.mode == modeFilePicker {
 		sb.WriteString(m.viewFilePickerModal())
 	} else if m.mode == modeHelp {
