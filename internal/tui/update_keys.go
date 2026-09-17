@@ -42,6 +42,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleRowDetailKey(msg)
 	case modeColumnModal:
 		return m.handleColumnModalKey(msg)
+	case modeThemeModal:
+		return m.handleThemeModalKey(msg)
 	default:
 		return m.handleNormalKey(msg)
 	}

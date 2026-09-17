@@ -16,6 +16,13 @@ func TestTheme_CuratedPalettes(t *testing.T) {
 		"Gruvbox",
 		"Tokyo Night",
 		"High Contrast",
+		"Dracula",
+		"Catppuccin Mocha",
+		"One Dark",
+		"Solarized Dark",
+		"Cyberpunk",
+		"Rose Pine",
+		"Matrix",
 	}
 
 	if len(themes) != len(expected) {
@@ -67,6 +74,21 @@ func TestTheme_SetCurrentTheme(t *testing.T) {
 	}
 	if CurrentThemeName() != "Tokyo Night" {
 		t.Errorf("expected 'Tokyo Night', got %q", CurrentThemeName())
+	}
+
+	matched = SetCurrentTheme("catppuccin-mocha")
+	if matched != "Catppuccin Mocha" {
+		t.Errorf("expected 'Catppuccin Mocha' for slug 'catppuccin-mocha', got %q", matched)
+	}
+
+	matched = SetCurrentTheme("dracula")
+	if matched != "Dracula" {
+		t.Errorf("expected 'Dracula' for slug 'dracula', got %q", matched)
+	}
+
+	matched = SetCurrentTheme("matrix")
+	if matched != "Matrix" {
+		t.Errorf("expected 'Matrix' for slug 'matrix', got %q", matched)
 	}
 
 	// 3. Fallback on unknown

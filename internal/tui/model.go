@@ -38,6 +38,7 @@ const (
 	modeFilePicker
 	modeRowDetail
 	modeColumnModal
+	modeThemeModal
 )
 
 type filePickerPurpose int
@@ -193,6 +194,10 @@ type Model struct {
 	colModalCursor    int
 	colVisibility     map[string]bool // profile-scoped: field -> visible (true/false)
 	colWidthOverrides map[string]int  // profile-scoped: field -> custom width
+
+	// Theme selection modal
+	themeModalCursor  int
+	themeModalInitial string
 
 	// Filter presets
 	filtersCfg          *config.FiltersConfig

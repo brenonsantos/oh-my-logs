@@ -482,6 +482,9 @@ func (m Model) renderKeyBarContent() string {
 	case modeColumnModal:
 		return "  " + theme.Muted.Render("Columns: [↑/↓: select · Space: toggle · +/-: resize · r: reset · Enter/Esc: done]")
 
+	case modeThemeModal:
+		return "  " + theme.Muted.Render("Themes: [↑/↓: live preview · Enter: apply · Esc: cancel]")
+
 	case modeHelp:
 		return "  " + theme.Muted.Render("Press ") + theme.KeyName.Render("?") + theme.Muted.Render(", ") + theme.KeyName.Render("Esc") + theme.Muted.Render(", or ") + theme.KeyName.Render("q") + theme.Muted.Render(" to close help")
 

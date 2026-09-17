@@ -473,6 +473,10 @@ func (m Model) handleSettingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if settingRow(m.settingsCursor) == settingRowLogPath {
 			return m.openFilePicker()
 		}
+		if settingRow(m.settingsCursor) == settingRowTheme {
+			m.openThemeModal()
+			return m, nil
+		}
 		m.mode = modeNormal
 		return m, nil
 	}
@@ -540,7 +544,13 @@ func (m Model) viewSettingsModal() string {
 	}
 
 	// Footer hints
-	sb.WriteString(theme.ModalFooter.Render("Enter/Esc close · ↑/↓ select · ←/→ adjust · Space toggle"))
+	if settingRow(m.settingsCursor) == settingRowTheme {
+		sb.WriteString(theme.ModalFooter.Render("Enter browse all 13 themes · ←/→ cycle · Esc close"))
+	} else if settingRow(m.settingsCursor) == settingRowLogPath {
+		sb.WriteString(theme.ModalFooter.Render("Enter browse folders · Esc close"))
+	} else {
+		sb.WriteString(theme.ModalFooter.Render("Enter/Esc close · ↑/↓ select · ←/→ adjust · Space toggle"))
+	}
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+2, modalBox)
