@@ -51,6 +51,8 @@ func (m Model) View() string {
 		sb.WriteString(m.viewRowDetailModal())
 	} else if m.mode == modeGame {
 		sb.WriteString(m.viewGameModal())
+	} else if m.mode == modeMarkerPrompt {
+		sb.WriteString(m.viewMarkerModal())
 	} else if len(m.visible) == 0 && m.splitMode == SplitNone {
 		sb.WriteString(m.viewEmptyState())
 	} else if m.splitMode != SplitNone {

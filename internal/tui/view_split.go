@@ -253,79 +253,6 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 			renderedPrefix = "   "
 		}
 
-		var cellParts []string
-		for colIdx, col := range cols {
-			val := r.Fields[col.Field]
-			switch col.Field {
-			case "raw":
-				val = r.Raw
-			case "message":
-				if val == "" {
-					val = r.Raw
-				}
-			case "_len":
-				val = FormatByteLen(len(r.Raw))
-			case "_hex":
-				val = FormatHexBytes(r.Raw)
-			case "_bin":
-				val = FormatBinaryBits(r.Raw)
-			case "_ascii":
-				val = FormatASCII(r.Raw)
-			}
-			var rowDelta time.Duration
-			if col.Field == "_delta" || col.Style == "delta" {
-				if i > 0 && !paneRows[i-1].Timestamp.IsZero() && !r.Timestamp.IsZero() {
-					rowDelta = r.Timestamp.Sub(paneRows[i-1].Timestamp)
-					val = timing.FormatDelta(rowDelta)
-				} else if r.Delta > 0 {
-					rowDelta = r.Delta
-					val = timing.FormatDelta(rowDelta)
-				} else if r.Fields["_delta"] != "" {
-					val = r.Fields["_delta"]
-				} else {
-					val = "---"
-				}
-			}
-			w := 0
-			if colIdx < len(colWidths) {
-				w = colWidths[colIdx]
-			}
-			cellText := padOrFlex(val, w, col.Width == 0)
-
-			cellStyle := theme.ResolveCellStyle(col, val)
-			if col.Field == "_delta" || col.Style == "delta" {
-				if m.deltaTracker != nil && rowDelta > 0 {
-					cellStyle = theme.DeltaStyle(m.deltaTracker.Classify(rowDelta))
-				} else {
-					cellStyle = theme.Muted
-				}
-			}
-			if r.Fields["level"] == "TX" && (col.Field == "message" || col.Style == "primary" || col.Field == "raw") {
-				cellStyle = cellStyle.Foreground(colorMaple)
-			}
-			if hasBg {
-				cellStyle = cellStyle.Background(rowBg)
-			}
-
-			var renderedCell string
-			if isMatch && tab.SearchInput != "" {
-				renderedCell = highlightSubstring(cellText, tab.SearchInput, cellStyle)
-			} else {
-				renderedCell = cellStyle.Render(cellText)
-			}
-			cellParts = append(cellParts, renderedCell)
-		}
-
-		sep := "  "
-		if hasBg {
-			sep = lipgloss.NewStyle().Background(rowBg).Render("  ")
-		}
-
-		rowBody := strings.Join(cellParts, sep)
-		if isSelectedRow && isFocused && tab.CursorCol >= 0 {
-			rowBody = applyRowCursor(rowBody, tab.CursorCol, tab.CharSelStart, tab.CharSelEnd)
-		}
-
 		contentW := paneW
 		vScrollChar := ""
 		if hasVScroll {
@@ -341,6 +268,85 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 		if availW < 0 {
 			availW = 0
 		}
+
+		var rowBody string
+		if r.IsMarker {
+			rowBody = formatMarkerRow(r, availW, hasBg, rowBg)
+		} else {
+			var cellParts []string
+			for colIdx, col := range cols {
+				val := r.Fields[col.Field]
+				switch col.Field {
+				case "raw":
+					val = r.Raw
+				case "message":
+					if val == "" {
+						val = r.Raw
+					}
+				case "_len":
+					val = FormatByteLen(len(r.Raw))
+				case "_hex":
+					val = FormatHexBytes(r.Raw)
+				case "_bin":
+					val = FormatBinaryBits(r.Raw)
+				case "_ascii":
+					val = FormatASCII(r.Raw)
+				}
+				var rowDelta time.Duration
+				if col.Field == "_delta" || col.Style == "delta" {
+					if i > 0 && !paneRows[i-1].Timestamp.IsZero() && !r.Timestamp.IsZero() {
+						rowDelta = r.Timestamp.Sub(paneRows[i-1].Timestamp)
+						val = timing.FormatDelta(rowDelta)
+					} else if r.Delta > 0 {
+						rowDelta = r.Delta
+						val = timing.FormatDelta(rowDelta)
+					} else if r.Fields["_delta"] != "" {
+						val = r.Fields["_delta"]
+					} else {
+						val = "---"
+					}
+				}
+				w := 0
+				if colIdx < len(colWidths) {
+					w = colWidths[colIdx]
+				}
+				cellText := padOrFlex(val, w, col.Width == 0)
+
+				cellStyle := theme.ResolveCellStyle(col, val)
+				if col.Field == "_delta" || col.Style == "delta" {
+					if m.deltaTracker != nil && rowDelta > 0 {
+						cellStyle = theme.DeltaStyle(m.deltaTracker.Classify(rowDelta))
+					} else {
+						cellStyle = theme.Muted
+					}
+				}
+				if r.Fields["level"] == "TX" && (col.Field == "message" || col.Style == "primary" || col.Field == "raw") {
+					cellStyle = cellStyle.Foreground(colorMaple)
+				}
+				if hasBg {
+					cellStyle = cellStyle.Background(rowBg)
+				}
+
+				var renderedCell string
+				if isMatch && tab.SearchInput != "" {
+					renderedCell = highlightSubstring(cellText, tab.SearchInput, cellStyle)
+				} else {
+					renderedCell = cellStyle.Render(cellText)
+				}
+				cellParts = append(cellParts, renderedCell)
+			}
+
+			sep := "  "
+			if hasBg {
+				sep = lipgloss.NewStyle().Background(rowBg).Render("  ")
+			}
+
+			rowBody = strings.Join(cellParts, sep)
+			if isSelectedRow && isFocused && tab.CursorCol >= 0 {
+				rowBody = applyRowCursor(rowBody, tab.CursorCol, tab.CharSelStart, tab.CharSelEnd)
+			}
+		}
+
 		slicedRow := ansiCut(rowBody, tab.ScrollX, availW)
 		fullRow := renderedPrefix + slicedRow
 

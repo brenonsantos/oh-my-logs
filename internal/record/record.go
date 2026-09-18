@@ -6,11 +6,13 @@ import "time"
 // Fields contains named values extracted from a raw serial line.
 // Raw preserves the original unmodified line.
 type Record struct {
-	ID        uint64
-	Fields    map[string]string
-	Raw       string
-	Timestamp time.Time
-	Delta     time.Duration
+	ID         uint64
+	Fields     map[string]string
+	Raw        string
+	Timestamp  time.Time
+	Delta      time.Duration
+	IsMarker   bool
+	MarkerNote string
 }
 
 // NewRecord creates an empty Record with the given raw line.
@@ -18,6 +20,29 @@ func NewRecord(raw string) Record {
 	return Record{
 		Fields: make(map[string]string),
 		Raw:    raw,
+	}
+}
+
+// NewMarkerRecord creates a milestone marker record with a user note and timestamp.
+func NewMarkerRecord(note string, ts time.Time) Record {
+	timeStr := ts.Format("15:04:05.000")
+	var displayMsg string
+	if note != "" {
+		displayMsg = "── 📌 MARKER [" + timeStr + "]: " + note + " ──"
+	} else {
+		displayMsg = "── 📌 MARKER [" + timeStr + "] ──"
+	}
+	return Record{
+		Fields: map[string]string{
+			"message": displayMsg,
+			"level":   "MARK",
+			"time":    timeStr,
+			"raw":     displayMsg,
+		},
+		Raw:        displayMsg,
+		Timestamp:  ts,
+		IsMarker:   true,
+		MarkerNote: note,
 	}
 }
 
