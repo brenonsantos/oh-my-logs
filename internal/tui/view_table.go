@@ -276,9 +276,9 @@ func (m Model) viewTable() string {
 func (m Model) effectiveTableHeight() int {
 	h := m.tableHeight
 	if m.mode == modeMarkerPrompt {
-		h -= 4
-		if h < 3 {
-			h = 3
+		h -= markerDrawerHeight
+		if h < minDrawerTableHeight {
+			h = minDrawerTableHeight
 		}
 	}
 	return h

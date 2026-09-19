@@ -46,5 +46,8 @@ dist/
 # macOS
 .DS_Store
 plan.md
+plan-history.md
 PR_*.md
 *.png
+.oml.yaml
+msg_log_serial_decoder.py

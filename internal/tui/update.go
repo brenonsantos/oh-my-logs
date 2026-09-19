@@ -302,7 +302,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				if m.scrollX > 0 {
-					m.scrollX -= 6
+					m.scrollX -= mouseWheelHorizontalStep
 					m.clampScrollX()
 				}
 				if m.splitMode != SplitNone {
@@ -325,7 +325,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case modeRowDetail:
 				if m.detailScrollOffset > 0 {
-					m.detailScrollOffset -= 2
+					m.detailScrollOffset -= detailModalScrollStep
 					if m.detailScrollOffset < 0 {
 						m.detailScrollOffset = 0
 					}
@@ -334,7 +334,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// ignore scrolling while modal or game is active
 			default:
 				m.follow = false
-				m.scrollOffset -= 3
+				m.scrollOffset -= mouseWheelScrollStep
 				m.clampScroll()
 				if m.splitMode != SplitNone && m.syncScroll {
 					m.syncOtherPaneChronologically()
@@ -347,7 +347,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
 					return m, nil
 				}
-				m.scrollX += 6
+				m.scrollX += mouseWheelHorizontalStep
 				m.clampScrollX()
 				if m.splitMode != SplitNone {
 					m.syncActiveTabToModel()
@@ -368,11 +368,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.presetCursor++
 				}
 			case modeRowDetail:
-				m.detailScrollOffset += 2
+				m.detailScrollOffset += detailModalScrollStep
 			case modeHelp, modeGame, modeSavePresetPrompt, modeMarkerPrompt:
 				// ignore scrolling while modal or game is active
 			default:
-				m.scrollOffset += 3
+				m.scrollOffset += mouseWheelScrollStep
 				m.clampScroll()
 				h := m.activeDataHeight()
 				if m.scrollOffset >= len(m.visible)-h {
@@ -594,14 +594,51 @@ func (m *Model) ingestRecord(r record.Record) {
 		_ = m.currentTab()
 	}
 	for i := range m.tabs {
+		appended := false
 		if m.tabs[i].BookmarkedOnly {
 			if r.IsMarker {
 				m.tabs[i].Visible = append(m.tabs[i].Visible, r)
-			} else {
-				continue
+				appended = true
 			}
 		} else if r.IsMarker || m.tabs[i].Filter == nil || m.tabs[i].Filter.Empty() || m.tabs[i].Filter.Matches(r) {
 			m.tabs[i].Visible = append(m.tabs[i].Visible, r)
+			appended = true
+		}
+
+		if appended {
+			if m.buffer != nil {
+				if maxCap := m.buffer.Cap(); maxCap > 0 && len(m.tabs[i].Visible) > maxCap {
+					excess := len(m.tabs[i].Visible) - maxCap
+					m.tabs[i].Visible = m.tabs[i].Visible[excess:]
+					if m.tabs[i].SelectedRow >= 0 {
+						m.tabs[i].SelectedRow -= excess
+						if m.tabs[i].SelectedRow < 0 {
+							m.tabs[i].SelectedRow = 0
+						}
+					}
+					if m.tabs[i].ScrollOffset > 0 {
+						m.tabs[i].ScrollOffset -= excess
+						if m.tabs[i].ScrollOffset < 0 {
+							m.tabs[i].ScrollOffset = 0
+						}
+					}
+					if i == m.activeTab {
+						if m.selectionStart >= 0 {
+							m.selectionStart -= excess
+							if m.selectionStart < 0 {
+								m.selectionStart = 0
+							}
+						}
+						if m.selectionEnd >= 0 {
+							m.selectionEnd -= excess
+							if m.selectionEnd < 0 {
+								m.selectionEnd = 0
+							}
+						}
+					}
+				}
+			}
+
 			if m.tabs[i].Follow && !m.paused {
 				h := m.tableHeight
 				if m.splitMode == SplitHorizontal {
@@ -624,6 +661,7 @@ func (m *Model) ingestRecord(r record.Record) {
 	m.visible = cur.Visible
 	m.scrollOffset = cur.ScrollOffset
 	m.follow = cur.Follow
+	m.selectedRow = cur.SelectedRow
 }
 
 // recordTXMessage adds an outbound transmission record to the log buffer for chronological correlation.

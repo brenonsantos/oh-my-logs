@@ -276,3 +276,30 @@ func TestVirtualTabsViewRendering(t *testing.T) {
 		t.Errorf("status bar should display active tab info badge")
 	}
 }
+
+func TestIngestRecord_BoundedMemoryGrowth(t *testing.T) {
+	cfg := serial.Config{Port: "COM1", Baud: 115200}
+	p := parser.NewRawParser()
+	const maxCap = 25
+	buf := record.NewBuffer(maxCap)
+	appCfg := &config.AppConfig{}
+	m := New(cfg, nil, p, buf, nil, appCfg)
+	m.buffer.Resize(maxCap)
+	m.width = 100
+	m.height = 30
+	m.recalcLayout()
+
+	// Ingest 60 records (more than 2x maxCap)
+	for i := 0; i < 60; i++ {
+		r := record.NewRecord("log line")
+		m.ingestRecord(r)
+	}
+
+	if len(m.tabs[0].Visible) != maxCap {
+		t.Fatalf("expected tab.Visible bounded to %d, got %d", maxCap, len(m.tabs[0].Visible))
+	}
+	if len(m.visible) != maxCap {
+		t.Fatalf("expected m.visible bounded to %d, got %d", maxCap, len(m.visible))
+	}
+}
+
