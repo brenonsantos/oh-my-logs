@@ -44,6 +44,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleColumnModalKey(msg)
 	case modeThemeModal:
 		return m.handleThemeModalKey(msg)
+	case modeMarkerPrompt:
+		return m.handleMarkerPromptKey(msg)
 	default:
 		return m.handleNormalKey(msg)
 	}
@@ -144,6 +146,10 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case keyMatches(msg, m.keys.Columns):
 		m.openColumnModal()
+		return m, nil
+
+	case keyMatches(msg, m.keys.AddMarker):
+		m.openMarkerPrompt()
 		return m, nil
 
 	case keyMatches(msg, m.keys.ViewDetail):

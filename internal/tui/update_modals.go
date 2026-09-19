@@ -766,7 +766,11 @@ func (m Model) handleRowDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case keyMatches(msg, m.keys.ToggleBookmark) || msg.String() == "b" || msg.String() == "m":
+	case keyMatches(msg, m.keys.AddMarker):
+		m.openMarkerPrompt()
+		return m, nil
+
+	case keyMatches(msg, m.keys.ToggleBookmark) || msg.String() == "b":
 		if m.bookmarks == nil {
 			m.bookmarks = make(map[uint64]struct{})
 		}

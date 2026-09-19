@@ -330,7 +330,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.detailScrollOffset = 0
 					}
 				}
-			case modeHelp, modeGame, modeSavePresetPrompt:
+			case modeHelp, modeGame, modeSavePresetPrompt, modeMarkerPrompt:
 				// ignore scrolling while modal or game is active
 			default:
 				m.follow = false
@@ -369,7 +369,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case modeRowDetail:
 				m.detailScrollOffset += 2
-			case modeHelp, modeGame, modeSavePresetPrompt:
+			case modeHelp, modeGame, modeSavePresetPrompt, modeMarkerPrompt:
 				// ignore scrolling while modal or game is active
 			default:
 				m.scrollOffset += 3
@@ -563,6 +563,12 @@ func (m *Model) ingestRecord(r record.Record) {
 
 	m.nextRecordID++
 	r.ID = m.nextRecordID
+	if r.IsMarker {
+		if m.bookmarks == nil {
+			m.bookmarks = make(map[uint64]struct{})
+		}
+		m.bookmarks[r.ID] = struct{}{}
+	}
 	m.buffer.Add(r)
 	if m.mode == modeGame {
 		m.logsDuringGame++
@@ -589,9 +595,12 @@ func (m *Model) ingestRecord(r record.Record) {
 	}
 	for i := range m.tabs {
 		if m.tabs[i].BookmarkedOnly {
-			continue
-		}
-		if m.tabs[i].Filter == nil || m.tabs[i].Filter.Empty() || m.tabs[i].Filter.Matches(r) {
+			if r.IsMarker {
+				m.tabs[i].Visible = append(m.tabs[i].Visible, r)
+			} else {
+				continue
+			}
+		} else if r.IsMarker || m.tabs[i].Filter == nil || m.tabs[i].Filter.Empty() || m.tabs[i].Filter.Matches(r) {
 			m.tabs[i].Visible = append(m.tabs[i].Visible, r)
 			if m.tabs[i].Follow && !m.paused {
 				h := m.tableHeight

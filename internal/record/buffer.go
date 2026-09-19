@@ -44,6 +44,64 @@ func (b *Buffer) Add(r Record) {
 	}
 }
 
+// InsertBeforeID inserts record r immediately before the record with targetID.
+// If targetID is not found or is 0, r is appended to the buffer.
+func (b *Buffer) InsertBeforeID(targetID uint64, r Record) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if r.ID == 0 {
+		b.nextID++
+		r.ID = b.nextID
+	}
+
+	if b.size == 0 || targetID == 0 {
+		b.data[b.head] = r
+		b.head = (b.head + 1) % b.cap
+		if b.size < b.cap {
+			b.size++
+		}
+		return
+	}
+
+	all := make([]Record, b.size)
+	start := (b.head - b.size + b.cap) % b.cap
+	targetIdx := -1
+	for i := 0; i < b.size; i++ {
+		idx := (start + i) % b.cap
+		if b.data[idx].ID == 0 {
+			b.nextID++
+			b.data[idx].ID = b.nextID
+		}
+		all[i] = b.data[idx]
+		if all[i].ID == targetID && targetIdx == -1 {
+			targetIdx = i
+		}
+	}
+
+	if targetIdx == -1 {
+		b.data[b.head] = r
+		b.head = (b.head + 1) % b.cap
+		if b.size < b.cap {
+			b.size++
+		}
+		return
+	}
+
+	newAll := make([]Record, 0, len(all)+1)
+	newAll = append(newAll, all[:targetIdx]...)
+	newAll = append(newAll, r)
+	newAll = append(newAll, all[targetIdx:]...)
+
+	if len(newAll) > b.cap {
+		newAll = newAll[len(newAll)-b.cap:]
+	}
+
+	copy(b.data, newAll)
+	b.size = len(newAll)
+	b.head = b.size % b.cap
+}
+
 // All returns a slice of all records in insertion order (oldest first).
 // The returned slice is a copy; modifications do not affect the buffer.
 func (b *Buffer) All() []Record {

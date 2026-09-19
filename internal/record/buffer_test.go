@@ -169,3 +169,33 @@ func TestBuffer_Resize(t *testing.T) {
 		t.Fatalf("expected cap 3, got %d", b.Cap())
 	}
 }
+
+func TestBuffer_InsertBeforeID(t *testing.T) {
+	b := record.NewBuffer(5)
+	r1 := record.Record{ID: 10, Raw: "first"}
+	r2 := record.Record{ID: 20, Raw: "second"}
+	r3 := record.Record{ID: 30, Raw: "third"}
+	b.Add(r1)
+	b.Add(r2)
+	b.Add(r3)
+
+	// Insert before r2 (ID: 20)
+	marker := record.Record{ID: 15, Raw: "marker"}
+	b.InsertBeforeID(20, marker)
+
+	all := b.All()
+	if len(all) != 4 {
+		t.Fatalf("expected 4 records, got %d", len(all))
+	}
+	if all[0].ID != 10 || all[1].ID != 15 || all[2].ID != 20 || all[3].ID != 30 {
+		t.Fatalf("unexpected order after InsertBeforeID: %v", all)
+	}
+
+	// Insert with nonexistent target appends
+	extra := record.Record{ID: 40, Raw: "extra"}
+	b.InsertBeforeID(999, extra)
+	all = b.All()
+	if len(all) != 5 || all[4].ID != 40 {
+		t.Fatalf("expected extra to append when target not found, got: %v", all)
+	}
+}
