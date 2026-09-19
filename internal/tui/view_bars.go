@@ -486,7 +486,7 @@ func (m Model) renderKeyBarContent() string {
 		return "  " + theme.Muted.Render("Themes: [↑/↓: live preview · Enter: apply · Esc: cancel]")
 
 	case modeMarkerPrompt:
-		return "  " + theme.Muted.Render("Marker Note: [Enter: insert marker · ←/→: cursor · ↑/↓: history · Esc: cancel]")
+		return "  " + theme.KeyName.Render("Enter") + " " + theme.Muted.Render("insert marker") + "  ·  " + theme.KeyName.Render("Esc") + " " + theme.Muted.Render("cancel")
 
 	case modeHelp:
 		return "  " + theme.Muted.Render("Press ") + theme.KeyName.Render("?") + theme.Muted.Render(", ") + theme.KeyName.Render("Esc") + theme.Muted.Render(", or ") + theme.KeyName.Render("q") + theme.Muted.Render(" to close help")

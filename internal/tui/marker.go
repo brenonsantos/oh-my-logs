@@ -232,3 +232,96 @@ func formatMarkerRow(r record.Record, width int, hasBg bool, rowBg lipgloss.Term
 
 	return markerStyle.Render(bannerText) + dashStyle.Render(trailingDashes)
 }
+
+// viewMarkerDrawer renders an interactive docked drawer with selected-row background styling.
+func (m Model) viewMarkerDrawer() string {
+	w := m.width
+	if w <= 0 {
+		w = 80
+	}
+
+	bg := colorSelected
+	baseStyle := lipgloss.NewStyle().Background(bg)
+
+	// 1. Header line: ─── 📌 ADD STREAM MARKER ── Target: Line #137 [11:03:20.322] ─── [Enter: insert · Esc: cancel] ───
+	var targetVal string
+	if m.markerTargetRow >= 0 {
+		tsStr := ""
+		if !m.markerTargetTime.IsZero() {
+			tsStr = " [" + m.markerTargetTime.Format("15:04:05.000") + "]"
+		}
+		targetVal = fmt.Sprintf("Target: Line #%d%s", m.markerTargetRow+1, tsStr)
+	} else {
+		targetVal = "Target: End of Stream (Live Milestone)"
+	}
+
+	title := fmt.Sprintf("─── 📌 ADD STREAM MARKER ── %s ", targetVal)
+	titleStyled := baseStyle.Foreground(colorYellow).Bold(true).Render(title)
+	titleW := lipgloss.Width(titleStyled)
+
+	help := " [Enter: insert · ←/→: cursor · ↑/↓: history · Esc: cancel] ───"
+	helpStyled := baseStyle.Foreground(colorMuted).Render(help)
+	helpW := lipgloss.Width(helpStyled)
+
+	dashCount := w - titleW - helpW
+	if dashCount < 1 {
+		dashCount = 1
+	}
+	middleDashes := baseStyle.Foreground(colorAccent).Render(strings.Repeat("─", dashCount))
+	headerLine := titleStyled + middleDashes + helpStyled
+	if curW := lipgloss.Width(headerLine); curW < w {
+		headerLine += baseStyle.Foreground(colorAccent).Render(strings.Repeat("─", w-curW))
+	} else if curW > w {
+		headerLine = baseStyle.MaxWidth(w).Render(headerLine)
+	}
+
+	// 2. Log preview line:  Log:  <message>
+	logLabel := baseStyle.Foreground(colorMuted).Bold(true).Render("  Log:  ")
+	var logBody string
+	if m.markerTargetText != "" {
+		preview := m.markerTargetText
+		avail := w - 10
+		if avail > 3 && len(preview) > avail {
+			preview = preview[:avail-3] + "..."
+		} else if len(preview) > avail {
+			preview = preview[:max(0, avail)]
+		}
+		logBody = baseStyle.Foreground(colorFg).Render(preview)
+	} else {
+		logBody = baseStyle.Foreground(colorMuted).Italic(true).Render("(new live milestone marker at end of stream)")
+	}
+	logLine := logLabel + logBody
+	if curW := lipgloss.Width(logLine); curW < w {
+		logLine += baseStyle.Render(strings.Repeat(" ", w-curW))
+	} else if curW > w {
+		logLine = baseStyle.MaxWidth(w).Render(logLine)
+	}
+
+	// 3. Note input line:  Note: [ power cycle #1 █                                               ]
+	noteLabel := baseStyle.Foreground(colorAccent).Bold(true).Render("  Note: ")
+	bracketOpen := baseStyle.Foreground(colorMuted).Render("[ ")
+	bracketClose := baseStyle.Foreground(colorMuted).Render(" ]")
+
+	promptW := lipgloss.Width(noteLabel) + lipgloss.Width(bracketOpen)
+	bracketCloseW := lipgloss.Width(bracketClose)
+	availInputW := w - promptW - bracketCloseW - 2
+	if availInputW < 10 {
+		availInputW = 10
+	}
+	inputStyle := baseStyle.Foreground(colorFg)
+	input := m.markerInput.RenderWindow(availInputW, inputStyle)
+	inputLine := noteLabel + bracketOpen + input + bracketClose
+	if curW := lipgloss.Width(inputLine); curW < w {
+		inputLine += baseStyle.Render(strings.Repeat(" ", w-curW))
+	} else if curW > w {
+		inputLine = baseStyle.MaxWidth(w).Render(inputLine)
+	}
+
+	// 4. Bottom divider line
+	bottomLine := baseStyle.Foreground(colorAccent).Render(strings.Repeat("─", w))
+	if curW := lipgloss.Width(bottomLine); curW > w {
+		bottomLine = baseStyle.MaxWidth(w).Render(bottomLine)
+	}
+
+	return headerLine + "\n" + logLine + "\n" + inputLine + "\n" + bottomLine
+}

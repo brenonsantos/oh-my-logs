@@ -44,23 +44,24 @@ func (m Model) viewTable() string {
 	colWidths := m.computeColWidths(cols)
 
 	totalRows := len(m.visible)
-	hasVScroll := totalRows > m.tableHeight && m.tableHeight > 1
+	effH := m.effectiveTableHeight()
+	hasVScroll := totalRows > effH && effH > 1
 	thumbH := 1
 	thumbTop := 0
 	if hasVScroll {
-		thumbH = m.tableHeight * m.tableHeight / totalRows
+		thumbH = effH * effH / totalRows
 		if thumbH < 1 {
 			thumbH = 1
 		}
-		maxOffset := totalRows - m.tableHeight
+		maxOffset := totalRows - effH
 		if maxOffset > 0 {
-			thumbTop = m.scrollOffset * (m.tableHeight - thumbH) / maxOffset
+			thumbTop = m.scrollOffset * (effH - thumbH) / maxOffset
 		}
 		if thumbTop < 0 {
 			thumbTop = 0
 		}
-		if thumbTop+thumbH > m.tableHeight {
-			thumbTop = m.tableHeight - thumbH
+		if thumbTop+thumbH > effH {
+			thumbTop = effH - thumbH
 		}
 	}
 
@@ -253,7 +254,7 @@ func (m Model) viewTable() string {
 	}
 
 	// Pad remaining vertical space to keep layout stable
-	for len(lines) < m.tableHeight {
+	for len(lines) < effH {
 		i := len(lines)
 		contentW := tableWidth
 		vScrollChar := ""
@@ -271,12 +272,25 @@ func (m Model) viewTable() string {
 	return strings.Join(lines, "\n")
 }
 
+// effectiveTableHeight returns the data row capacity taking into account active bottom drawers.
+func (m Model) effectiveTableHeight() int {
+	h := m.tableHeight
+	if m.mode == modeMarkerPrompt {
+		h -= 4
+		if h < 3 {
+			h = 3
+		}
+	}
+	return h
+}
+
 // visibleRows returns the slice of records currently in the viewport.
 func (m Model) visibleRows() []record.Record {
 	if len(m.visible) == 0 {
 		return nil
 	}
-	end := m.scrollOffset + m.tableHeight
+	effH := m.effectiveTableHeight()
+	end := m.scrollOffset + effH
 	if end > len(m.visible) {
 		end = len(m.visible)
 	}

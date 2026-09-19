@@ -256,13 +256,13 @@ func TestMarker_InsertAtSelectedLine(t *testing.T) {
 		t.Fatalf("expected markerTargetID %d, got %d", targetRecID, m.markerTargetID)
 	}
 
-	// Verify modal prompt view renders target line information
-	modalView := m.viewMarkerModal()
-	if !strings.Contains(modalView, "📌 Add Stream Marker Note") {
-		t.Errorf("expected modal to contain title, got:\n%s", modalView)
+	// Verify marker drawer renders target line information
+	drawerView := m.viewMarkerDrawer()
+	if !strings.Contains(drawerView, "📌 ADD STREAM MARKER") {
+		t.Errorf("expected drawer to contain title, got:\n%s", drawerView)
 	}
-	if !strings.Contains(modalView, "Line #2") {
-		t.Errorf("expected modal to mention Line #2, got:\n%s", modalView)
+	if !strings.Contains(drawerView, "Line #2") {
+		t.Errorf("expected drawer to mention Line #2, got:\n%s", drawerView)
 	}
 
 	// Type note and press Enter
