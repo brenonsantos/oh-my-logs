@@ -102,23 +102,23 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Horizontal scrollbar divider click (Row m.height - 3)
-	if msg.Y == m.height-3 {
+	// Horizontal scrollbar divider click
+	if msg.Y == m.height-hScrollbarBottomOffset {
 		return m.handleHScrollbarClick(msg)
 	}
 
-	// Tab bar click (Row 2 when len(m.tabs) > 1)
-	if len(m.tabs) > 1 && msg.Y == 2 {
+	// Tab bar click
+	if len(m.tabs) > 1 && msg.Y == tabBarRow {
 		return m.handleTabBarMouseClick(msg)
 	}
 
-	// Status bar click (Row m.height - 2)
-	if msg.Y == m.height-2 {
+	// Status bar click
+	if msg.Y == m.height-statusBarBottomOffset {
 		return m.handleStatusBarMouseClick(msg)
 	}
 
-	// Key bar click (Row m.height - 1)
-	if msg.Y == m.height-1 {
+	// Key bar click
+	if msg.Y == m.height-keyBarBottomOffset {
 		return m.handleKeyBarMouseClick(msg)
 	}
 
@@ -184,9 +184,9 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 // splitTableStartY returns the terminal Y row where viewSplitTable() begins.
 func (m Model) splitTableStartY() int {
 	if len(m.tabs) > 1 {
-		return 2 + tabBarChromeRows
+		return tabBarRow + tabBarChromeRows
 	}
-	return 2
+	return tabBarRow
 }
 
 // tableDataStartY returns the terminal Y row where log data rows begin in single-table view.

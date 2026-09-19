@@ -716,12 +716,12 @@ func (m Model) viewRowDetailModal() string {
 		}
 	}
 
-	modalWidth := int(float64(m.width) * 0.82)
-	if modalWidth < 68 {
-		modalWidth = 68
+	modalWidth := int(float64(m.width) * rowDetailWidthRatio)
+	if modalWidth < minRowDetailWidth {
+		modalWidth = minRowDetailWidth
 	}
-	if modalWidth > 115 {
-		modalWidth = 115
+	if modalWidth > maxRowDetailWidth {
+		modalWidth = maxRowDetailWidth
 	}
 	if modalWidth > m.width-4 {
 		modalWidth = m.width - 4
@@ -732,8 +732,8 @@ func (m Model) viewRowDetailModal() string {
 	}
 
 	availHeight := m.tableHeight + 2
-	if availHeight < 14 {
-		availHeight = 14
+	if availHeight < minRowDetailHeight {
+		availHeight = minRowDetailHeight
 	}
 	if availHeight > m.height-4 {
 		availHeight = m.height - 4
@@ -931,69 +931,6 @@ func (m Model) viewRowDetailModal() string {
 	}
 
 	sb.WriteString(theme.ModalFooter.Render("↑/↓ scroll · ←/→ (or n/p) record · b pin · y copy · Esc close"))
-
-	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
-	return centerBox(m.width, m.tableHeight+splitPaneHeaderOverhead, modalBox)
-}
-
-// viewMarkerModal renders an interactive centered prompt dialog to add or annotate a stream marker.
-func (m Model) viewMarkerModal() string {
-	modalWidth := 58
-	if modalWidth > m.width-4 {
-		modalWidth = m.width - 4
-	}
-	if modalWidth < 30 {
-		modalWidth = 30
-	}
-
-	innerW := modalWidth - 6
-	if innerW < 20 {
-		innerW = 20
-	}
-
-	var sb strings.Builder
-	sb.WriteString(theme.ModalTitle.Render("📌 Add Stream Marker Note"))
-	sb.WriteString("\n\n")
-
-	// Target line info
-	targetLabel := "Target: "
-	var targetVal string
-	if m.markerTargetRow >= 0 {
-		tsStr := ""
-		if !m.markerTargetTime.IsZero() {
-			tsStr = " [" + m.markerTargetTime.Format("15:04:05.000") + "]"
-		}
-		targetVal = fmt.Sprintf("Line #%d%s", m.markerTargetRow+1, tsStr)
-	} else {
-		targetVal = "End of Stream (Live Milestone)"
-	}
-	sb.WriteString(theme.Muted.Render(targetLabel) + theme.Accent.Render(targetVal))
-	sb.WriteString("\n")
-
-	if m.markerTargetText != "" {
-		preview := m.markerTargetText
-		availPreviewW := innerW - 8
-		if availPreviewW > 3 && len(preview) > availPreviewW {
-			preview = preview[:availPreviewW-3] + "..."
-		} else if len(preview) > availPreviewW {
-			preview = preview[:max(0, availPreviewW)]
-		}
-		sb.WriteString(theme.Muted.Render("Log:    ") + theme.Content.Render(preview))
-		sb.WriteString("\n")
-	}
-	sb.WriteString("\n")
-
-	prompt := theme.Secondary.Render("Note: ")
-	labelW := lipgloss.Width(prompt)
-	availInputW := innerW - labelW - 2
-	if availInputW < 15 {
-		availInputW = 15
-	}
-	input := m.markerInput.RenderWindow(availInputW, theme.ModalSelected)
-	sb.WriteString("  " + prompt + input)
-	sb.WriteString("\n\n")
-
-	sb.WriteString(theme.ModalFooter.Render("Enter: insert · ←/→: cursor · ↑/↓: history · Esc: cancel"))
 
 	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
 	return centerBox(m.width, m.tableHeight+splitPaneHeaderOverhead, modalBox)

@@ -352,18 +352,18 @@ func (m Model) currentFilePickerPrefix() string {
 
 // filePickerModalWidth computes a responsive width for the file picker modal based on terminal width.
 func (m Model) filePickerModalWidth() int {
-	target := int(float64(m.width) * 0.72)
-	if target < 86 {
-		target = 86
+	target := int(float64(m.width) * filePickerWidthRatio)
+	if target < minFilePickerWidth {
+		target = minFilePickerWidth
 	}
-	if target > 116 {
-		target = 116
+	if target > maxFilePickerWidth {
+		target = maxFilePickerWidth
 	}
 	if target > m.width-4 {
 		target = m.width - 4
 	}
-	if target < 40 {
-		target = 40
+	if target < minFilePickerInnerWidth {
+		target = minFilePickerInnerWidth
 	}
 	return target
 }
@@ -371,8 +371,8 @@ func (m Model) filePickerModalWidth() int {
 // filePickerHeight computes a responsive height for the file list based on available vertical space.
 func (m Model) filePickerHeight() int {
 	avail := m.tableHeight + 2
-	if m.height > 0 && m.height-14 > avail {
-		avail = m.height - 14
+	if m.height > 0 && m.height-filePickerHeightPadding > avail {
+		avail = m.height - filePickerHeightPadding
 	}
 	fpH := avail - 11
 	if fpH < 8 {

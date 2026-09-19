@@ -12,6 +12,7 @@ import (
 // extracts the record's fields.
 type RegexParser struct {
 	regexes []*regexp.Regexp
+	names   [][]string
 }
 
 // NewRegexParser compiles the given patterns and returns a RegexParser.
@@ -34,7 +35,11 @@ func NewRegexParser(patterns ...string) (*RegexParser, error) {
 	if len(regexes) == 0 {
 		return nil, fmt.Errorf("parser: regex parser requires at least one non-empty pattern")
 	}
-	return &RegexParser{regexes: regexes}, nil
+	names := make([][]string, len(regexes))
+	for i, re := range regexes {
+		names[i] = re.SubexpNames()
+	}
+	return &RegexParser{regexes: regexes, names: names}, nil
 }
 
 // Parse implements Parser. Named capture groups from the first matching pattern become record fields.
@@ -43,10 +48,10 @@ func NewRegexParser(patterns ...string) (*RegexParser, error) {
 func (p *RegexParser) Parse(line string) (record.Record, error) {
 	r := record.NewRecord(line)
 
-	for _, re := range p.regexes {
+	for idx, re := range p.regexes {
 		match := re.FindStringSubmatch(line)
 		if match != nil {
-			names := re.SubexpNames()
+			names := p.names[idx]
 			for i, name := range names {
 				if i == 0 || name == "" {
 					continue // skip full match and unnamed groups

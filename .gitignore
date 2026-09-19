@@ -46,5 +46,7 @@ dist/
 # macOS
 .DS_Store
 plan.md
+plan-history.md
 PR_*.md
 *.png
+.oml.yaml

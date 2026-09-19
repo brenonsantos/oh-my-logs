@@ -31,6 +31,12 @@ const (
 
 	// inspectorDividerRows is the row height of the inspector metadata header/divider.
 	inspectorDividerRows = 1
+
+	// markerDrawerHeight is the row height of the bottom-docked stream marker drawer.
+	markerDrawerHeight = 4
+
+	// minDrawerTableHeight is the minimum table rows preserved when a docked drawer is open.
+	minDrawerTableHeight = 3
 )
 
 // Column Layout & Sizing Constants
@@ -87,11 +93,38 @@ const (
 	// modalWidthHelp is the width for the keyboard shortcuts help dialog.
 	modalWidthHelp = 89
 
+	// Responsive File Picker Modal Dimensions
+	minFilePickerWidth      = 86
+	maxFilePickerWidth      = 116
+	minFilePickerInnerWidth = 40
+	filePickerWidthRatio    = 0.72
+	filePickerHeightPadding = 14
+
+	// Responsive Row Detail Modal Dimensions
+	minRowDetailWidth   = 68
+	maxRowDetailWidth   = 115
+	minRowDetailHeight  = 14
+	rowDetailWidthRatio = 0.82
+
+	// minMarkerInputWidth is the minimum visual width for the stream marker note input prompt.
+	minMarkerInputWidth = 10
+
 	// minSavePresetInputWidth is the minimum visual width for the preset name input prompt.
 	minSavePresetInputWidth = 10
 
 	// savePresetPromptLabelWidth is the character offset reserved for "Preset Name: ".
 	savePresetPromptLabelWidth = 17
+)
+
+// Terminal Screen Row Offsets
+const (
+	// tabBarRow is the terminal row Y coordinate where tab headers are rendered when tabs > 1.
+	tabBarRow = 2
+
+	// Bottom chrome row offsets relative to terminal height (m.height):
+	keyBarBottomOffset     = 1
+	statusBarBottomOffset  = 2
+	hScrollbarBottomOffset = 3
 )
 
 // Scrollbar & Interaction Constants
@@ -101,6 +134,15 @@ const (
 
 	// minScrollThumbWidth is the minimum character width of a scrollbar thumb.
 	minScrollThumbWidth = 3
+
+	// mouseWheelScrollStep is the number of rows scrolled on vertical mouse wheel events.
+	mouseWheelScrollStep = 3
+
+	// mouseWheelHorizontalStep is the number of characters scrolled on Shift+wheel events.
+	mouseWheelHorizontalStep = 6
+
+	// detailModalScrollStep is the number of rows scrolled in the log inspector modal.
+	detailModalScrollStep = 2
 
 	// doubleClickThreshold is the maximum duration between two clicks on the same row to register a double-click.
 	doubleClickThreshold = 400 * time.Millisecond

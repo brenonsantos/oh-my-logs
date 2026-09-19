@@ -305,8 +305,8 @@ func (m Model) viewMarkerDrawer() string {
 	promptW := lipgloss.Width(noteLabel) + lipgloss.Width(bracketOpen)
 	bracketCloseW := lipgloss.Width(bracketClose)
 	availInputW := w - promptW - bracketCloseW - 2
-	if availInputW < 10 {
-		availInputW = 10
+	if availInputW < minMarkerInputWidth {
+		availInputW = minMarkerInputWidth
 	}
 	inputStyle := baseStyle.Foreground(colorFg)
 	input := m.markerInput.RenderWindow(availInputW, inputStyle)
