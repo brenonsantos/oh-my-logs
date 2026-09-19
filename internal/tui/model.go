@@ -39,6 +39,7 @@ const (
 	modeRowDetail
 	modeColumnModal
 	modeThemeModal
+	modeMarkerPrompt
 )
 
 type filePickerPurpose int
@@ -207,6 +208,13 @@ type Model struct {
 	// Serial TX transmission prompt
 	txInput  TextInput
 	txEnding serial.LineEnding
+
+	// Bench marker annotation prompt
+	markerInput      TextInput
+	markerTargetID   uint64
+	markerTargetRow  int
+	markerTargetText string
+	markerTargetTime time.Time
 
 	// Easter egg mini-game
 	activeGame     game.MiniGame
@@ -442,6 +450,7 @@ func New(
 		searchInput:         NewTextInput(false),
 		savePresetNameInput: NewTextInput(false),
 		txInput:             NewTextInput(true),
+		markerInput:         NewTextInput(true),
 		txEnding:            txEnd,
 		splitMode:           SplitNone,
 		splitLeftTab:        0,

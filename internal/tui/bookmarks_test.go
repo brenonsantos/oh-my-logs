@@ -46,8 +46,8 @@ func TestBookmarkToggle(t *testing.T) {
 		t.Errorf("expected message to mention Pinned row 2, got %q", m.message)
 	}
 
-	// Untoggle bookmark with 'm'
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	// Untoggle bookmark with 'b'
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
 	m = updated.(Model)
 
 	if len(m.bookmarks) != 0 {

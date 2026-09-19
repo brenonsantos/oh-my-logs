@@ -53,6 +53,10 @@ func (m Model) View() string {
 		sb.WriteString(m.viewGameModal())
 	} else if len(m.visible) == 0 && m.splitMode == SplitNone {
 		sb.WriteString(m.viewEmptyState())
+		if m.mode == modeMarkerPrompt {
+			sb.WriteByte('\n')
+			sb.WriteString(m.viewMarkerDrawer())
+		}
 	} else if m.splitMode != SplitNone {
 		sb.WriteString(m.viewSplitTable())
 		if m.isInspectorActive() && m.inspectorHeight > 0 {
@@ -60,6 +64,10 @@ func (m Model) View() string {
 			sb.WriteString(m.viewInspectorDivider())
 			sb.WriteByte('\n')
 			sb.WriteString(m.viewInspectorDrawer())
+		}
+		if m.mode == modeMarkerPrompt {
+			sb.WriteByte('\n')
+			sb.WriteString(m.viewMarkerDrawer())
 		}
 	} else {
 		// Table Header
@@ -79,6 +87,12 @@ func (m Model) View() string {
 			sb.WriteString(m.viewInspectorDivider())
 			sb.WriteByte('\n')
 			sb.WriteString(m.viewInspectorDrawer())
+		}
+
+		// Marker Note Bottom Drawer
+		if m.mode == modeMarkerPrompt {
+			sb.WriteByte('\n')
+			sb.WriteString(m.viewMarkerDrawer())
 		}
 	}
 

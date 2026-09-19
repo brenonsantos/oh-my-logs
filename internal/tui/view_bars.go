@@ -485,11 +485,14 @@ func (m Model) renderKeyBarContent() string {
 	case modeThemeModal:
 		return "  " + theme.Muted.Render("Themes: [↑/↓: live preview · Enter: apply · Esc: cancel]")
 
+	case modeMarkerPrompt:
+		return "  " + theme.KeyName.Render("Enter") + " " + theme.Muted.Render("insert marker") + "  ·  " + theme.KeyName.Render("Esc") + " " + theme.Muted.Render("cancel")
+
 	case modeHelp:
 		return "  " + theme.Muted.Render("Press ") + theme.KeyName.Render("?") + theme.Muted.Render(", ") + theme.KeyName.Render("Esc") + theme.Muted.Render(", or ") + theme.KeyName.Render("q") + theme.Muted.Render(" to close help")
 
 	case modeRowDetail:
-		return "  " + theme.Muted.Render("Log Inspector: [↑/↓: scroll · ←/→: prev/next · y: copy detail · Y: copy raw · b: pin · Esc/Enter: close]")
+		return "  " + theme.Muted.Render("Log Inspector: [↑/↓: scroll · ←/→: prev/next · y: copy detail · Y: copy raw · b: pin · m: mark · Esc/Enter: close]")
 
 	default:
 		hint := func(k, action string) string {
@@ -595,6 +598,7 @@ func (m Model) renderKeyBarContent() string {
 				hint("F", "presets"),
 				hint(",", "⚙ cfg"),
 				hint("o", "cols"),
+				hint("m", "mark"),
 				hint("s", "save"),
 				hint("Space", pauseLabel),
 				hint("c", "clear"),

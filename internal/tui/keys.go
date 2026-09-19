@@ -32,6 +32,7 @@ type keyMap struct {
 	NewTab           key.Binding
 	CloseTab         key.Binding
 	ToggleBookmark   key.Binding
+	AddMarker        key.Binding
 	NextBookmark     key.Binding
 	PrevBookmark     key.Binding
 	BookmarksOnly    key.Binding
@@ -210,8 +211,12 @@ func defaultKeyMap() keyMap {
 			key.WithHelp("Ctrl+W", "close tab"),
 		),
 		ToggleBookmark: key.NewBinding(
-			key.WithKeys("b", "m"),
-			key.WithHelp("b/m", "bookmark row"),
+			key.WithKeys("b"),
+			key.WithHelp("b", "bookmark row"),
+		),
+		AddMarker: key.NewBinding(
+			key.WithKeys("m", "M"),
+			key.WithHelp("m", "marker note"),
 		),
 		NextBookmark: key.NewBinding(
 			key.WithKeys("]"),
