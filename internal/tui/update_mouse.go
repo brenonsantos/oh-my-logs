@@ -98,7 +98,7 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeNormal
 		return m, nil
 	}
-	if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+	if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter && m.mode != modeTimeJump {
 		return m, nil
 	}
 
@@ -362,7 +362,7 @@ func (m Model) handleStatusBarMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) 
 }
 
 func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+	if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter && m.mode != modeTimeJump {
 		return m, nil
 	}
 
@@ -455,7 +455,7 @@ func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleMouseRelease(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter {
+	if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter && m.mode != modeTimeJump {
 		return m, nil
 	}
 	if start, end := m.selectionRange(); start >= 0 && end >= 0 {

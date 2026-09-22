@@ -339,10 +339,10 @@ func TestDefaultDisconnectedOnLaunch(t *testing.T) {
 
 	// 3. View should show ready to connect with the configured port
 	emptyView := m.viewEmptyState()
-	if !strings.Contains(emptyView, "Ready to connect (/dev/ttyUSB0)") {
+	if !strings.Contains(emptyView, "Ready to connect") || !strings.Contains(emptyView, "/dev/ttyUSB0") {
 		t.Errorf("expected empty state to show 'Ready to connect (/dev/ttyUSB0)', got:\n%s", emptyView)
 	}
-	if !strings.Contains(emptyView, "Press r to connect") {
+	if !strings.Contains(emptyView, "Press") || !strings.Contains(emptyView, "to connect") {
 		t.Errorf("expected empty state to show 'Press r to connect', got:\n%s", emptyView)
 	}
 

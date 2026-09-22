@@ -20,6 +20,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleSearchKey(msg)
 	case modeFilter:
 		return m.handleFilterKey(msg)
+	case modeTimeJump:
+		return m.handleTimeJumpKey(msg)
 	case modeFilterPresets:
 		return m.handleFilterPresetsKey(msg)
 	case modeSavePresetPrompt:
@@ -72,6 +74,12 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeFilter
 		m.filterInput.SetText(m.currentTab().FilterRaw)
 		m.filterInput.ResetHistoryCursor()
+		return m, nil
+
+	case keyMatches(msg, m.keys.TimeJump):
+		m.mode = modeTimeJump
+		m.timeJumpInput.Clear()
+		m.timeJumpInput.ResetHistoryCursor()
 		return m, nil
 
 	case keyMatches(msg, m.keys.SendTX):

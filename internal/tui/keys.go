@@ -51,6 +51,7 @@ type keyMap struct {
 	CopyRaw          key.Binding
 	SelectUp         key.Binding
 	SelectDown       key.Binding
+	TimeJump         key.Binding
 	ViewDetail       key.Binding
 	Help             key.Binding
 	Game             key.Binding
@@ -74,8 +75,12 @@ func defaultKeyMap() keyMap {
 			key.WithHelp("Shift+↑/K", "expand selection up"),
 		),
 		SelectDown: key.NewBinding(
-			key.WithKeys("shift+down", "J"),
-			key.WithHelp("Shift+↓/J", "expand selection down"),
+			key.WithKeys("shift+down"),
+			key.WithHelp("Shift+↓", "expand selection down"),
+		),
+		TimeJump: key.NewBinding(
+			key.WithKeys("J"),
+			key.WithHelp("J", "jump to time"),
 		),
 		Search: key.NewBinding(
 			key.WithKeys("ctrl+f"),

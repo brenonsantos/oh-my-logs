@@ -280,7 +280,7 @@ func TestShiftUpDownMultiRowSelection(t *testing.T) {
 	}
 
 	// 2. Press Shift+Down to expand selection to row 3 (2 rows: two, three)
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("shift+down")})
 	m = updated.(Model)
 	if m.selectionStart != 2 || m.selectionEnd != 3 {
 		t.Fatalf("expected selection range 2..3, got %d..%d", m.selectionStart, m.selectionEnd)
@@ -290,7 +290,7 @@ func TestShiftUpDownMultiRowSelection(t *testing.T) {
 	}
 
 	// 3. Press Shift+Down again (3 rows: two, three, four)
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("shift+down")})
 	m = updated.(Model)
 	if m.selectionStart != 2 || m.selectionEnd != 4 {
 		t.Fatalf("expected selection range 2..4, got %d..%d", m.selectionStart, m.selectionEnd)
@@ -300,7 +300,7 @@ func TestShiftUpDownMultiRowSelection(t *testing.T) {
 	}
 
 	// 4. Press Shift+Up to contract selection back to row 3 (2 rows: two, three)
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("shift+up")})
 	m = updated.(Model)
 	if m.selectionStart != 2 || m.selectionEnd != 3 {
 		t.Fatalf("expected selection range 2..3, got %d..%d", m.selectionStart, m.selectionEnd)

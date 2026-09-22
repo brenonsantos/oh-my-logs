@@ -464,6 +464,12 @@ func (m Model) renderKeyBarContent() string {
 		help := theme.Muted.Render("  [Enter: apply · ↑/↓: history · ←/→: cursor · ^P: presets · ^V: paste · Esc: cancel]")
 		return "  " + prompt + text + help
 
+	case modeTimeJump:
+		prompt := theme.Primary.Render("Jump to time: ")
+		text := m.timeJumpInput.Render(theme.Content)
+		help := theme.Muted.Render("  [Enter: jump · ↑/↓: history · ←/→: cursor · ^V: paste · Esc: cancel · e.g. 14:20:00 or -5m / +30s]")
+		return "  " + prompt + text + help
+
 	case modeFilterPresets:
 		return "  " + theme.Muted.Render("Filter Presets: [Enter: apply · ↑/↓: navigate · s: save active · d: delete · Esc: close]")
 
@@ -527,6 +533,7 @@ func (m Model) renderKeyBarContent() string {
 				hint("Esc", "unselect"),
 				hint("f", "filter"),
 				hint("^F", "search"),
+				hint("J", "time"),
 				hint("Space", "resume"),
 				hint("c", "clear"),
 				hint(",", "⚙ cfg"),
@@ -549,6 +556,7 @@ func (m Model) renderKeyBarContent() string {
 			candidates = append(candidates,
 				hint("f", "filter"),
 				hint("^F", "search"),
+				hint("J", "time"),
 				hint("w", "pane"),
 				hint("S", "sync"),
 				hint(splitCloseKey, "unsplit"),
@@ -597,6 +605,7 @@ func (m Model) renderKeyBarContent() string {
 				hint("P", "profile"),
 				hint("F", "presets"),
 				hint(",", "⚙ cfg"),
+				hint("J", "time"),
 				hint("o", "cols"),
 				hint("m", "mark"),
 				hint("s", "save"),
