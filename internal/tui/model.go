@@ -27,6 +27,7 @@ const (
 	modeNormal inputMode = iota
 	modeSearch
 	modeFilter
+	modeTimeJump
 	modePortPicker
 	modeProfilePicker
 	modeFilterPresets
@@ -168,6 +169,9 @@ type Model struct {
 	searchInput   TextInput
 	searchMatches []int // indices into visible
 	searchCursor  int   // match navigation index into searchMatches
+
+	// Timestamp Jump
+	timeJumpInput TextInput
 
 	// Scroll / follow
 	scrollOffset int // index of the top visible row
@@ -448,6 +452,7 @@ func New(
 		bookmarks:           make(map[uint64]struct{}),
 		filterInput:         NewTextInput(true),
 		searchInput:         NewTextInput(false),
+		timeJumpInput:       NewTextInput(true),
 		savePresetNameInput: NewTextInput(false),
 		txInput:             NewTextInput(true),
 		markerInput:         NewTextInput(true),
