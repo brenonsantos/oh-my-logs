@@ -425,6 +425,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── Key events ───────────────────────────────────────────────────────────
 	case tea.KeyMsg:
+		s := msg.String()
+		if msg.Type == tea.KeyRunes {
+			s = string(msg.Runes)
+		}
+		if isMouseSequence(s) {
+			if strings.Contains(s, "64") {
+				m.follow = false
+				m.scrollOffset -= mouseWheelScrollStep
+				m.clampScroll()
+				if m.splitMode != SplitNone && m.syncScroll {
+					m.syncOtherPaneChronologically()
+				}
+			} else if strings.Contains(s, "65") {
+				m.scrollOffset += mouseWheelScrollStep
+				m.clampScroll()
+				h := m.activeDataHeight()
+				if m.scrollOffset >= len(m.visible)-h {
+					m.follow = true
+				} else {
+					m.follow = false
+				}
+				if m.splitMode != SplitNone && m.syncScroll {
+					m.syncOtherPaneChronologically()
+				}
+			}
+			return m, nil
+		}
 		return m.handleKey(msg)
 	}
 
