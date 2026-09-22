@@ -195,9 +195,81 @@ func handleTextInput(current string, msg tea.KeyMsg) string {
 	return res
 }
 
+func isMouseSuffixFragment(s string) bool {
+	if len(s) < 2 {
+		return false
+	}
+	if !strings.HasSuffix(s, "M") && !strings.HasSuffix(s, "m") {
+		return false
+	}
+	prefix := s[:len(s)-1]
+	hasDigit := false
+	for _, r := range prefix {
+		if r >= '0' && r <= '9' {
+			hasDigit = true
+		} else if r != ';' {
+			return false
+		}
+	}
+	return hasDigit
+}
+
+func isMousePrefixFragment(s string) bool {
+	if len(s) < 2 {
+		return false
+	}
+	p := s
+	if strings.HasPrefix(p, "\x1b[<") {
+		p = p[3:]
+	} else if strings.HasPrefix(p, "[<") {
+		p = p[2:]
+	} else if strings.HasPrefix(p, "<") {
+		p = p[1:]
+	} else {
+		return false
+	}
+	if len(p) == 0 || p[0] < '0' || p[0] > '9' {
+		return false
+	}
+	for i, r := range p {
+		if i == len(p)-1 && (r == 'M' || r == 'm') {
+			continue
+		}
+		if (r < '0' || r > '9') && r != ';' {
+			return false
+		}
+	}
+	return true
+}
+
+func isMouseCoordFragment(s string) bool {
+	if len(s) < 3 || !strings.Contains(s, ";") {
+		return false
+	}
+	for _, r := range s {
+		if (r < '0' || r > '9') && r != ';' {
+			return false
+		}
+	}
+	return true
+}
+
+// isMouseSequence checks if a string is a leaked terminal mouse reporting sequence
+// or any fragment produced when mouse sequences are split across buffer boundaries.
+func isMouseSequence(s string) bool {
+	if len(s) < 2 {
+		return false
+	}
+	return isMousePrefixFragment(s) || isMouseSuffixFragment(s) || isMouseCoordFragment(s)
+}
+
 // handleTextInputWithCursor handles printable character insertion, deletion, and horizontal navigation.
 // It accepts the current string and the 0-indexed rune cursor position pos, returning the updated string and cursor.
 func handleTextInputWithCursor(current string, pos int, msg tea.KeyMsg) (string, int) {
+	if isMouseSequence(msg.String()) || (msg.Type == tea.KeyRunes && isMouseSequence(string(msg.Runes))) {
+		return current, pos
+	}
+
 	runes := []rune(current)
 	if pos < 0 {
 		pos = 0
@@ -260,6 +332,9 @@ func handleTextInputWithCursor(current string, pos int, msg tea.KeyMsg) (string,
 
 	case tea.KeyRunes:
 		if !msg.Alt {
+			if isMouseSequence(string(msg.Runes)) {
+				return current, pos
+			}
 			for _, r := range msg.Runes {
 				if unicode.IsPrint(r) {
 					runes = append(runes[:pos], append([]rune{r}, runes[pos:]...)...)

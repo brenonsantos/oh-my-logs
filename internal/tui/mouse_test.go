@@ -663,3 +663,93 @@ func TestMouseClickInSplitMode(t *testing.T) {
 	}
 }
 
+func TestMouseScroll_DoesNotPolluteSearchOrFilter(t *testing.T) {
+	m := newTestModel()
+	m.width = 100
+	m.height = 30
+	m.recalcLayout()
+
+	// Fill with 50 test records
+	for i := 0; i < 50; i++ {
+		m.ingestRecord(record.NewRecord(fmt.Sprintf("msg %d", i)))
+	}
+	m.scrollOffset = 20
+	m.follow = false
+
+	// 1. Enter Search mode (Ctrl+F)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlF})
+	m = updated.(Model)
+	if m.mode != modeSearch {
+		t.Fatalf("expected modeSearch, got %v", m.mode)
+	}
+
+	// Type 'e', 'r', 'r'
+	for _, r := range "err" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = updated.(Model)
+	}
+	if m.searchInput.Value != "err" {
+		t.Fatalf("expected searchInput 'err', got %q", m.searchInput.Value)
+	}
+
+	// Leaked Wheel Up sequence "<64;61;35M" arriving as KeyMsg
+	initialOffset := m.scrollOffset
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("<64;61;35M")})
+	m = updated.(Model)
+
+	// Search input must NOT be polluted
+	if m.searchInput.Value != "err" {
+		t.Errorf("expected searchInput to remain 'err', got %q", m.searchInput.Value)
+	}
+	// Viewport must have scrolled up
+	if m.scrollOffset >= initialOffset {
+		t.Errorf("expected scrollOffset to decrease (scroll up) from %d, got %d", initialOffset, m.scrollOffset)
+	}
+
+	// Leaked Wheel Down sequence "<65;38;40M" arriving as KeyMsg
+	currOffset := m.scrollOffset
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("<65;38;40M")})
+	m = updated.(Model)
+
+	if m.searchInput.Value != "err" {
+		t.Errorf("expected searchInput to remain 'err', got %q", m.searchInput.Value)
+	}
+	if m.scrollOffset <= currOffset {
+		t.Errorf("expected scrollOffset to increase (scroll down) from %d, got %d", currOffset, m.scrollOffset)
+	}
+
+	// Exit search
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.mode != modeNormal {
+		t.Fatalf("expected modeNormal after Esc, got %v", m.mode)
+	}
+
+	// 2. Enter Filter mode ('f')
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m = updated.(Model)
+	if m.mode != modeFilter {
+		t.Fatalf("expected modeFilter, got %v", m.mode)
+	}
+
+	// Type 's' as in user's screenshot
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	m = updated.(Model)
+	if m.filterInput.Value != "s" {
+		t.Fatalf("expected filterInput 's', got %q", m.filterInput.Value)
+	}
+
+	// Send burst of leaked mouse sequences from the screenshot
+	burst := []string{"<64;61;35M", "<64;61;35M", "<64;59;38M", "<64;59;38M", "<65;38;40M"}
+	for _, seq := range burst {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(seq)})
+		m = updated.(Model)
+	}
+
+	// Filter input must remain pure "s", exactly as the user intended
+	if m.filterInput.Value != "s" {
+		t.Errorf("expected filterInput to strictly remain 's', got %q", m.filterInput.Value)
+	}
+}
+
+

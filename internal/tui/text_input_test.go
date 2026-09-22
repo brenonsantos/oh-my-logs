@@ -194,3 +194,51 @@ func TestTextInput_RenderAndWindow(t *testing.T) {
 		t.Fatalf("expected window render to contain 'hello', got %q", rw)
 	}
 }
+
+func TestTextInput_IgnoresMouseSequences(t *testing.T) {
+	ti := NewTextInput(false)
+	ti.SetText("s")
+
+	// 1. Full SGR mouse wheel up sequence from screenshot: "<64;61;35M"
+	ti.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("<64;61;35M")})
+	if ti.Text() != "s" {
+		t.Fatalf("expected text to remain 's', got %q", ti.Text())
+	}
+
+	// 2. SGR mouse wheel down sequence from screenshot: "<65;38;40M"
+	ti.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("<65;38;40M")})
+	if ti.Text() != "s" {
+		t.Fatalf("expected text to remain 's', got %q", ti.Text())
+	}
+
+	// 3. CSI prefixed SGR sequence: "[<64;61;35M"
+	ti.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("[<64;61;35M")})
+	if ti.Text() != "s" {
+		t.Fatalf("expected text to remain 's', got %q", ti.Text())
+	}
+
+	// 4. Trailing SGR fragment: "64;61;35M"
+	ti.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("64;61;35M")})
+	if ti.Text() != "s" {
+		t.Fatalf("expected text to remain 's', got %q", ti.Text())
+	}
+
+	// 5. Short buffer-split fragments from fast scrolling (Screenshot 2: ";19M", "4M", "22M", "<6")
+	fastScrollFragments := []string{";19M", "4M", "22M", "<6", "<64;", "59;38", ";22M"}
+	for _, frag := range fastScrollFragments {
+		ti.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(frag)})
+		if ti.Text() != "s" {
+			t.Fatalf("expected text to remain 's' after fragment %q, got %q", frag, ti.Text())
+		}
+	}
+
+	// 6. Normal typing character by character is never blocked
+	ti.Clear()
+	for _, r := range "<module;error>" {
+		ti.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	if ti.Text() != "<module;error>" {
+		t.Fatalf("expected normal typing '<module;error>', got %q", ti.Text())
+	}
+}
+
