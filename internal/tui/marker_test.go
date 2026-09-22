@@ -333,3 +333,180 @@ func TestMarker_RowDetailModal_PressM(t *testing.T) {
 	}
 }
 
+func TestMarker_DeleteInNormalMode(t *testing.T) {
+	m := setupTestModelForMarkers(t)
+	m.ingestRecord(record.NewRecord("line 1"))
+	m.recordMarker("marker to delete")
+	m.ingestRecord(record.NewRecord("line 2"))
+
+	if len(m.visible) != 3 {
+		t.Fatalf("expected 3 records, got %d", len(m.visible))
+	}
+
+	markerID := m.visible[1].ID
+	if !m.visible[1].IsMarker {
+		t.Fatalf("expected row 1 to be marker")
+	}
+
+	// Focus marker row
+	m.selectedRow = 1
+
+	// Press 'd' to delete marker
+	res, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	m = res.(Model)
+
+	if len(m.visible) != 2 {
+		t.Fatalf("expected 2 visible records after deleting marker, got %d", len(m.visible))
+	}
+	if m.visible[0].Raw != "line 1" || m.visible[1].Raw != "line 2" {
+		t.Fatalf("unexpected records remaining: %v", m.visible)
+	}
+	if m.buffer.Len() != 2 {
+		t.Fatalf("expected 2 records in buffer, got %d", m.buffer.Len())
+	}
+	if _, ok := m.bookmarks[markerID]; ok {
+		t.Errorf("expected marker ID %d to be removed from bookmarks", markerID)
+	}
+	if !strings.Contains(m.message, "Removed marker") {
+		t.Errorf("expected status message mentioning 'Removed marker', got %q", m.message)
+	}
+
+	// Try deleting with 'delete' and 'backspace' keys on another marker
+	m.recordMarker("second marker")
+	if len(m.visible) != 3 {
+		t.Fatalf("expected 3 records after adding second marker, got %d", len(m.visible))
+	}
+	m.selectedRow = 2
+
+	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	m = res.(Model)
+	if len(m.visible) != 2 {
+		t.Fatalf("expected 2 visible records after pressing Delete, got %d", len(m.visible))
+	}
+}
+
+func TestMarker_NormalRecordNotDeletedByD(t *testing.T) {
+	m := setupTestModelForMarkers(t)
+	m.ingestRecord(record.NewRecord("important log line"))
+	m.selectedRow = 0
+
+	// Press 'd' on regular log row (must NOT delete)
+	res, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	m = res.(Model)
+
+	if len(m.visible) != 1 {
+		t.Fatalf("expected regular log not to be deleted by 'd', got len %d", len(m.visible))
+	}
+	if m.buffer.Len() != 1 {
+		t.Fatalf("expected buffer to still have 1 record, got %d", m.buffer.Len())
+	}
+}
+
+func TestMarker_EditMarkerNote(t *testing.T) {
+	m := setupTestModelForMarkers(t)
+	m.recordMarker("initial milestone")
+
+	if len(m.visible) != 1 || m.visible[0].MarkerNote != "initial milestone" {
+		t.Fatalf("expected marker with note 'initial milestone'")
+	}
+	markerID := m.visible[0].ID
+
+	// Select the marker row
+	m.selectedRow = 0
+
+	// Press 'm' to edit
+	m.openMarkerPrompt()
+
+	if !m.markerIsEditing {
+		t.Errorf("expected markerIsEditing to be true")
+	}
+	if m.markerEditID != markerID {
+		t.Errorf("expected markerEditID %d, got %d", markerID, m.markerEditID)
+	}
+	if m.markerInput.Value != "initial milestone" {
+		t.Errorf("expected markerInput to be pre-filled with 'initial milestone', got %q", m.markerInput.Value)
+	}
+
+	// Change text to 'updated milestone'
+	m.markerInput.SetText("updated milestone")
+	res, _ := m.handleMarkerPromptKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m = res.(Model)
+
+	if m.mode != modeNormal {
+		t.Errorf("expected return to modeNormal after save")
+	}
+	if len(m.visible) != 1 {
+		t.Fatalf("expected still 1 marker (no duplicate inserted), got %d", len(m.visible))
+	}
+	if m.visible[0].MarkerNote != "updated milestone" {
+		t.Errorf("expected updated note 'updated milestone', got %q", m.visible[0].MarkerNote)
+	}
+	if m.visible[0].ID != markerID {
+		t.Errorf("expected marker ID to be preserved (%d), got %d", markerID, m.visible[0].ID)
+	}
+	if !strings.Contains(m.message, "Updated marker") {
+		t.Errorf("expected status message mentioning 'Updated marker', got %q", m.message)
+	}
+}
+
+func TestMarker_DeleteFromDrawerCtrlD(t *testing.T) {
+	m := setupTestModelForMarkers(t)
+	m.recordMarker("marker to delete via drawer")
+	m.selectedRow = 0
+
+	// Open prompt on marker
+	m.openMarkerPrompt()
+	if !m.markerIsEditing {
+		t.Fatalf("expected markerIsEditing true")
+	}
+
+	// Press Ctrl+D
+	res, _ := m.handleMarkerPromptKey(tea.KeyMsg{Type: tea.KeyCtrlD})
+	m = res.(Model)
+
+	if m.mode != modeNormal {
+		t.Errorf("expected modeNormal after Ctrl+D")
+	}
+	if len(m.visible) != 0 {
+		t.Fatalf("expected marker to be removed, got %d visible", len(m.visible))
+	}
+	if m.buffer.Len() != 0 {
+		t.Fatalf("expected buffer to be empty, got %d", m.buffer.Len())
+	}
+}
+
+func TestMarker_DeleteFromRowDetail(t *testing.T) {
+	m := setupTestModelForMarkers(t)
+	m.recordMarker("marker in detail view")
+	m.selectedRow = 0
+
+	// Open detail view
+	m.mode = modeRowDetail
+
+	// Press 'd' in detail view
+	res, _ := m.handleRowDetailKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	m = res.(Model)
+
+	if m.mode != modeNormal {
+		t.Errorf("expected detail modal to close after deleting marker, got mode %v", m.mode)
+	}
+	if len(m.visible) != 0 {
+		t.Fatalf("expected marker to be deleted from row detail modal, got %d", len(m.visible))
+	}
+}
+
+func TestMarker_KeyBarHintsForMarkerRow(t *testing.T) {
+	m := setupTestModelForMarkers(t)
+	m.recordMarker("hint marker")
+	m.selectedRow = 0
+
+	keyBar := m.viewKeyBar()
+	if !strings.Contains(keyBar, "delete marker") {
+		t.Errorf("expected key bar to contain 'delete marker' when marker is selected, got:\n%s", keyBar)
+	}
+	if !strings.Contains(keyBar, "edit marker") {
+		t.Errorf("expected key bar to contain 'edit marker' when marker is selected, got:\n%s", keyBar)
+	}
+}
+
+

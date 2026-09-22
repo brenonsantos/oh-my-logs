@@ -770,6 +770,15 @@ func (m Model) handleRowDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.openMarkerPrompt()
 		return m, nil
 
+	case msg.String() == "d" || msg.String() == "delete" || msg.String() == "backspace":
+		r, ok := m.activeInspectorRecord()
+		if ok && r.IsMarker {
+			m.removeMarker(r.ID)
+			m.mode = modeNormal
+			return m, nil
+		}
+		return m, nil
+
 	case keyMatches(msg, m.keys.ToggleBookmark) || msg.String() == "b":
 		if m.bookmarks == nil {
 			m.bookmarks = make(map[uint64]struct{})

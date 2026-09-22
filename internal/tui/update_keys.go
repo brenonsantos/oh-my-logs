@@ -160,6 +160,12 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.openMarkerPrompt()
 		return m, nil
 
+	case msg.String() == "d" || msg.String() == "delete" || msg.String() == "backspace":
+		if rec, ok := m.activeSelectedRecord(); ok && rec.IsMarker {
+			m.removeMarker(rec.ID)
+			return m, nil
+		}
+
 	case keyMatches(msg, m.keys.ViewDetail):
 		return m.openRowDetail()
 

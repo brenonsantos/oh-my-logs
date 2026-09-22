@@ -46,12 +46,13 @@ func (m Model) activeSelectedRecord() (record.Record, bool) {
 
 // openMarkerPrompt enters the marker note input mode and captures target line context.
 func (m *Model) openMarkerPrompt() {
-	m.markerInput.Reset()
 	m.mode = modeMarkerPrompt
 	m.markerTargetRow = -1
 	m.markerTargetID = 0
 	m.markerTargetText = ""
 	m.markerTargetTime = time.Time{}
+	m.markerIsEditing = false
+	m.markerEditID = 0
 
 	if rec, ok := m.activeSelectedRecord(); ok {
 		m.markerTargetRow = m.activeSelectedRowIndex()
@@ -61,24 +62,50 @@ func (m *Model) openMarkerPrompt() {
 		if m.markerTargetText == "" && rec.Fields != nil {
 			m.markerTargetText = rec.Fields["message"]
 		}
+		if rec.IsMarker {
+			m.markerIsEditing = true
+			m.markerEditID = rec.ID
+			m.markerInput.SetText(rec.MarkerNote)
+			return
+		}
 	}
+	m.markerInput.Reset()
 }
 
 // handleMarkerPromptKey processes keystrokes in the marker input mode.
 func (m Model) handleMarkerPromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
+	case msg.Type == tea.KeyCtrlD || msg.String() == "ctrl+d":
+		if m.markerIsEditing && m.markerEditID != 0 {
+			m.removeMarker(m.markerEditID)
+			m.markerInput.Reset()
+			m.markerIsEditing = false
+			m.markerEditID = 0
+			m.mode = modeNormal
+			return m, nil
+		}
+		return m, nil
+
 	case keyMatches(msg, m.keys.Cancel):
 		m.mode = modeNormal
 		m.markerInput.Reset()
+		m.markerIsEditing = false
+		m.markerEditID = 0
 		return m, nil
 
 	case keyMatches(msg, m.keys.Confirm) || msg.Type == tea.KeyEnter:
 		note := strings.TrimSpace(m.markerInput.Value)
-		m.recordMarker(note)
+		if m.markerIsEditing && m.markerEditID != 0 {
+			m.updateMarkerNote(m.markerEditID, note)
+		} else {
+			m.recordMarker(note)
+		}
 		if note != "" {
 			m.markerInput.AddHistory(note)
 		}
 		m.markerInput.Reset()
+		m.markerIsEditing = false
+		m.markerEditID = 0
 		m.mode = modeNormal
 		return m, nil
 
@@ -86,6 +113,95 @@ func (m Model) handleMarkerPromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.markerInput.HandleKey(msg)
 		return m, nil
 	}
+}
+
+// removeMarker removes a marker record by its ID from the buffer and all visible tab views.
+func (m *Model) removeMarker(markerID uint64) bool {
+	if markerID == 0 {
+		return false
+	}
+	// 1. Remove from ring buffer
+	if !m.buffer.RemoveByID(markerID) {
+		return false
+	}
+
+	// 2. Remove from bookmarks
+	if m.bookmarks != nil {
+		delete(m.bookmarks, markerID)
+	}
+
+	// 3. Remove from all tabs
+	for i := range m.tabs {
+		tab := &m.tabs[i]
+		targetIdx := -1
+		for idx, r := range tab.Visible {
+			if r.ID == markerID {
+				targetIdx = idx
+				break
+			}
+		}
+		if targetIdx >= 0 {
+			newVis := make([]record.Record, 0, len(tab.Visible)-1)
+			newVis = append(newVis, tab.Visible[:targetIdx]...)
+			newVis = append(newVis, tab.Visible[targetIdx+1:]...)
+			tab.Visible = newVis
+
+			if tab.SelectedRow > targetIdx {
+				tab.SelectedRow--
+			} else if tab.SelectedRow == targetIdx {
+				if tab.SelectedRow >= len(tab.Visible) {
+					tab.SelectedRow = len(tab.Visible) - 1
+				}
+			}
+			if i == m.activeTab {
+				m.selectedRow = tab.SelectedRow
+			}
+		}
+	}
+
+	// 4. Sync active tab to model
+	cur := m.currentTab()
+	m.visible = cur.Visible
+	if m.selectedRow >= len(m.visible) {
+		m.selectedRow = len(m.visible) - 1
+	}
+	m.clampScroll()
+	m.message = "📌 Removed marker"
+	return true
+}
+
+// updateMarkerNote modifies an existing marker's note in place across buffer and active tabs.
+func (m *Model) updateMarkerNote(markerID uint64, newNote string) bool {
+	if markerID == 0 {
+		return false
+	}
+	m.buffer.Transform(func(r record.Record) record.Record {
+		if r.ID == markerID && r.IsMarker {
+			updated := record.NewMarkerRecord(newNote, r.Timestamp)
+			updated.ID = r.ID
+			return updated
+		}
+		return r
+	})
+
+	for i := range m.tabs {
+		for idx := range m.tabs[i].Visible {
+			if m.tabs[i].Visible[idx].ID == markerID && m.tabs[i].Visible[idx].IsMarker {
+				updated := record.NewMarkerRecord(newNote, m.tabs[i].Visible[idx].Timestamp)
+				updated.ID = markerID
+				m.tabs[i].Visible[idx] = updated
+			}
+		}
+	}
+
+	cur := m.currentTab()
+	m.visible = cur.Visible
+	if newNote != "" {
+		m.message = fmt.Sprintf("📌 Updated marker: %s", newNote)
+	} else {
+		m.message = "📌 Updated marker"
+	}
+	return true
 }
 
 // recordMarker creates and inserts a milestone marker into the log stream at the target row or end of stream.
@@ -243,23 +359,29 @@ func (m Model) viewMarkerDrawer() string {
 	bg := colorSelected
 	baseStyle := lipgloss.NewStyle().Background(bg)
 
-	// 1. Header line: ─── 📌 ADD STREAM MARKER ── Target: Line #137 [11:03:20.322] ─── [Enter: insert · Esc: cancel] ───
+	// 1. Header line: ─── 📌 ADD/EDIT STREAM MARKER ── Target: Line #137 [11:03:20.322] ─── [Enter: insert/save · Esc: cancel] ───
 	var targetVal string
-	if m.markerTargetRow >= 0 {
-		tsStr := ""
-		if !m.markerTargetTime.IsZero() {
-			tsStr = " [" + m.markerTargetTime.Format("15:04:05.000") + "]"
-		}
+	tsStr := ""
+	if !m.markerTargetTime.IsZero() {
+		tsStr = " [" + m.markerTargetTime.Format("15:04:05.000") + "]"
+	}
+
+	actionLabel := "ADD STREAM MARKER"
+	help := " [Enter: insert · ←/→: cursor · ↑/↓: history · Esc: cancel] ───"
+	if m.markerIsEditing {
+		actionLabel = "EDIT STREAM MARKER"
+		help = " [Enter: save · ^D: delete · ←/→: cursor · Esc: cancel] ───"
+		targetVal = fmt.Sprintf("Marker #%d%s", m.markerTargetRow+1, tsStr)
+	} else if m.markerTargetRow >= 0 {
 		targetVal = fmt.Sprintf("Target: Line #%d%s", m.markerTargetRow+1, tsStr)
 	} else {
 		targetVal = "Target: End of Stream (Live Milestone)"
 	}
 
-	title := fmt.Sprintf("─── 📌 ADD STREAM MARKER ── %s ", targetVal)
+	title := fmt.Sprintf("─── 📌 %s ── %s ", actionLabel, targetVal)
 	titleStyled := baseStyle.Foreground(colorYellow).Bold(true).Render(title)
 	titleW := lipgloss.Width(titleStyled)
 
-	help := " [Enter: insert · ←/→: cursor · ↑/↓: history · Esc: cancel] ───"
 	helpStyled := baseStyle.Foreground(colorMuted).Render(help)
 	helpW := lipgloss.Width(helpStyled)
 
@@ -276,7 +398,11 @@ func (m Model) viewMarkerDrawer() string {
 	}
 
 	// 2. Log preview line:  Log:  <message>
-	logLabel := baseStyle.Foreground(colorMuted).Bold(true).Render("  Log:  ")
+	logLabelText := "  Log:  "
+	if m.markerIsEditing {
+		logLabelText = "  Marker: "
+	}
+	logLabel := baseStyle.Foreground(colorMuted).Bold(true).Render(logLabelText)
 	var logBody string
 	if m.markerTargetText != "" {
 		preview := m.markerTargetText
@@ -286,7 +412,11 @@ func (m Model) viewMarkerDrawer() string {
 		} else if len(preview) > avail {
 			preview = preview[:max(0, avail)]
 		}
-		logBody = baseStyle.Foreground(colorFg).Render(preview)
+		if m.markerIsEditing {
+			logBody = baseStyle.Foreground(colorYellow).Render(preview)
+		} else {
+			logBody = baseStyle.Foreground(colorFg).Render(preview)
+		}
 	} else {
 		logBody = baseStyle.Foreground(colorMuted).Italic(true).Render("(new live milestone marker at end of stream)")
 	}

@@ -102,6 +102,44 @@ func (b *Buffer) InsertBeforeID(targetID uint64, r Record) {
 	b.head = b.size % b.cap
 }
 
+// RemoveByID removes the record with the given ID from the buffer.
+// Returns true if the record was found and removed, false otherwise.
+func (b *Buffer) RemoveByID(id uint64) bool {
+	if id == 0 {
+		return false
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.size == 0 {
+		return false
+	}
+
+	all := make([]Record, b.size)
+	start := (b.head - b.size + b.cap) % b.cap
+	targetIdx := -1
+	for i := 0; i < b.size; i++ {
+		idx := (start + i) % b.cap
+		all[i] = b.data[idx]
+		if all[i].ID == id && targetIdx == -1 {
+			targetIdx = i
+		}
+	}
+
+	if targetIdx == -1 {
+		return false
+	}
+
+	newAll := make([]Record, 0, len(all)-1)
+	newAll = append(newAll, all[:targetIdx]...)
+	newAll = append(newAll, all[targetIdx+1:]...)
+
+	copy(b.data, newAll)
+	b.size = len(newAll)
+	b.head = b.size % b.cap
+	return true
+}
+
 // All returns a slice of all records in insertion order (oldest first).
 // The returned slice is a copy; modifications do not affect the buffer.
 func (b *Buffer) All() []Record {

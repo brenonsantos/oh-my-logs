@@ -492,12 +492,20 @@ func (m Model) renderKeyBarContent() string {
 		return "  " + theme.Muted.Render("Themes: [↑/↓: live preview · Enter: apply · Esc: cancel]")
 
 	case modeMarkerPrompt:
+		if m.markerIsEditing {
+			return "  " + theme.KeyName.Render("Enter") + " " + theme.Muted.Render("save changes") + "  ·  " +
+				theme.KeyName.Render("^D") + " " + theme.Muted.Render("delete marker") + "  ·  " +
+				theme.KeyName.Render("Esc") + " " + theme.Muted.Render("cancel")
+		}
 		return "  " + theme.KeyName.Render("Enter") + " " + theme.Muted.Render("insert marker") + "  ·  " + theme.KeyName.Render("Esc") + " " + theme.Muted.Render("cancel")
 
 	case modeHelp:
 		return "  " + theme.Muted.Render("Press ") + theme.KeyName.Render("?") + theme.Muted.Render(", ") + theme.KeyName.Render("Esc") + theme.Muted.Render(", or ") + theme.KeyName.Render("q") + theme.Muted.Render(" to close help")
 
 	case modeRowDetail:
+		if r, ok := m.activeInspectorRecord(); ok && r.IsMarker {
+			return "  " + theme.Muted.Render("Log Inspector: [↑/↓: scroll · ←/→: prev/next · d: delete marker · m: edit · Esc/Enter: close]")
+		}
 		return "  " + theme.Muted.Render("Log Inspector: [↑/↓: scroll · ←/→: prev/next · y: copy detail · Y: copy raw · b: pin · m: mark · Esc/Enter: close]")
 
 	default:
@@ -523,6 +531,8 @@ func (m Model) renderKeyBarContent() string {
 				}
 				count := end - start + 1
 				candidates = append(candidates, hint("y", fmt.Sprintf("copy (%d)", count)))
+			} else if rec, ok := m.activeSelectedRecord(); ok && rec.IsMarker {
+				candidates = append(candidates, hint("d", "delete marker"), hint("m", "edit marker"), hint("Enter", "detail"))
 			} else {
 				candidates = append(candidates, hint("Enter", "detail"), hint("y", "copy"))
 			}

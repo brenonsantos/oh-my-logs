@@ -219,6 +219,8 @@ type Model struct {
 	markerTargetRow  int
 	markerTargetText string
 	markerTargetTime time.Time
+	markerIsEditing  bool
+	markerEditID     uint64
 
 	// Easter egg mini-game
 	activeGame     game.MiniGame

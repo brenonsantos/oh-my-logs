@@ -199,3 +199,64 @@ func TestBuffer_InsertBeforeID(t *testing.T) {
 		t.Fatalf("expected extra to append when target not found, got: %v", all)
 	}
 }
+
+func TestBuffer_RemoveByID(t *testing.T) {
+	b := record.NewBuffer(5)
+
+	// 1. Remove from empty buffer
+	if b.RemoveByID(10) {
+		t.Errorf("expected RemoveByID to return false on empty buffer")
+	}
+
+	// 2. Add records [10, 20, 30, 40]
+	b.Add(record.Record{ID: 10, Raw: "ten"})
+	b.Add(record.Record{ID: 20, Raw: "twenty"})
+	b.Add(record.Record{ID: 30, Raw: "thirty"})
+	b.Add(record.Record{ID: 40, Raw: "forty"})
+
+	// 3. Remove non-existent ID
+	if b.RemoveByID(999) {
+		t.Errorf("expected RemoveByID to return false for nonexistent ID")
+	}
+	if b.Len() != 4 {
+		t.Errorf("expected len 4, got %d", b.Len())
+	}
+
+	// 4. Remove middle element (ID 20)
+	if !b.RemoveByID(20) {
+		t.Fatalf("expected RemoveByID(20) to return true")
+	}
+	if b.Len() != 3 {
+		t.Fatalf("expected len 3, got %d", b.Len())
+	}
+	all := b.All()
+	if len(all) != 3 || all[0].ID != 10 || all[1].ID != 30 || all[2].ID != 40 {
+		t.Fatalf("unexpected records after removing 20: %v", all)
+	}
+
+	// 5. Remove first element (ID 10)
+	if !b.RemoveByID(10) {
+		t.Fatalf("expected RemoveByID(10) to return true")
+	}
+	all = b.All()
+	if len(all) != 2 || all[0].ID != 30 || all[1].ID != 40 {
+		t.Fatalf("unexpected records after removing 10: %v", all)
+	}
+
+	// 6. Remove last element (ID 40)
+	if !b.RemoveByID(40) {
+		t.Fatalf("expected RemoveByID(40) to return true")
+	}
+	all = b.All()
+	if len(all) != 1 || all[0].ID != 30 {
+		t.Fatalf("unexpected records after removing 40: %v", all)
+	}
+
+	// 7. Remove the only remaining element (ID 30)
+	if !b.RemoveByID(30) {
+		t.Fatalf("expected RemoveByID(30) to return true")
+	}
+	if b.Len() != 0 || len(b.All()) != 0 {
+		t.Fatalf("expected buffer to be empty, len=%d", b.Len())
+	}
+}
