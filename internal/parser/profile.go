@@ -119,6 +119,14 @@ func ParseProfile(data []byte) (*Profile, error) {
 
 // LoadProfile reads a YAML file at path and unmarshals it into a Profile.
 func LoadProfile(path string) (*Profile, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("profile: cannot read %q: %w", path, err)
+	}
+	if fi.IsDir() {
+		return nil, fmt.Errorf("profile: %q is a directory, not a profile file", path)
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("profile: cannot read %q: %w", path, err)

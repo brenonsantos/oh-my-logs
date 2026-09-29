@@ -141,3 +141,97 @@ func TestSettings_ColumnCustomization(t *testing.T) {
 		t.Errorf("expected cleared customization, got %+v", clearedCust)
 	}
 }
+
+func TestResolveProfilePath_DirectoryConflict(t *testing.T) {
+	tempDir := t.TempDir()
+	profilesDir := filepath.Join(tempDir, "profiles")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatalf("failed to create profilesDir: %v", err)
+	}
+
+	// Create an installed profile in appCfg.ProfilesDir
+	profileContent := `name: DeviceProfile
+description: Test Device Profile
+parser:
+  type: raw
+`
+	profileYAML := filepath.Join(profilesDir, "deviceprofile.yaml")
+	if err := os.WriteFile(profileYAML, []byte(profileContent), 0o644); err != nil {
+		t.Fatalf("failed to write profile file: %v", err)
+	}
+
+	appCfg := &AppConfig{
+		ConfigDir:   tempDir,
+		ProfilesDir: profilesDir,
+		LogsDir:     filepath.Join(tempDir, "logs"),
+	}
+
+	// Create a local directory with the same name "DeviceProfile" in temp working directory
+	workDir := filepath.Join(tempDir, "workspace")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	conflictDir := filepath.Join(workDir, "DeviceProfile")
+	if err := os.MkdirAll(conflictDir, 0o755); err != nil {
+		t.Fatalf("failed to create conflict dir: %v", err)
+	}
+
+	// Change working directory to workDir during this test
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd error: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(origWd)
+	}()
+	if err := os.Chdir(workDir); err != nil {
+		t.Fatalf("Chdir error: %v", err)
+	}
+
+	// 1. ResolveProfilePath("DeviceProfile"):
+	// Even though a local directory named "DeviceProfile" exists,
+	// it must NOT return the directory. It must resolve to the installed profile YAML.
+	resolved := ResolveProfilePath(appCfg, "DeviceProfile")
+	if resolved != profileYAML {
+		t.Fatalf("expected resolved path %q, got %q", profileYAML, resolved)
+	}
+
+	// 2. Resolve by lowercase/slug name
+	resolvedSlug := ResolveProfilePath(appCfg, "deviceprofile")
+	if resolvedSlug != profileYAML {
+		t.Fatalf("expected resolved slug %q, got %q", profileYAML, resolvedSlug)
+	}
+
+	// 3. Directly pointing to a directory that has NO profile inside should not return the directory
+	nonProfileDir := filepath.Join(workDir, "SomeOtherDir")
+	if err := os.MkdirAll(nonProfileDir, 0o755); err != nil {
+		t.Fatalf("failed to create nonProfileDir: %v", err)
+	}
+	if res := ResolveProfilePath(appCfg, "SomeOtherDir"); res != "" {
+		t.Fatalf("expected empty string for directory without profiles, got %q", res)
+	}
+}
+
+func TestResolveProfilePath_BundleDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	appCfg := &AppConfig{
+		ConfigDir:   tempDir,
+		ProfilesDir: filepath.Join(tempDir, "profiles"),
+		LogsDir:     filepath.Join(tempDir, "logs"),
+	}
+
+	// Create bundle directory with profile.yaml inside
+	bundleDir := filepath.Join(tempDir, "bundle_test")
+	if err := os.MkdirAll(bundleDir, 0o755); err != nil {
+		t.Fatalf("failed to create bundleDir: %v", err)
+	}
+	bundleProfile := filepath.Join(bundleDir, "profile.yaml")
+	if err := os.WriteFile(bundleProfile, []byte("name: BundleProfile\nparser:\n  type: raw\n"), 0o644); err != nil {
+		t.Fatalf("failed to write bundle profile: %v", err)
+	}
+
+	resolved := ResolveProfilePath(appCfg, bundleDir)
+	if resolved != bundleProfile {
+		t.Fatalf("expected %q, got %q", bundleProfile, resolved)
+	}
+}

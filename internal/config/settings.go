@@ -110,12 +110,12 @@ func ResolveProfilePath(appCfg *AppConfig, nameOrPath string) string {
 		return ""
 	}
 
-	// 1. Direct path check
-	if _, err := os.Stat(nameOrPath); err == nil {
+	// 1. Direct regular file check
+	if fi, err := os.Stat(nameOrPath); err == nil && !fi.IsDir() {
 		return nameOrPath
 	}
 
-	// 2. Search all discovered profile paths
+	// 2. Search all discovered profile paths (global and local profiles)
 	candidates := FindAllProfilePaths(appCfg)
 	for _, p := range candidates {
 		// Check by exact filename without extension
@@ -131,6 +131,32 @@ func ResolveProfilePath(appCfg *AppConfig, nameOrPath string) string {
 		}
 		if strings.EqualFold(prof.Name, nameOrPath) {
 			return p
+		}
+	}
+
+	// 3. If nameOrPath is a directory, check if it contains a profile bundle (e.g. profile.yaml or a single yaml profile)
+	if fi, err := os.Stat(nameOrPath); err == nil && fi.IsDir() {
+		bundleCandidates := []string{
+			filepath.Join(nameOrPath, "profile.yaml"),
+			filepath.Join(nameOrPath, "profile.yml"),
+		}
+		for _, bc := range bundleCandidates {
+			if bfi, berr := os.Stat(bc); berr == nil && !bfi.IsDir() {
+				return bc
+			}
+		}
+
+		// Check if there is exactly one YAML file in the directory
+		if entries, rerr := os.ReadDir(nameOrPath); rerr == nil {
+			var yamlFiles []string
+			for _, e := range entries {
+				if !e.IsDir() && (strings.HasSuffix(e.Name(), ".yaml") || strings.HasSuffix(e.Name(), ".yml")) {
+					yamlFiles = append(yamlFiles, filepath.Join(nameOrPath, e.Name()))
+				}
+			}
+			if len(yamlFiles) == 1 {
+				return yamlFiles[0]
+			}
 		}
 	}
 
