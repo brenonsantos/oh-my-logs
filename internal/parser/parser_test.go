@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -222,6 +223,17 @@ func TestLoadProfile_InvalidYAML(t *testing.T) {
 	_, err := parser.LoadProfile(path)
 	if err == nil {
 		t.Fatal("expected error for invalid YAML")
+	}
+}
+
+func TestLoadProfile_Directory(t *testing.T) {
+	dir := t.TempDir()
+	_, err := parser.LoadProfile(dir)
+	if err == nil {
+		t.Fatal("expected error when LoadProfile is passed a directory")
+	}
+	if !strings.Contains(err.Error(), "is a directory") {
+		t.Fatalf("expected error mentioning 'is a directory', got: %v", err)
 	}
 }
 

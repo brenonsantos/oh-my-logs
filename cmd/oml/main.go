@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -230,6 +231,9 @@ For profile management commands and examples:
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
+	} else if targetProfile != "" && !strings.EqualFold(targetProfile, "raw") {
+		fmt.Fprintf(os.Stderr, "error: profile %q not found (run 'oml profile list' to see available profiles)\n", targetProfile)
+		os.Exit(1)
 	} else {
 		p = parser.NewRawParser()
 	}
