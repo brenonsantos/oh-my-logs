@@ -12,7 +12,7 @@ type Config struct {
 
 	// Exec is an optional shell command to run as a persistent worker process.
 	// Incoming matching payloads are sent to stdin; decoded JSON lines are read from stdout.
-	// Example: "python3 .oml/smp_decoder.py"
+	// Example: "python3 .oml/custom_decoder.py"
 	Exec string `yaml:"exec,omitempty"`
 
 	// ExtraPaths contains additional search directories to prepend to PATH for the worker.
