@@ -249,6 +249,10 @@ type Model struct {
 	lastClickTime  time.Time
 	lastClickRow   int
 
+	// Scrollbar mouse drag state
+	isDraggingVScroll bool // true while left mouse button is dragging vertical scrollbar
+	isDraggingHScroll bool // true while left mouse button is dragging horizontal scrollbar
+
 	// Bookmarks / pinning
 	bookmarks      map[uint64]struct{} // set of bookmarked record IDs
 	bookmarkedOnly bool                // when true, filter to show only bookmarked rows

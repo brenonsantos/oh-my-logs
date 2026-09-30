@@ -303,3 +303,89 @@ func TestIngestRecord_BoundedMemoryGrowth(t *testing.T) {
 	}
 }
 
+func TestTabTitleFollowsFilterChanges(t *testing.T) {
+	m := newTestTabModel()
+
+	// 1. Initial tab is named "All"
+	if m.tabs[0].DisplayName(1) != "All" {
+		t.Fatalf("expected initial tab to be 'All', got %q", m.tabs[0].DisplayName(1))
+	}
+
+	// Filter on Tab 1 -> tab name should update to follow filter
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m = updated.(Model)
+	for _, r := range "system" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = updated.(Model)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+
+	if m.tabs[0].DisplayName(1) != "system" {
+		t.Errorf("expected tab 0 name to update to 'system', got %q", m.tabs[0].DisplayName(1))
+	}
+
+	// Change filter on Tab 1 -> tab name should follow new filter
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m = updated.(Model)
+	m.filterInput.SetText("kernel")
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+
+	if m.tabs[0].DisplayName(1) != "kernel" {
+		t.Errorf("expected tab 0 name to update to 'kernel', got %q", m.tabs[0].DisplayName(1))
+	}
+
+	// Clear filter on Tab 1 -> tab name should restore to "All"
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m = updated.(Model)
+	m.filterInput.Clear()
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+
+	if m.tabs[0].DisplayName(1) != "All" {
+		t.Errorf("expected tab 0 name to restore to 'All', got %q", m.tabs[0].DisplayName(1))
+	}
+
+	// 2. Create Tab 2
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	m = updated.(Model)
+	if m.tabs[1].DisplayName(2) != "Tab 2" {
+		t.Fatalf("expected new tab 2 to initially be named 'Tab 2', got %q", m.tabs[1].DisplayName(2))
+	}
+
+	// Enter filter on Tab 2: "error"
+	for _, r := range "error" {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = updated.(Model)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+
+	if m.tabs[1].DisplayName(2) != "error" {
+		t.Errorf("expected tab 2 name to follow filter 'error', got %q", m.tabs[1].DisplayName(2))
+	}
+
+	// Change filter on Tab 2: "warning"
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m = updated.(Model)
+	m.filterInput.SetText("warning")
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+
+	if m.tabs[1].DisplayName(2) != "warning" {
+		t.Errorf("expected tab 2 name to follow changed filter 'warning', got %q", m.tabs[1].DisplayName(2))
+	}
+
+	// Clear filter on Tab 2: should restore to "Tab 2"
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m = updated.(Model)
+	m.filterInput.Clear()
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+
+	if m.tabs[1].DisplayName(2) != "Tab 2" {
+		t.Errorf("expected tab 2 name to restore to 'Tab 2', got %q", m.tabs[1].DisplayName(2))
+	}
+}
+

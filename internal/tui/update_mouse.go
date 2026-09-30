@@ -104,6 +104,7 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// Horizontal scrollbar divider click
 	if msg.Y == m.height-hScrollbarBottomOffset {
+		m.isDraggingHScroll = true
 		return m.handleHScrollbarClick(msg)
 	}
 
@@ -134,6 +135,7 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Y >= tableStartY && msg.Y < tableEndY {
 		// Vertical scrollbar click at right edge
 		if msg.X >= m.tableWidth()-2 && len(m.visible) > m.tableHeight && m.tableHeight > 1 {
+			m.isDraggingVScroll = true
 			clickRow := msg.Y - tableStartY
 			maxOffset := len(m.visible) - m.tableHeight
 			if maxOffset > 0 {
@@ -368,8 +370,13 @@ func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if msg.Button == tea.MouseButtonNone {
+		m.isDraggingVScroll = false
+		m.isDraggingHScroll = false
+	}
+
 	// Dragging vertical scrollbar
-	if msg.X >= m.tableWidth()-2 && len(m.visible) > m.tableHeight && m.tableHeight > 1 {
+	if m.isDraggingVScroll && len(m.visible) > m.tableHeight && m.tableHeight > 1 {
 		dataStartY := m.tableDataStartY()
 		if m.splitMode != SplitNone {
 			dataStartY = m.splitTableStartY() + splitPaneHeaderOverhead
@@ -391,7 +398,7 @@ func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Dragging horizontal scrollbar
-	if msg.Y == m.height-3 {
+	if m.isDraggingHScroll {
 		return m.handleHScrollbarClick(msg)
 	}
 
@@ -457,6 +464,8 @@ func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleMouseRelease(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	m.isDraggingVScroll = false
+	m.isDraggingHScroll = false
 	if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter && m.mode != modeTimeJump {
 		return m, nil
 	}
