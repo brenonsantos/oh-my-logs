@@ -160,13 +160,28 @@ if (-not (Test-Path $ProfilesDir)) {
     New-Item -ItemType Directory -Path $ProfilesDir -Force | Out-Null
 }
 
-$ProfilesSource = if ($ExtractedProfilesDir) { $ExtractedProfilesDir } elseif ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "examples\profiles"))) { Join-Path $ScriptDir "examples\profiles" } else { "" }
-if ($ProfilesSource -and (Test-Path $ProfilesSource)) {
+$CandidateYamls = @()
+if ($TempDir -and (Test-Path $TempDir)) {
+    $CandidateYamls = Get-ChildItem -Path $TempDir -Recurse -Filter "*.yaml" -ErrorAction SilentlyContinue
+}
+if ((-not $CandidateYamls -or $CandidateYamls.Count -eq 0) -and $ScriptDir) {
+    foreach ($loc in @((Join-Path $ScriptDir "examples\profiles"), (Join-Path $ScriptDir "profiles\examples"))) {
+        if (Test-Path $loc) {
+            $CandidateYamls = Get-ChildItem -Path $loc -Filter "*.yaml" -ErrorAction SilentlyContinue
+            if ($CandidateYamls) { break }
+        }
+    }
+}
+
+if ($CandidateYamls) {
     $Copied = 0
-    Get-ChildItem -Path $ProfilesSource -Filter "*.yaml" | ForEach-Object {
-        $DestFile = Join-Path $ProfilesDir $_.Name
+    $SeenNames = @{}
+    foreach ($item in $CandidateYamls) {
+        if ($SeenNames.ContainsKey($item.Name)) { continue }
+        $SeenNames[$item.Name] = $true
+        $DestFile = Join-Path $ProfilesDir $item.Name
         if (-not (Test-Path $DestFile)) {
-            Copy-Item -Path $_.FullName -Destination $DestFile
+            Copy-Item -Path $item.FullName -Destination $DestFile -Force
             $Copied++
         }
     }

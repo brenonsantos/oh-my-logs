@@ -219,28 +219,37 @@ fi
 
 # Install default curated profiles (Zephyr, Logcat, Raw)
 mkdir -p "$PROFILES_DIR"
-SRC_PROFILES=""
-if [ -n "$EXTRACTED_PROFILES" ] && [ -d "$EXTRACTED_PROFILES/profiles" ]; then
-    SRC_PROFILES="$EXTRACTED_PROFILES/profiles"
-elif [ -n "$EXTRACTED_PROFILES" ] && [ -d "$EXTRACTED_PROFILES" ]; then
-    SRC_PROFILES="$EXTRACTED_PROFILES"
-elif [ -n "$SCRIPT_DIR" ] && [ -d "$SCRIPT_DIR/examples/profiles" ]; then
-    SRC_PROFILES="$SCRIPT_DIR/examples/profiles"
+COPIED=0
+
+CANDIDATE_FILES=()
+if [ -n "$TMP_DIR" ] && [ -d "$TMP_DIR" ]; then
+    while IFS= read -r f; do
+        [ -n "$f" ] && CANDIDATE_FILES+=("$f")
+    done < <(find "$TMP_DIR" -type f \( -name "*.yaml" -o -name "*.yml" \) 2>/dev/null)
 fi
 
-if [ -n "$SRC_PROFILES" ] && [ -d "$SRC_PROFILES" ]; then
-    COPIED=0
-    for f in "$SRC_PROFILES"/*.yaml; do
-        [ -e "$f" ] || continue
-        base="$(basename "$f")"
-        if [ ! -f "$PROFILES_DIR/$base" ]; then
-            cp "$f" "$PROFILES_DIR/$base"
-            COPIED=$((COPIED + 1))
+if [ ${#CANDIDATE_FILES[@]} -eq 0 ] && [ -n "$SCRIPT_DIR" ]; then
+    for src in "$SCRIPT_DIR/examples/profiles" "$SCRIPT_DIR/profiles/examples"; do
+        if [ -d "$src" ]; then
+            for f in "$src"/*.yaml "$src"/*.yml; do
+                [ -e "$f" ] && CANDIDATE_FILES+=("$f")
+            done
+            break
         fi
     done
-    if [ "$COPIED" -gt 0 ]; then
-        print_success "Installed $COPIED default profile(s) to $PROFILES_DIR"
+fi
+
+for f in "${CANDIDATE_FILES[@]}"; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"
+    if [ ! -f "$PROFILES_DIR/$base" ]; then
+        cp "$f" "$PROFILES_DIR/$base"
+        COPIED=$((COPIED + 1))
     fi
+done
+
+if [ "$COPIED" -gt 0 ]; then
+    print_success "Installed $COPIED default profile(s) to $PROFILES_DIR"
 fi
 
 # Check PATH
