@@ -799,9 +799,13 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			cur := m.currentTab()
 			cur.Filter = f
 			cur.FilterRaw = val
-			if cur.Name == "" || strings.HasPrefix(cur.Name, "Tab ") {
-				if val != "" {
-					cur.Name = val
+			if val != "" {
+				cur.Name = val
+			} else {
+				if m.activeTab == 0 {
+					cur.Name = "All"
+				} else {
+					cur.Name = fmt.Sprintf("Tab %d", m.activeTab+1)
 				}
 			}
 			m.rebuildVisible()

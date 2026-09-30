@@ -115,6 +115,11 @@ func (m Model) handleCloseActiveTab() (tea.Model, tea.Cmd) {
 	if m.activeTab >= len(m.tabs) {
 		m.activeTab = len(m.tabs) - 1
 	}
+	for i := range m.tabs {
+		if strings.HasPrefix(m.tabs[i].Name, "Tab ") && m.tabs[i].FilterRaw == "" {
+			m.tabs[i].Name = fmt.Sprintf("Tab %d", i+1)
+		}
+	}
 	m.syncModelToActiveTab()
 	m.recalcLayout()
 	m.message = fmt.Sprintf("Closed %s", closedName)

@@ -752,4 +752,108 @@ func TestMouseScroll_DoesNotPolluteSearchOrFilter(t *testing.T) {
 	}
 }
 
+func TestMouseHover_OverScrollbarsDoesNotScroll(t *testing.T) {
+	m := newTestTabModel()
+	m.width = 100
+	m.height = 30
+	m.recalcLayout()
+
+	// Ingest 50 records so vertical scrollbar is active and maxOffset > 0
+	for i := 0; i < 50; i++ {
+		m.ingestRecord(record.NewRecord(fmt.Sprintf("log line number %d with some longer payload message", i)))
+	}
+	m.scrollOffset = 0
+	m.follow = false
+	m.scrollX = 0
+
+	// 1. Hover motion over vertical scrollbar (X = tableWidth()-1, Y = 15) with NO button pressed
+	updated, _ := m.Update(tea.MouseMsg{
+		X:      m.tableWidth() - 1,
+		Y:      15,
+		Action: tea.MouseActionMotion,
+		Button: tea.MouseButtonNone,
+	})
+	m = updated.(Model)
+
+	if m.scrollOffset != 0 {
+		t.Errorf("hovering over vertical scrollbar should NOT scroll, but scrollOffset changed to %d", m.scrollOffset)
+	}
+	if m.isDraggingVScroll {
+		t.Errorf("isDraggingVScroll should be false during hover")
+	}
+
+	// 2. Hover motion over horizontal scrollbar (Y = height-hScrollbarBottomOffset, X = 50) with NO button pressed
+	updated, _ = m.Update(tea.MouseMsg{
+		X:      50,
+		Y:      m.height - hScrollbarBottomOffset,
+		Action: tea.MouseActionMotion,
+		Button: tea.MouseButtonNone,
+	})
+	m = updated.(Model)
+
+	if m.scrollX != 0 {
+		t.Errorf("hovering over horizontal scrollbar should NOT scroll, but scrollX changed to %d", m.scrollX)
+	}
+	if m.isDraggingHScroll {
+		t.Errorf("isDraggingHScroll should be false during hover")
+	}
+
+	// 3. Click (MouseActionPress) on vertical scrollbar -> should set isDraggingVScroll and update scroll
+	updated, _ = m.Update(tea.MouseMsg{
+		X:      m.tableWidth() - 1,
+		Y:      m.tableDataStartY() + 10,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	})
+	m = updated.(Model)
+
+	if !m.isDraggingVScroll {
+		t.Errorf("clicking on vertical scrollbar should activate isDraggingVScroll")
+	}
+	if m.scrollOffset == 0 {
+		t.Errorf("clicking on vertical scrollbar row 10 should have updated scrollOffset from 0")
+	}
+
+	// 4. Move mouse while dragging -> should continue updating scroll
+	offsetAfterClick := m.scrollOffset
+	updated, _ = m.Update(tea.MouseMsg{
+		X:      m.tableWidth() - 1,
+		Y:      m.tableDataStartY() + 15,
+		Action: tea.MouseActionMotion,
+		Button: tea.MouseButtonLeft,
+	})
+	m = updated.(Model)
+
+	if m.scrollOffset == offsetAfterClick {
+		t.Errorf("dragging vertical scrollbar should update scrollOffset from %d", offsetAfterClick)
+	}
+
+	// 5. Release mouse -> should disarm dragging
+	updated, _ = m.Update(tea.MouseMsg{
+		X:      m.tableWidth() - 1,
+		Y:      m.tableDataStartY() + 15,
+		Action: tea.MouseActionRelease,
+		Button: tea.MouseButtonLeft,
+	})
+	m = updated.(Model)
+
+	if m.isDraggingVScroll {
+		t.Errorf("releasing mouse should disarm isDraggingVScroll")
+	}
+
+	// 6. Further hover motion without button press must NOT change scroll
+	currOffset := m.scrollOffset
+	updated, _ = m.Update(tea.MouseMsg{
+		X:      m.tableWidth() - 1,
+		Y:      m.tableDataStartY() + 5,
+		Action: tea.MouseActionMotion,
+		Button: tea.MouseButtonNone,
+	})
+	m = updated.(Model)
+
+	if m.scrollOffset != currOffset {
+		t.Errorf("hovering after release should NOT scroll: expected %d, got %d", currOffset, m.scrollOffset)
+	}
+}
+
 
