@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -80,10 +81,64 @@ func isGitURL(src string) bool {
 	return false
 }
 
+// AlternateGitURL converts between HTTPS and SSH git URLs.
+// e.g. https://github.example.com/org/repo.git <-> git@github.example.com:org/repo.git
+func AlternateGitURL(gitURL string) string {
+	raw := strings.TrimSpace(gitURL)
+	if strings.HasPrefix(raw, "https://") || strings.HasPrefix(raw, "http://") {
+		u, err := url.Parse(raw)
+		if err == nil && u.Host != "" {
+			path := strings.TrimPrefix(u.Path, "/")
+			if path != "" {
+				return fmt.Sprintf("git@%s:%s", u.Host, path)
+			}
+		}
+	} else if strings.HasPrefix(raw, "git@") {
+		afterAt := strings.TrimPrefix(raw, "git@")
+		parts := strings.SplitN(afterAt, ":", 2)
+		if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
+			return fmt.Sprintf("https://%s/%s", parts[0], strings.TrimPrefix(parts[1], "/"))
+		}
+	} else if strings.HasPrefix(raw, "ssh://") {
+		u, err := url.Parse(raw)
+		if err == nil && u.Hostname() != "" {
+			path := strings.TrimPrefix(u.Path, "/")
+			if path != "" {
+				return fmt.Sprintf("https://%s/%s", u.Hostname(), path)
+			}
+		}
+	}
+	return ""
+}
+
+func cloneGitRepo(ctx context.Context, targetURL, tmpDir, token string) ([]byte, error) {
+	cloneURL := targetURL
+	if token != "" && (strings.HasPrefix(targetURL, "https://") || strings.HasPrefix(targetURL, "http://")) {
+		u, err := url.Parse(targetURL)
+		if err == nil {
+			u.User = url.UserPassword("x-access-token", token)
+			cloneURL = u.String()
+		}
+	}
+
+	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", cloneURL, tmpDir)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		outStr := strings.TrimSpace(string(out))
+		if token != "" {
+			outStr = strings.ReplaceAll(outStr, token, "******")
+		}
+		return []byte(outStr), err
+	}
+	return out, nil
+}
+
 func installFromGit(appCfg *AppConfig, gitURL string, opts InstallOptions) ([]InstallResult, error) {
 	timeout := opts.Timeout
 	if timeout <= 0 {
-		timeout = 30 * time.Second
+		timeout = 45 * time.Second
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -95,9 +150,49 @@ func installFromGit(appCfg *AppConfig, gitURL string, opts InstallOptions) ([]In
 	}
 	defer os.RemoveAll(tmpDir)
 
-	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", gitURL, tmpDir)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("git clone failed for %s: %s (%w)", gitURL, strings.TrimSpace(string(out)), err)
+	token := opts.Token
+	if token == "" {
+		for _, envKey := range []string{"GHE_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "OML_TOKEN"} {
+			if val := os.Getenv(envKey); val != "" {
+				token = val
+				break
+			}
+		}
+	}
+
+	out, cloneErr := cloneGitRepo(ctx, gitURL, tmpDir, token)
+	effectiveURL := gitURL
+
+	// If primary clone failed, attempt alternate protocol (HTTPS <-> SSH)
+	if cloneErr != nil {
+		altURL := AlternateGitURL(gitURL)
+		if altURL != "" {
+			_ = os.RemoveAll(tmpDir)
+			_ = os.MkdirAll(tmpDir, 0o755)
+
+			altOut, altErr := cloneGitRepo(ctx, altURL, tmpDir, token)
+			if altErr == nil {
+				cloneErr = nil
+				effectiveURL = altURL
+			} else {
+				host := ""
+				if u, err := url.Parse(gitURL); err == nil && u.Host != "" {
+					host = u.Host
+				} else if strings.Contains(gitURL, "@") {
+					parts := strings.Split(gitURL, "@")
+					if len(parts) > 1 {
+						host = strings.Split(parts[1], ":")[0]
+					}
+				}
+				hint := ""
+				if host != "" {
+					hint = fmt.Sprintf("\nHint: To authenticate with private or enterprise git repositories:\n  • SSH: Ensure your SSH key is loaded ('ssh -T git@%s')\n  • HTTPS: Set a Personal Access Token: export GHE_TOKEN=\"<token>\" (or GH_TOKEN)", host)
+				}
+				return nil, fmt.Errorf("git clone failed for %s: %s\nFallback clone failed for %s: %s%s", gitURL, string(out), altURL, string(altOut), hint)
+			}
+		} else {
+			return nil, fmt.Errorf("git clone failed for %s: %s (%w)", gitURL, strings.TrimSpace(string(out)), cloneErr)
+		}
 	}
 
 	results, err := installFromDirectory(appCfg, tmpDir, opts)
@@ -105,7 +200,7 @@ func installFromGit(appCfg *AppConfig, gitURL string, opts InstallOptions) ([]In
 		return nil, err
 	}
 	for i := range results {
-		results[i].Source = gitURL
+		results[i].Source = effectiveURL
 	}
 	return results, nil
 }
