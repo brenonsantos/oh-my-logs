@@ -167,6 +167,7 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 			m.lastClickTime = now
 			m.lastClickRow = absIdx
+			m.clampScroll()
 		}
 		return m, nil
 	}
@@ -178,6 +179,7 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	m.cursorCol = -1
 	m.charSelStart = -1
 	m.charSelEnd = -1
+	m.clampScroll()
 	return m, nil
 }
 
@@ -461,7 +463,11 @@ func (m Model) handleMouseRelease(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if start, end := m.selectionRange(); start >= 0 && end >= 0 {
 		m.selectedRow = m.selectionEnd
 		m.message = m.selectionMessage(end-start+1, "press y to copy")
+	} else {
+		m.selectionStart = -1
+		m.selectionEnd = -1
 	}
+	m.clampScroll()
 	return m, nil
 }
 
@@ -492,8 +498,8 @@ func (m Model) handleSelectUp() (tea.Model, tea.Cmd) {
 
 	if m.selectionEnd < m.scrollOffset {
 		m.scrollOffset = m.selectionEnd
-		m.clampScroll()
 	}
+	m.clampScroll()
 
 	minS, maxS := m.selectionStart, m.selectionEnd
 	if minS > maxS {
@@ -532,8 +538,8 @@ func (m Model) handleSelectDown() (tea.Model, tea.Cmd) {
 	h := m.activeDataHeight()
 	if m.selectionEnd >= m.scrollOffset+h {
 		m.scrollOffset = m.selectionEnd - h + 1
-		m.clampScroll()
 	}
+	m.clampScroll()
 
 	minS, maxS := m.selectionStart, m.selectionEnd
 	if minS > maxS {

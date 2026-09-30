@@ -101,6 +101,7 @@ func (m Model) handleToggleBookmark() (tea.Model, tea.Cmd) {
 			}
 			m.clampScroll()
 		}
+		m.clampScroll()
 	}
 	return m, nil
 }

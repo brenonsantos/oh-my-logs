@@ -133,10 +133,29 @@ func (m *Model) recordMarker(note string) {
 		}
 	}
 
-	// Dispatch to all tabs
+	// Synchronize active interactive state from model into current tab before dispatching marker
 	if len(m.tabs) == 0 {
 		_ = m.currentTab()
 	}
+	curTab := m.currentTab()
+	curTab.SelectedRow = m.selectedRow
+	curTab.ScrollOffset = m.scrollOffset
+	curTab.ScrollX = m.scrollX
+	curTab.CursorCol = m.cursorCol
+	curTab.CharSelStart = m.charSelStart
+	curTab.CharSelEnd = m.charSelEnd
+
+	if m.selectedRow >= len(m.visible) {
+		m.selectedRow = -1
+	}
+	if m.selectedRow >= 0 {
+		m.follow = false
+		curTab.Follow = false
+	} else {
+		curTab.Follow = m.follow
+	}
+	curTab.SelectedRow = m.selectedRow
+
 	for i := range m.tabs {
 		if m.markerTargetID != 0 {
 			targetIdx := -1
@@ -161,6 +180,9 @@ func (m *Model) recordMarker(note string) {
 				m.tabs[i].Visible = append(m.tabs[i].Visible, r)
 			}
 		} else {
+			if m.tabs[i].SelectedRow >= 0 {
+				m.tabs[i].Follow = false
+			}
 			m.tabs[i].Visible = append(m.tabs[i].Visible, r)
 			if m.tabs[i].Follow && !m.paused {
 				h := m.tableHeight
@@ -177,6 +199,7 @@ func (m *Model) recordMarker(note string) {
 	m.visible = cur.Visible
 	m.scrollOffset = cur.ScrollOffset
 	m.follow = cur.Follow
+	m.selectedRow = cur.SelectedRow
 
 	if m.markerTargetRow >= 0 {
 		if note != "" {

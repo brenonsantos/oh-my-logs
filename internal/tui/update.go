@@ -375,7 +375,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.scrollOffset += mouseWheelScrollStep
 				m.clampScroll()
 				h := m.activeDataHeight()
-				if m.scrollOffset >= len(m.visible)-h {
+				if m.selectedRow >= 0 {
+					m.follow = false
+				} else if m.scrollOffset >= len(m.visible)-h {
 					m.follow = true
 				} else {
 					m.follow = false
@@ -441,7 +443,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.scrollOffset += mouseWheelScrollStep
 				m.clampScroll()
 				h := m.activeDataHeight()
-				if m.scrollOffset >= len(m.visible)-h {
+				if m.selectedRow >= 0 {
+					m.follow = false
+				} else if m.scrollOffset >= len(m.visible)-h {
 					m.follow = true
 				} else {
 					m.follow = false
@@ -616,11 +620,38 @@ func (m *Model) ingestRecord(r record.Record) {
 		}
 	}
 
-	// Dispatch to all tabs
+	// Synchronize active interactive state from model into current tab before ingesting
 	if len(m.tabs) == 0 {
 		_ = m.currentTab()
 	}
+	curTab := m.currentTab()
+	curTab.SelectedRow = m.selectedRow
+	curTab.ScrollOffset = m.scrollOffset
+	curTab.ScrollX = m.scrollX
+	curTab.CursorCol = m.cursorCol
+	curTab.CharSelStart = m.charSelStart
+	curTab.CharSelEnd = m.charSelEnd
+
+	if m.selectedRow >= len(curTab.Visible) {
+		m.selectedRow = -1
+	}
+	if m.selectedRow >= 0 {
+		m.follow = false
+		curTab.Follow = false
+	} else {
+		curTab.Follow = m.follow
+	}
+	curTab.SelectedRow = m.selectedRow
+
+	// Dispatch to all tabs
 	for i := range m.tabs {
+		if m.tabs[i].SelectedRow >= len(m.tabs[i].Visible) {
+			m.tabs[i].SelectedRow = -1
+		}
+		if m.tabs[i].SelectedRow >= 0 {
+			m.tabs[i].Follow = false
+		}
+
 		appended := false
 		if m.tabs[i].BookmarkedOnly {
 			if r.IsMarker {
@@ -640,7 +671,7 @@ func (m *Model) ingestRecord(r record.Record) {
 					if m.tabs[i].SelectedRow >= 0 {
 						m.tabs[i].SelectedRow -= excess
 						if m.tabs[i].SelectedRow < 0 {
-							m.tabs[i].SelectedRow = 0
+							m.tabs[i].SelectedRow = -1
 						}
 					}
 					if m.tabs[i].ScrollOffset > 0 {
@@ -652,12 +683,17 @@ func (m *Model) ingestRecord(r record.Record) {
 					if i == m.activeTab {
 						if m.selectionStart >= 0 {
 							m.selectionStart -= excess
-							if m.selectionStart < 0 {
-								m.selectionStart = 0
-							}
 						}
 						if m.selectionEnd >= 0 {
 							m.selectionEnd -= excess
+						}
+						if m.selectionStart < 0 && m.selectionEnd < 0 {
+							m.selectionStart = -1
+							m.selectionEnd = -1
+						} else {
+							if m.selectionStart < 0 {
+								m.selectionStart = 0
+							}
 							if m.selectionEnd < 0 {
 								m.selectionEnd = 0
 							}
