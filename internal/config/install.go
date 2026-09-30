@@ -150,13 +150,19 @@ func CopyProfilesFrom(srcDir, targetDir string) int {
 	return copied
 }
 
-// CopyDefaultProfiles copies any files in local examples/profiles into targetDir without overwriting.
+// CopyDefaultProfiles ensures starter profiles exist in targetDir.
+// It first attempts to copy from local files, then falls back to embedded profiles.
 func CopyDefaultProfiles(targetDir string) int {
+	copied := 0
 	src := filepath.Join("examples", "profiles")
 	if _, err := os.Stat(src); err != nil {
 		src = filepath.Join("profiles", "examples")
 	}
-	return CopyProfilesFrom(src, targetDir)
+	if _, err := os.Stat(src); err == nil {
+		copied += CopyProfilesFrom(src, targetDir)
+	}
+	copied += EnsureDefaultProfiles(targetDir)
+	return copied
 }
 
 // UninstallBinary removes the installed binary from targetDir, or scans standard

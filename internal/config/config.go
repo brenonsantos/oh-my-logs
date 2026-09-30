@@ -42,6 +42,9 @@ func Load() (*AppConfig, error) {
 		}
 	}
 
+	// Ensure default starter profiles exist in global profiles directory.
+	EnsureDefaultProfiles(cfg.ProfilesDir)
+
 	return cfg, nil
 }
 
