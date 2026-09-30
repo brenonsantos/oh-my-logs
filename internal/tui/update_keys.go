@@ -187,6 +187,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.charSelEnd = -1
 		m.searchInput.Clear()
 		m.searchMatches = nil
+		m.clampScroll()
 		return m, nil
 	}
 
@@ -230,6 +231,9 @@ func (m Model) openRowDetail() (Model, tea.Cmd) {
 				t.SelectedRow = 0
 			}
 		}
+		if t != nil {
+			t.Follow = false
+		}
 	} else {
 		if m.selectedRow < 0 {
 			if m.follow && len(m.visible) > 0 {
@@ -240,6 +244,8 @@ func (m Model) openRowDetail() (Model, tea.Cmd) {
 				m.selectedRow = 0
 			}
 		}
+		m.follow = false
+		m.clampScroll()
 	}
 
 	m.detailScrollOffset = 0
@@ -318,7 +324,9 @@ func (m Model) handleNavigationKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 			if m.selectedRow >= m.scrollOffset+h {
 				m.scrollOffset = m.selectedRow - h + 1
 			}
-			if m.selectedRow >= len(m.visible)-1 {
+			if m.selectedRow >= 0 {
+				m.follow = false
+			} else if m.scrollOffset >= len(m.visible)-h {
 				m.follow = true
 			} else {
 				m.follow = false
@@ -368,6 +376,7 @@ func (m Model) handleNavigationKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 			m.scrollX = m.cursorCol - 2
 			m.clampScrollX()
 		}
+		m.clampScroll()
 		return m, nil, true
 
 	case keyMatches(msg, m.keys.CursorRight):
@@ -400,6 +409,7 @@ func (m Model) handleNavigationKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 			m.scrollX = m.cursorCol - availW + 3
 			m.clampScrollX()
 		}
+		m.clampScroll()
 		return m, nil, true
 
 	case keyMatches(msg, m.keys.CharSelectLeft), msg.String() == "shift+left":
@@ -427,6 +437,7 @@ func (m Model) handleNavigationKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 			m.scrollX = m.cursorCol - 2
 			m.clampScrollX()
 		}
+		m.clampScroll()
 		return m, nil, true
 
 	case keyMatches(msg, m.keys.CharSelectRight), msg.String() == "shift+right":
@@ -461,6 +472,7 @@ func (m Model) handleNavigationKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 			m.scrollX = m.cursorCol - availW + 3
 			m.clampScrollX()
 		}
+		m.clampScroll()
 		return m, nil, true
 
 	case keyMatches(msg, m.keys.PageUp):
@@ -491,8 +503,8 @@ func (m Model) handleNavigationKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 			if m.selectedRow >= len(m.visible) {
 				m.selectedRow = len(m.visible) - 1
 			}
-		}
-		if m.scrollOffset >= len(m.visible)-h {
+			m.follow = false
+		} else if m.scrollOffset >= len(m.visible)-h {
 			m.follow = true
 		}
 		m.clampScroll()

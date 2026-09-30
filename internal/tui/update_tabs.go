@@ -186,10 +186,20 @@ func (m *Model) clampScroll() {
 	if m.scrollOffset > maxOffset {
 		m.scrollOffset = maxOffset
 	}
+	if m.selectedRow >= len(m.visible) {
+		m.selectedRow = -1
+	}
+	if m.selectedRow >= 0 {
+		m.follow = false
+	}
 	if len(m.tabs) > 0 {
 		cur := m.currentTab()
 		cur.ScrollOffset = m.scrollOffset
 		cur.Follow = m.follow
+		cur.SelectedRow = m.selectedRow
+		cur.CursorCol = m.cursorCol
+		cur.CharSelStart = m.charSelStart
+		cur.CharSelEnd = m.charSelEnd
 	}
 }
 

@@ -727,10 +727,14 @@ func (m *Model) activeTabIdx() int {
 
 // exportViewport captures the active tab/viewport state from Model.
 func (m *Model) exportViewport() ViewportState {
+	follow := m.follow
+	if m.selectedRow >= 0 {
+		follow = false
+	}
 	return ViewportState{
 		Visible:        m.visible,
 		ScrollOffset:   m.scrollOffset,
-		Follow:         m.follow,
+		Follow:         follow,
 		SearchInput:    m.searchInput.Value,
 		SearchMatches:  m.searchMatches,
 		SearchCursor:   m.searchCursor,
