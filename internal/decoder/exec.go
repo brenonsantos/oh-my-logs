@@ -157,6 +157,8 @@ func (e *ExecDecoder) readLineWithTimeoutLocked(timeout time.Duration) (string, 
 
 func (e *ExecDecoder) startWorkerLocked() error {
 	resolvedCmd := e.command
+	workDir := ""
+	var cmd *exec.Cmd
 	parts := strings.Fields(e.command)
 	if len(parts) >= 2 && (parts[0] == "python" || parts[0] == "python3" || parts[0] == "sh" || parts[0] == "bash" || parts[0] == "node") {
 		script := parts[1]
@@ -165,18 +167,40 @@ func (e *ExecDecoder) startWorkerLocked() error {
 				cand := filepath.Join(dir, script)
 				if fi, err := os.Stat(cand); err == nil && !fi.IsDir() {
 					parts[1] = cand
-					resolvedCmd = strings.Join(parts, " ")
+					workDir = dir
 					break
 				}
 			}
+		} else {
+			if fi, err := os.Stat(script); err == nil && !fi.IsDir() {
+				workDir = filepath.Dir(script)
+			}
 		}
-	}
-
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
+		cmd = exec.Command(parts[0], parts[1:]...)
+	} else if len(parts) == 1 {
+		binName := parts[0]
+		for _, dir := range e.extraPaths {
+			cand := filepath.Join(dir, binName)
+			if fi, err := os.Stat(cand); err == nil && !fi.IsDir() {
+				parts[0] = cand
+				workDir = dir
+				break
+			}
+		}
+		if workDir != "" {
+			cmd = exec.Command(parts[0])
+		} else if runtime.GOOS == "windows" {
+			cmd = exec.Command("cmd.exe", "/c", resolvedCmd)
+		} else {
+			cmd = exec.Command("sh", "-c", resolvedCmd)
+		}
+	} else if runtime.GOOS == "windows" {
 		cmd = exec.Command("cmd.exe", "/c", resolvedCmd)
 	} else {
 		cmd = exec.Command("sh", "-c", resolvedCmd)
+	}
+	if workDir != "" {
+		cmd.Dir = workDir
 	}
 
 	if len(e.extraPaths) > 0 {

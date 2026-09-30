@@ -188,10 +188,14 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if parseLine == "" {
 				return old // preserve bare-prompt records as-is (rare edge case)
 			}
-			newRec, _ := m.parser.Parse(parseLine)
+			newRec, parsedTs := parseLineWithTimestampFallback(m.parser, parseLine)
 			newRec.Raw = old.Raw // keep the original raw
 			newRec.ID = old.ID
-			newRec.Timestamp = old.Timestamp
+			if !old.Timestamp.IsZero() {
+				newRec.Timestamp = old.Timestamp
+			} else if !parsedTs.IsZero() {
+				newRec.Timestamp = parsedTs
+			}
 			newRec.Delta = old.Delta
 			if newRec.Fields == nil {
 				newRec.Fields = make(map[string]string)

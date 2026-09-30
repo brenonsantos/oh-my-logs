@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/game"
+	"github.com/brenoniehues/oh-my-logs/internal/parser"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
 	"github.com/brenoniehues/oh-my-logs/internal/timing"
@@ -167,7 +168,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if line == "" {
 			return m, listenToSource(m.source)
 		}
-		r, _ := m.parser.Parse(line)
+		r, parsedTs := parseLineWithTimestampFallback(m.parser, line)
+		if !parsedTs.IsZero() && r.Timestamp.IsZero() {
+			r.Timestamp = parsedTs
+		}
 		m.ingestRecord(r)
 		return m, listenToSource(m.source)
 
@@ -520,6 +524,34 @@ func parseTimeString(s string) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+func parseLineWithTimestampFallback(p parser.Parser, line string) (record.Record, time.Time) {
+	if p == nil {
+		return record.NewRecord(line), time.Time{}
+	}
+	r, err := p.Parse(line)
+	if err == nil {
+		return r, time.Time{}
+	}
+
+	trimmed := strings.TrimSpace(line)
+	if strings.HasPrefix(trimmed, "[") {
+		if idx := strings.Index(trimmed, "]"); idx > 1 {
+			tsCandidate := trimmed[1:idx]
+			if parsedTs := parseTimeString(tsCandidate); !parsedTs.IsZero() {
+				subLine := strings.TrimSpace(trimmed[idx+1:])
+				if subLine != "" {
+					if subRec, subErr := p.Parse(subLine); subErr == nil {
+						subRec.Raw = line
+						return subRec, parsedTs
+					}
+				}
+			}
+		}
+	}
+
+	return r, time.Time{}
 }
 
 func tryParseRecordTimestamp(r record.Record, configuredField string) time.Time {

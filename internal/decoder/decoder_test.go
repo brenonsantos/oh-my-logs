@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/brenoniehues/oh-my-logs/internal/record"
@@ -153,7 +154,7 @@ func TestExecDecoder_WorkerProcess(t *testing.T) {
 	cmd := fmt.Sprintf("%s -test.run=TestHelperProcess", os.Args[0])
 
 	cfg := Config{
-		Match: `^smp:\s*(?P<payload>.*)`,
+		Match: `^proto:\s*(?P<payload>.*)`,
 		Exec:  cmd,
 	}
 
@@ -167,15 +168,15 @@ func TestExecDecoder_WorkerProcess(t *testing.T) {
 	os.Setenv("GO_WANT_DECODER_HELPER_PROCESS", "1")
 	defer os.Unsetenv("GO_WANT_DECODER_HELPER_PROCESS")
 
-	rec := record.NewRecord("smp: 12345")
-	rec.Fields["message"] = "smp: 12345"
+	rec := record.NewRecord("proto: 12345")
+	rec.Fields["message"] = "proto: 12345"
 
 	transformed, matched := d.Decode(rec)
 	if !matched {
 		t.Fatalf("expected record to match exec decoder")
 	}
 
-	if transformed.Fields["message"] != "Decoded: smp: 12345" {
+	if transformed.Fields["message"] != "Decoded: proto: 12345" {
 		t.Errorf("expected summary message from worker, got %q", transformed.Fields["message"])
 	}
 	if transformed.Fields["topic"] != "Cycle" {
@@ -187,7 +188,50 @@ func TestExecDecoder_WorkerProcess(t *testing.T) {
 	if transformed.Fields["ok"] != "true" {
 		t.Errorf("expected ok=true, got %q", transformed.Fields["ok"])
 	}
-	if transformed.Fields["_raw_message"] != "smp: 12345" {
+	if transformed.Fields["_raw_message"] != "proto: 12345" {
 		t.Errorf("expected _raw_message preserved, got %q", transformed.Fields["_raw_message"])
+	}
+}
+
+func TestExecDecoder_ExtraPathsResolution(t *testing.T) {
+	tempDir := t.TempDir()
+	subDir := filepath.Join(tempDir, "nested folder with spaces", "tools")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+
+	siblingPath := filepath.Join(subDir, "sibling.txt")
+	if err := os.WriteFile(siblingPath, []byte("sibling_data"), 0o644); err != nil {
+		t.Fatalf("failed to write sibling file: %v", err)
+	}
+
+	scriptPath := filepath.Join(subDir, "mock_decoder.sh")
+	scriptContent := "#!/bin/sh\nsibling=$(cat sibling.txt 2>/dev/null)\nwhile IFS= read -r line; do\n  echo \"{\\\"summary\\\": \\\"Nested: $line ($sibling)\\\"}\"\ndone\n"
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0o755); err != nil {
+		t.Fatalf("failed to write script: %v", err)
+	}
+
+	cfg := Config{
+		Match:      `^test:\s*(.*)`,
+		Exec:       "sh mock_decoder.sh",
+		ExtraPaths: []string{subDir},
+	}
+
+	d, err := NewExecDecoder(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer d.Close()
+
+	rec := record.NewRecord("test: hello")
+	rec.Fields["message"] = "test: hello"
+
+	transformed, matched := d.Decode(rec)
+	if !matched {
+		t.Fatalf("expected match")
+	}
+	expected := "Nested: test: hello (sibling_data)"
+	if transformed.Fields["message"] != expected {
+		t.Errorf("expected %q, got %q", expected, transformed.Fields["message"])
 	}
 }

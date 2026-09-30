@@ -121,6 +121,16 @@ For profile management commands and examples:
 	if *flagStdin {
 		sourceCount++
 	}
+
+	// Positional log file argument (e.g. "oml saved.log" or "oml -profile Zephyr saved.log")
+	if *flagFile == "" && sourceCount == 0 && len(flag.Args()) > 0 {
+		cand := flag.Args()[0]
+		if fi, err := os.Stat(cand); err == nil && !fi.IsDir() {
+			*flagFile = cand
+			sourceCount++
+		}
+	}
+
 	if sourceCount > 1 {
 		fmt.Fprintln(os.Stderr, "error: --port, --file, --cmd, and --stdin are mutually exclusive")
 		os.Exit(1)

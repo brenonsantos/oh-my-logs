@@ -556,14 +556,12 @@ func (m *Model) rebuildDecodersPipeline(profileDecoders []decoder.Config) {
 	if len(all) > 0 {
 		var searchDirs []string
 		if m.appConfig != nil && m.appConfig.DecodersDir != "" {
-			searchDirs = append(searchDirs, m.appConfig.DecodersDir)
-			if entries, err := os.ReadDir(m.appConfig.DecodersDir); err == nil {
-				for _, e := range entries {
-					if e.IsDir() {
-						searchDirs = append(searchDirs, filepath.Join(m.appConfig.DecodersDir, e.Name()))
-					}
+			_ = filepath.WalkDir(m.appConfig.DecodersDir, func(path string, d os.DirEntry, err error) error {
+				if err == nil && d.IsDir() {
+					searchDirs = append(searchDirs, path)
 				}
-			}
+				return nil
+			})
 		}
 		for i := range all {
 			if len(searchDirs) > 0 {

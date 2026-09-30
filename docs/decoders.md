@@ -51,7 +51,7 @@ decoders:
 
 ## 3. Procedural Decoders (`exec` Workers)
 
-For encrypted, compressed, or packed binary/Base64 payloads (such as SMP messages or custom protocols), `oml` can delegate decoding to an external worker process (Python, Go, Node, Bash, Rust, etc.).
+For encrypted, compressed, or packed binary/Base64 payloads (such as packed binary messages or custom protocols), `oml` can delegate decoding to an external worker process (Python, Go, Node, Bash, Rust, etc.).
 
 ```yaml
 decoders:

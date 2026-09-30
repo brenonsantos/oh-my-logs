@@ -1,9 +1,12 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/decoder"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -114,5 +117,78 @@ func TestTUIDecoders_InspectorModalShowsRawAndDecoded(t *testing.T) {
 	}
 	if strings.Contains(formatted, "_raw_message:") {
 		t.Errorf("expected FormattedRecordDetail to omit _raw_message from fields list, got: %s", formatted)
+	}
+}
+
+func TestTUIDecoders_NestedDecodersDirDiscovery(t *testing.T) {
+	tempDir := t.TempDir()
+	nestedDecDir := filepath.Join(tempDir, "bundle", "nested")
+	if err := os.MkdirAll(nestedDecDir, 0o755); err != nil {
+		t.Fatalf("failed to create nested dir: %v", err)
+	}
+
+	appCfg := &config.AppConfig{
+		DecodersDir: tempDir,
+	}
+
+	buf := record.NewBuffer(100)
+	rawParser := parser.NewRawParser()
+	m := New(serial.DefaultConfig(), nil, rawParser, buf, nil, appCfg)
+
+	decoders := []decoder.Config{
+		{
+			Match: `^nested:\s*(.*)`,
+			Format: "Handled: {0}",
+		},
+	}
+	m.rebuildDecodersPipeline(decoders)
+
+	if m.decoders == nil {
+		t.Fatalf("expected pipeline to be created")
+	}
+}
+
+func TestTUIDecoders_IngestLineWithHostTimestampAndDecoder(t *testing.T) {
+	buf := record.NewBuffer(100)
+	p, err := parser.NewRegexParser(`^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?P<module>[a-zA-Z0-9_.-]+):\s*(?P<message>.*)$`)
+	if err != nil {
+		t.Fatalf("failed to create regex parser: %v", err)
+	}
+
+	m := New(serial.DefaultConfig(), nil, p, buf, nil, nil)
+	m.SetProjectDecoders([]decoder.Config{
+		{
+			Match:  `^CMD:(?P<cmd>[A-Za-z0-9]+)`,
+			Format: "Processed command: {cmd}",
+		},
+	})
+
+	// Ingest line with host timestamp prefix as written by disk logger
+	rawLine := "[2026-09-30T15:52:40.788] [  15863.410] <inf> sensor_node: CMD:RebootRequest"
+	updatedModel, _ := m.Update(lineMsg(rawLine))
+	m = updatedModel.(Model)
+
+	if len(m.visible) != 1 {
+		t.Fatalf("expected 1 record visible, got %d", len(m.visible))
+	}
+
+	rec := m.visible[0]
+	if rec.Fields["level"] != "inf" {
+		t.Errorf("expected level=inf, got %q", rec.Fields["level"])
+	}
+	if rec.Fields["uptime"] != "15863.410" {
+		t.Errorf("expected uptime=15863.410, got %q", rec.Fields["uptime"])
+	}
+	if rec.Fields["module"] != "sensor_node" {
+		t.Errorf("expected module=sensor_node, got %q", rec.Fields["module"])
+	}
+	if rec.Fields["message"] != "Processed command: RebootRequest" {
+		t.Errorf("expected decoded message 'Processed command: RebootRequest', got %q", rec.Fields["message"])
+	}
+	if rec.Fields["_raw_message"] != "CMD:RebootRequest" {
+		t.Errorf("expected _raw_message='CMD:RebootRequest', got %q", rec.Fields["_raw_message"])
+	}
+	if rec.Raw != rawLine {
+		t.Errorf("expected full raw preserved, got %q", rec.Raw)
 	}
 }
