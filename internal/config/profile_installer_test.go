@@ -228,3 +228,39 @@ decoders:
 	}
 }
 
+func TestAlternateGitURL(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{
+			input:    "https://github.example.com/team/tools.git",
+			expected: "git@github.example.com:team/tools.git",
+		},
+		{
+			input:    "http://github.example.com/team/tools.git",
+			expected: "git@github.example.com:team/tools.git",
+		},
+		{
+			input:    "git@github.example.com:team/tools.git",
+			expected: "https://github.example.com/team/tools.git",
+		},
+		{
+			input:    "ssh://git@github.example.com/team/tools.git",
+			expected: "https://github.example.com/team/tools.git",
+		},
+		{
+			input:    "not-a-url",
+			expected: "",
+		},
+	}
+
+	for _, tc := range tests {
+		actual := config.AlternateGitURL(tc.input)
+		if actual != tc.expected {
+			t.Errorf("AlternateGitURL(%q) = %q, want %q", tc.input, actual, tc.expected)
+		}
+	}
+}
+
+
