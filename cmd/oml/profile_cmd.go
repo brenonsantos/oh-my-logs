@@ -72,7 +72,7 @@ Examples:
   oml profile list
   oml profile install ./profiles/zephyr.yaml
   oml profile install https://raw.githubusercontent.com/.../appliance.yaml
-  oml profile install git@github.whirlpool.com:firmware/tools.git
+  oml profile install git@github.company.internal:firmware/tools.git
   oml profile update
   oml profile update appliance --check
   oml profile show 1
