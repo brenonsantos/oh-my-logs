@@ -23,32 +23,10 @@ func DefaultInstallDir() (string, error) {
 			localAppData = filepath.Join(home, "AppData", "Local")
 		}
 		return filepath.Join(localAppData, "Programs", "oh-my-logs"), nil
-	case "darwin":
-		// On macOS, try /usr/local/bin if writable, else ~/.local/bin
-		if isWritableDir("/usr/local/bin") {
-			return "/usr/local/bin", nil
-		}
-		return filepath.Join(home, ".local", "bin"), nil
-	default: // linux / unix
-		if isWritableDir("/usr/local/bin") {
-			return "/usr/local/bin", nil
-		}
+	default: // darwin / linux / unix
+		// Default to user-local ~/.local/bin to avoid requiring root/sudo permissions
 		return filepath.Join(home, ".local", "bin"), nil
 	}
-}
-
-func isWritableDir(dir string) bool {
-	info, err := os.Stat(dir)
-	if err != nil || !info.IsDir() {
-		return false
-	}
-	// Try creating a temp file to verify write permissions
-	testFile := filepath.Join(dir, fmt.Sprintf(".oml_write_test_%d", os.Getpid()))
-	if err := os.WriteFile(testFile, []byte("test"), 0o600); err != nil {
-		return false
-	}
-	_ = os.Remove(testFile)
-	return true
 }
 
 // InstallBinary copies the currently running binary to targetDir and ensures example profiles exist.
@@ -178,7 +156,7 @@ func UninstallBinary(targetDir string) (string, error) {
 		if _, err := os.Stat(destPath); os.IsNotExist(err) {
 			return "", fmt.Errorf("binary not found at %q", destPath)
 		}
-		if err := os.Remove(destPath); err != nil {
+		if err := removeBinary(destPath); err != nil {
 			if os.IsPermission(err) {
 				if runtime.GOOS == "windows" {
 					return "", fmt.Errorf("permission denied removing %q (please run PowerShell as Administrator)", destPath)
@@ -215,7 +193,7 @@ func UninstallBinary(targetDir string) (string, error) {
 		}
 	}
 
-	// 3. Known standard system and user directories
+	// 3. Known standard system and user directories (user-local checked first)
 	if home, err := os.UserHomeDir(); err == nil {
 		switch runtime.GOOS {
 		case "windows":
@@ -230,9 +208,9 @@ func UninstallBinary(targetDir string) (string, error) {
 			}
 		default: // darwin / linux
 			standardDirs := []string{
-				"/usr/local/bin",
 				filepath.Join(home, ".local", "bin"),
 				filepath.Join(home, "bin"),
+				"/usr/local/bin",
 			}
 			for _, d := range standardDirs {
 				p := filepath.Clean(filepath.Join(d, binaryName))
@@ -252,7 +230,7 @@ func UninstallBinary(targetDir string) (string, error) {
 	for _, cand := range candidates {
 		if _, err := os.Stat(cand); err == nil {
 			foundAny = true
-			if err := os.Remove(cand); err != nil {
+			if err := removeBinary(cand); err != nil {
 				if os.IsPermission(err) {
 					permDenied = append(permDenied, cand)
 				} else {
@@ -269,6 +247,13 @@ func UninstallBinary(targetDir string) (string, error) {
 	}
 
 	if len(permDenied) > 0 {
+		if len(removed) > 0 {
+			msg := strings.Join(removed, ", ")
+			if runtime.GOOS == "windows" {
+				return fmt.Sprintf("%s (could not remove %s: requires Administrator)", msg, strings.Join(permDenied, ", ")), nil
+			}
+			return fmt.Sprintf("%s (could not remove %s: requires sudo)", msg, strings.Join(permDenied, ", ")), nil
+		}
 		if runtime.GOOS == "windows" {
 			return strings.Join(removed, ", "), fmt.Errorf("permission denied removing %s (please run PowerShell as Administrator)", strings.Join(permDenied, ", "))
 		}

@@ -65,6 +65,8 @@ esac
 # Parse arguments
 DO_UNINSTALL=0
 NIGHTLY=0
+SYSTEM_INSTALL=0
+TARGET_DIR="${INSTALL_DIR:-}"
 SPECIFIED_TAG="${VERSION:-${TAG:-}}"
 
 while [ $# -gt 0 ]; do
@@ -75,6 +77,18 @@ while [ $# -gt 0 ]; do
             ;;
         --nightly|-n)
             NIGHTLY=1
+            shift
+            ;;
+        --system|-s)
+            SYSTEM_INSTALL=1
+            shift
+            ;;
+        --dir|-d)
+            TARGET_DIR="$2"
+            shift 2
+            ;;
+        --dir=*)
+            TARGET_DIR="${1#*=}"
             shift
             ;;
         --version|-v|--tag)
@@ -95,15 +109,20 @@ done
 if [ "$DO_UNINSTALL" = "1" ]; then
     print_step "Uninstalling oh-my-logs (oml)..."
     REMOVED=0
-    for DIR in "/usr/local/bin" "$HOME/.local/bin" "$HOME/bin"; do
+    for DIR in "$HOME/.local/bin" "$HOME/bin" "/usr/local/bin"; do
         if [ -f "$DIR/oml" ]; then
             if [ -w "$DIR" ]; then
                 rm -f "$DIR/oml"
+                print_success "Removed $DIR/oml"
+                REMOVED=1
+            elif command -v sudo >/dev/null 2>&1; then
+                if sudo rm -f "$DIR/oml"; then
+                    print_success "Removed $DIR/oml"
+                    REMOVED=1
+                fi
             else
-                sudo rm -f "$DIR/oml"
+                print_warn "Permission denied removing $DIR/oml (try: sudo rm -f \"$DIR/oml\")"
             fi
-            print_success "Removed $DIR/oml"
-            REMOVED=1
         fi
     done
     if [ "$REMOVED" -eq 0 ]; then
@@ -122,16 +141,24 @@ else
 fi
 
 # Determine target directory
-if [ -w "/usr/local/bin" ]; then
+USE_SUDO=0
+if [ -n "$TARGET_DIR" ]; then
+    if [ ! -w "$TARGET_DIR" ] && command -v sudo >/dev/null 2>&1; then
+        USE_SUDO=1
+    fi
+elif [ "${SYSTEM_INSTALL:-0}" = "1" ] || [ "${OML_SYSTEM:-0}" = "1" ]; then
     TARGET_DIR="/usr/local/bin"
-elif [ -f "/usr/local/bin/oml" ] && command -v sudo >/dev/null 2>&1; then
-    # An existing binary in /usr/local/bin should be updated directly with sudo
+    if [ ! -w "$TARGET_DIR" ] && command -v sudo >/dev/null 2>&1; then
+        USE_SUDO=1
+    fi
+elif [ -f "/usr/local/bin/oml" ] && [ ! -f "$HOME/.local/bin/oml" ]; then
+    # Existing system-wide installation detected: update it in place
     TARGET_DIR="/usr/local/bin"
-    USE_SUDO=1
-elif command -v sudo >/dev/null 2>&1 && [ -t 0 ]; then
-    TARGET_DIR="/usr/local/bin"
-    USE_SUDO=1
+    if [ ! -w "$TARGET_DIR" ] && command -v sudo >/dev/null 2>&1; then
+        USE_SUDO=1
+    fi
 else
+    # Default: user-local installation in ~/.local/bin (no root / sudo required)
     TARGET_DIR="$HOME/.local/bin"
     mkdir -p "$TARGET_DIR"
 fi
