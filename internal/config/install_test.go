@@ -18,6 +18,15 @@ func TestDefaultInstallDir(t *testing.T) {
 	if dir == "" {
 		t.Fatalf("DefaultInstallDir returned empty string")
 	}
+	if runtime.GOOS != "windows" {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			expected := filepath.Join(home, ".local", "bin")
+			if dir != expected {
+				t.Errorf("expected default install dir %q, got %q", expected, dir)
+			}
+		}
+	}
 }
 
 func TestInstallAndUninstallBinary(t *testing.T) {

@@ -39,8 +39,22 @@ $BinaryPath = Join-Path $InstallDir "oml.exe"
 if ($Uninstall) {
     Write-Step "Uninstalling oh-my-logs (oml)..."
     if (Test-Path $BinaryPath) {
-        Remove-Item -Path $BinaryPath -Force
-        Write-Success "Removed $BinaryPath"
+        try {
+            Remove-Item -Path $BinaryPath -Force -ErrorAction Stop
+            Write-Success "Removed $BinaryPath"
+        } catch {
+            # If the binary is locked/in-use, rename and dispatch background cleanup
+            try {
+                $TempLeaf = ".oml_uninstall_$PID.tmp"
+                $TempPath = Join-Path $InstallDir $TempLeaf
+                if (Test-Path $TempPath) { Remove-Item -Path $TempPath -Force -ErrorAction SilentlyContinue }
+                Rename-Item -Path $BinaryPath -NewName $TempLeaf -Force -ErrorAction Stop
+                Start-Process -FilePath "cmd.exe" -ArgumentList "/C ping 127.0.0.1 -n 2 >nul & del /f /q `"$TempPath`"" -WindowStyle Hidden
+                Write-Success "Removed $BinaryPath"
+            } catch {
+                Write-WarningMsg "Could not remove $BinaryPath : $_"
+            }
+        }
     }
 
     # Remove from User PATH
