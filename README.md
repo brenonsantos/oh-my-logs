@@ -1,6 +1,6 @@
 # oh-my-logs (`oml`)
 
-> **Release v1.2.0 — Taubateano**  
+> **Release v1.4.1 — Joinvillense**  
 > A high-performance, cross-platform terminal UI for monitoring, filtering, measuring latency, and transmitting serial data for embedded systems.
 
 <img width="926" height="676" alt="oh-my-logs main interface" src="https://github.com/user-attachments/assets/beaa2cf3-4b70-4240-a166-a40532f9edb1" />
