@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 	"github.com/brenoniehues/oh-my-logs/internal/decoder"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/game"
+	"github.com/brenoniehues/oh-my-logs/internal/ipc"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
@@ -299,6 +301,9 @@ type Model struct {
 	// Decoders pipeline
 	decoders        *decoder.Pipeline
 	projectDecoders []decoder.Config
+
+	// IPC Server
+	ipcServer io.Closer
 }
 
 // New creates a new Model with sensible defaults.
@@ -578,8 +583,12 @@ func (m *Model) rebuildDecodersPipeline(profileDecoders []decoder.Config) {
 	}
 }
 
-// Close gracefully terminates background resources including decoders and disk loggers.
+// Close gracefully terminates background resources including decoders, disk loggers, and IPC server.
 func (m *Model) Close() error {
+	if m.ipcServer != nil {
+		_ = m.ipcServer.Close()
+		m.ipcServer = nil
+	}
 	if m.decoders != nil {
 		_ = m.decoders.Close()
 		m.decoders = nil
@@ -588,6 +597,22 @@ func (m *Model) Close() error {
 		_ = m.diskLogger.Close()
 	}
 	return nil
+}
+
+// StartIPCServer starts the local IPC server allowing external clients (like oml mcp) to query live logs.
+func (m *Model) StartIPCServer() {
+	if m.ipcServer != nil {
+		return
+	}
+	configDir := ""
+	if m.appConfig != nil {
+		configDir = m.appConfig.ConfigDir
+	}
+	sockAddr := ipc.SocketPath(configDir)
+	srv, err := ipc.NewServer(sockAddr, NewIPCHandler(m))
+	if err == nil {
+		m.ipcServer = srv
+	}
 }
 
 // StartDiskLogger begins direct-to-disk streaming to targetPath.
