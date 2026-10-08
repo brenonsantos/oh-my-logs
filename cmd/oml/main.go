@@ -6,8 +6,10 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
+	"github.com/brenoniehues/oh-my-logs/internal/ipc"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
@@ -21,6 +23,14 @@ var (
 )
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "mcp") {
+		appCfg, err := config.Load()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: config: %v\n", err)
+		}
+		os.Exit(runMCPCommand(appCfg, os.Args[2:]))
+	}
+
 	if len(os.Args) > 1 && (os.Args[1] == "profile" || os.Args[1] == "profiles") {
 		appCfg, err := config.Load()
 		if err != nil {
@@ -62,6 +72,7 @@ Fast, keyboard-centric terminal log viewer for embedded systems.
 
 Usage:
   oml [flags]                      Launch interactive log viewer
+  oml mcp [options]                Start Model Context Protocol (MCP) server for AI assistants
   oml profile <command> [options]  Manage parser profiles & companion decoders
 
 Stream Sources (mutually exclusive):
@@ -314,11 +325,30 @@ For profile management commands and examples:
 	}
 	buf := record.NewBuffer(bufCap)
 
+	// If the port was busy, check if an active oml MCP session is holding it and request handover
+	if *flagPort != "" && src == nil {
+		configDir := ""
+		if appCfg != nil {
+			configDir = appCfg.ConfigDir
+		}
+		sockAddr := ipc.SocketPath(configDir)
+		client := ipc.NewClient(sockAddr)
+		if client.IsAvailable() {
+			_ = client.RequestHandover()
+			time.Sleep(100 * time.Millisecond)
+			src, err = serial.NewSerialSource(serialCfg)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error connecting to %s after handover: %v\n", serialCfg.Port, err)
+			}
+		}
+	}
+
 	// ── TUI ───────────────────────────────────────────────────────────────────
 	if savedSettings != nil && savedSettings.Theme != "" {
 		tui.SetCurrentTheme(savedSettings.Theme)
 	}
 	model := tui.New(serialCfg, profile, p, buf, src, appCfg)
+	model.StartIPCServer()
 
 	if projectCfg != nil {
 		if len(projectCfg.Decoders) > 0 {
