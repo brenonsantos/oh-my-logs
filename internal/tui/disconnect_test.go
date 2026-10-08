@@ -359,3 +359,35 @@ func TestDefaultDisconnectedOnLaunch(t *testing.T) {
 		t.Errorf("expected tryReconnectCmd to be returned after pressing 'r'")
 	}
 }
+
+func TestListenToSource_ClosedOrNilSourceDoesNotPanic(t *testing.T) {
+	// 1. Nil source returns nil cmd without panic
+	cmd := listenToSource(nil)
+	if cmd != nil {
+		t.Errorf("expected listenToSource(nil) to return nil, got %v", cmd)
+	}
+
+	errCmd := listenToSourceErrors(nil)
+	if errCmd != nil {
+		t.Errorf("expected listenToSourceErrors(nil) to return nil, got %v", errCmd)
+	}
+
+	// 2. Closed channel source produces ConnStateMsg without panic
+	mockSrc := newMockCloseSource()
+	close(mockSrc.lines)
+	close(mockSrc.errors)
+
+	cmdClosed := listenToSource(mockSrc)
+	msg := cmdClosed()
+	stateMsg, ok := msg.(ConnStateMsg)
+	if !ok || stateMsg.State != ConnDisconnected {
+		t.Errorf("expected ConnStateMsg with ConnDisconnected on closed source, got %T: %v", msg, msg)
+	}
+
+	errCmdClosed := listenToSourceErrors(mockSrc)
+	errMsg := errCmdClosed()
+	if errMsg != nil {
+		t.Errorf("expected nil from listenToSourceErrors on closed channel, got %v", errMsg)
+	}
+}
+
