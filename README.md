@@ -154,7 +154,46 @@ Explore the dedicated documentation guides for in-depth tutorials and configurat
 | [**Dual-Pane Split Views**](docs/split-views.md) | Vertical and horizontal split layouts, pane focus switching, and synchronized chronological scrolling (`S`). |
 | [**Serial TX (Send)**](docs/serial-tx.md) | Interactive serial send prompt, line ending selection (`Ctrl+E`), command history, draft recovery, and Maple Orange echo. |
 | [**Bookmarks & Log Pinning**](docs/bookmarks.md) | Pinning milestones, batch bookmarking, chronological jumping (`[` / `]`), and Bookmarked-Only filtering. |
+| [**AI & MCP Integration**](docs/mcp.md) | Model Context Protocol server (`oml mcp`), Gemini CLI / Claude Desktop setup, local IPC bridge, and active watchdog tools. |
 | [**Master Keybindings Reference**](docs/keybindings.md) | Complete categorized cheat sheet of all keyboard shortcuts, mouse gestures, input prompts, and easter eggs. |
+
+---
+
+## 🤖 AI & Model Context Protocol (MCP) Integration
+
+`oml` includes a native, headless **Model Context Protocol (MCP)** server (`oml mcp`) with a transparent local IPC bridge. This allows AI assistants like **Gemini CLI**, **Claude Desktop**, or **Cursor** to directly inspect device logs, send shell commands, and monitor hardware events—even while you are actively viewing the logs in the interactive `oml` TUI!
+
+### Quick AI Setup
+
+Add `oml` to your AI assistant's MCP configuration (e.g., `~/.gemini/settings.json` or `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "oml": {
+      "command": "oml",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### Available MCP Tools for AI Agents
+
+| Tool | Purpose |
+|------|---------|
+| `list_ports` | Detect and list all hardware serial ports. |
+| `connect_port` | Dynamically open or switch serial port, baud rate, and parsing profile. |
+| `disconnect_port` | Release the port handle (allowing external flashers like `west flash` or `pyocd` to run). |
+| `get_device_status` | Return connection state, uptime, active profile, and buffer statistics. |
+| `get_recent_logs` | Retrieve recent log lines with severity level (`DEBUG`, `INFO`, `WARN`, `ERROR`), module filter, and `since_id` checkpointing. |
+| `search_logs` | Search log history using plain text or regular expressions. |
+| `send_serial_command` | Send commands over serial TX to the device shell and capture output. |
+| `wait_for_log` | Block until a specific boot banner, regex, or state transition occurs. |
+| `watch_session` | Continuously observe incoming logs over a duration, ideal while a user presses buttons or physically tests hardware. |
+| `clear_log_buffer` | Reset in-memory log buffer for clean diagnostic runs. |
+
+See [**AI & MCP Integration Guide**](docs/mcp.md) for detailed architecture, multi-process IPC behavior, and example agent prompts.
 
 ---
 
