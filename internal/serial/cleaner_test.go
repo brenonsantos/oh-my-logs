@@ -87,6 +87,16 @@ func TestCleanTerminalLine(t *testing.T) {
 			input:    "[ 1.234] <inf> transaction total is $50.00 for user <john>",
 			expected: "[ 1.234] <inf> transaction total is $50.00 for user <john>",
 		},
+		{
+			name:     "subcommand tab indentation and column formatting preserved",
+			input:    "  set_conv_group\t: Set conversation group",
+			expected: "  set_conv_group        : Set conversation group",
+		},
+		{
+			name:     "inline ANSI cursor movements and clear sequences stripped",
+			input:    "enable \x1b[1D \x1b[J\x1b[1D \x1b[J: enable target",
+			expected: "enable   : enable target",
+		},
 	}
 
 	for _, tc := range tests {
@@ -94,6 +104,49 @@ func TestCleanTerminalLine(t *testing.T) {
 			actual := serial.CleanTerminalLine(tc.input)
 			if actual != tc.expected {
 				t.Errorf("CleanTerminalLine(%q) = %q, want %q", tc.input, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestExpandTabs(t *testing.T) {
+	cases := []struct {
+		name     string
+		input    string
+		tabWidth int
+		expected string
+	}{
+		{
+			name:     "no tabs",
+			input:    "hello world",
+			tabWidth: 8,
+			expected: "hello world",
+		},
+		{
+			name:     "single tab at start",
+			input:    "\thello",
+			tabWidth: 8,
+			expected: "        hello",
+		},
+		{
+			name:     "tab stop alignment with 4 spaces",
+			input:    "cmd\tdesc",
+			tabWidth: 4,
+			expected: "cmd desc",
+		},
+		{
+			name:     "tab stop alignment with 8 spaces",
+			input:    "a\tb\tc",
+			tabWidth: 8,
+			expected: "a       b       c",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := serial.ExpandTabs(tc.input, tc.tabWidth)
+			if actual != tc.expected {
+				t.Errorf("ExpandTabs(%q, %d) = %q, want %q", tc.input, tc.tabWidth, actual, tc.expected)
 			}
 		})
 	}

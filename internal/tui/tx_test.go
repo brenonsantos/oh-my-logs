@@ -470,10 +470,15 @@ func TestShellInteractiveMode_TabForwardingAndCharacterStreaming(t *testing.T) {
 		t.Errorf("expected up arrow ANSI sequence, got %q", string(lastWritten))
 	}
 
-	// 5. Enter should send configured line ending and record TX badge
+	// 5. Enter should send configured line ending only (preventing command duplication) and record TX badge
 	m.shellInput.SetText("version")
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
+
+	lastWritten = mock.written[len(mock.written)-1]
+	if string(lastWritten) != "\r\n" {
+		t.Errorf("expected only newline ending '\\r\\n' sent on Enter in interactive mode, got %q", string(lastWritten))
+	}
 
 	if m.buffer.Len() != 1 {
 		t.Fatalf("expected 1 record in buffer for TX badge, got %d", m.buffer.Len())

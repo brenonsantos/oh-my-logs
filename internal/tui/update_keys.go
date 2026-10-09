@@ -968,17 +968,22 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// 9. Enter: Transmit command line ending, save history, record TX badge
+	// 9. Enter: Transmit command line ending, save history, record TX badge.
+	// NOTE: In interactive passthrough mode, character runes were ALREADY transmitted
+	// character-by-character as the engineer typed them. Therefore, pressing Enter must
+	// ONLY transmit the configured line ending suffix (e.g. \r or \r\n), NOT re-transmit
+	// the entire string `val + ending`, which would result in command duplication (e.g. "os_msgos_msg").
 	if keyMatches(msg, m.keys.Confirm) || msg.Type == tea.KeyEnter {
 		val := m.shellInput.Value
-		payload, err := serial.FormatTXPayload(val, m.txEnding)
-		if err == nil {
-			_, _ = m.source.Write(payload)
-			if val != "" {
-				m.recordTXMessage(val)
-				if m.shellInput.AddHistory(val) {
-					m.saveSettings()
-				}
+		ending := m.txEnding.Suffix()
+		if ending == "" {
+			ending = "\r"
+		}
+		_, _ = m.source.Write([]byte(ending))
+		if val != "" {
+			m.recordTXMessage(val)
+			if m.shellInput.AddHistory(val) {
+				m.saveSettings()
 			}
 		}
 		m.shellInput.Reset()
