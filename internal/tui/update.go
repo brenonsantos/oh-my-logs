@@ -17,8 +17,18 @@ import (
 
 // listenToSource returns a command that waits for the next line from the source.
 func listenToSource(src serial.Source) tea.Cmd {
+	if src == nil {
+		return nil
+	}
 	return func() tea.Msg {
-		line, ok := <-src.Lines()
+		defer func() {
+			_ = recover()
+		}()
+		linesCh := src.Lines()
+		if linesCh == nil {
+			return ConnStateMsg{State: ConnDisconnected, Detail: "source closed"}
+		}
+		line, ok := <-linesCh
 		if !ok {
 			return ConnStateMsg{State: ConnDisconnected, Detail: "source closed"}
 		}
@@ -28,8 +38,18 @@ func listenToSource(src serial.Source) tea.Cmd {
 
 // listenToSourceErrors returns a command that reads the next error from the source.
 func listenToSourceErrors(src serial.Source) tea.Cmd {
+	if src == nil {
+		return nil
+	}
 	return func() tea.Msg {
-		err, ok := <-src.Errors()
+		defer func() {
+			_ = recover()
+		}()
+		errsCh := src.Errors()
+		if errsCh == nil {
+			return nil
+		}
+		err, ok := <-errsCh
 		if !ok {
 			return nil
 		}
@@ -166,14 +186,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			line = strings.TrimSpace(line)
 		}
 		if line == "" {
-			return m, listenToSource(m.source)
+			if m.connState == ConnConnected && m.source != nil {
+				return m, listenToSource(m.source)
+			}
+			return m, nil
 		}
 		r, parsedTs := parseLineWithTimestampFallback(m.parser, line)
 		if !parsedTs.IsZero() && r.Timestamp.IsZero() {
 			r.Timestamp = parsedTs
 		}
 		m.ingestRecord(r)
-		return m, listenToSource(m.source)
+		if m.connState == ConnConnected && m.source != nil {
+			return m, listenToSource(m.source)
+		}
+		return m, nil
 
 
 	// ── Log save completed ───────────────────────────────────────────────────
