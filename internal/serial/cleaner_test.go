@@ -58,6 +58,26 @@ func TestCleanTerminalLine(t *testing.T) {
 			expected: "",
 		},
 		{
+			name:     "standalone dollar device prompt becomes empty",
+			input:    "$device",
+			expected: "",
+		},
+		{
+			name:     "standalone dollar device with space becomes empty",
+			input:    "$ device ",
+			expected: "",
+		},
+		{
+			name:     "dollar device prompt prefix stripped from log",
+			input:    "$device [ 12.345] <inf> sensor: ready",
+			expected: "[ 12.345] <inf> sensor: ready",
+		},
+		{
+			name:     "bracketed device prompt stripped from log",
+			input:    "[device]$ [ 12.345] <inf> sensor: ready",
+			expected: "[ 12.345] <inf> sensor: ready",
+		},
+		{
 			name:     "colored log preserved",
 			input:    "\x1b[32m[   5208.360]\x1b[0m <inf> os_msg: ok",
 			expected: "\x1b[32m[   5208.360]\x1b[0m <inf> os_msg: ok",

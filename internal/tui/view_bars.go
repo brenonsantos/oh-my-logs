@@ -420,6 +420,10 @@ func (m Model) viewStatusBar() string {
 		parts = append(parts, theme.Accent.Bold(true).Render(fmt.Sprintf("▤ %s", curFormat.Tag())))
 	}
 
+	if m.mode == modeShellInteractive {
+		parts = append(parts, theme.TitleConnErr.Render("⚡ SHELL ACTIVE"))
+	}
+
 	parts = append(parts, tsStr)
 	parts = append(parts, followStr)
 
@@ -480,6 +484,16 @@ func (m Model) renderKeyBarContent() string {
 		prompt := lipgloss.NewStyle().Foreground(colorMaple).Bold(true).Render(fmt.Sprintf("TX [%s] › ", m.txEnding.String()))
 		text := m.txInput.Render(theme.Content)
 		help := theme.Muted.Render("  [Enter: send · Tab: line ending · ↑/↓: history · ←/→: cursor · ^V: paste · Esc: cancel]")
+		return "  " + prompt + text + help
+
+	case modeShellInteractive:
+		promptLabel := m.shellPrompt
+		if promptLabel == "" {
+			promptLabel = "$ "
+		}
+		prompt := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("📟 SHELL: " + promptLabel)
+		text := m.shellInput.Render(theme.Content)
+		help := theme.Muted.Render("  [Tab: MCU completion · ↑/↓: MCU history · ^C: interrupt · Enter: send · Esc: exit to logs]")
 		return "  " + prompt + text + help
 
 	case modeSettings:
@@ -607,16 +621,14 @@ func (m Model) renderKeyBarContent() string {
 				hint(",", "⚙ cfg"),
 				hint("J", "time"),
 				hint("o", "cols"),
-				hint("m", "mark"),
 				hint("s", "save"),
+				hint("p", "port"),
 				hint("Space", pauseLabel),
 				hint("c", "clear"),
 				hint("i", "send"),
+				hint("I", "shell"),
 				hint("|", "split"),
 			)
-			if (m.connState == ConnConnected || m.serialCfg.Port != "") && !m.isFileSource {
-				candidates = append(candidates, hint("p", "port"))
-			}
 		}
 
 		// Adaptive width budget:

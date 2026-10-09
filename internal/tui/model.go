@@ -37,6 +37,7 @@ const (
 	modeHelp
 	modeGame
 	modeTXInput
+	modeShellInteractive
 	modeSettings
 	modeFilePicker
 	modeRowDetail
@@ -214,6 +215,10 @@ type Model struct {
 	// Serial TX transmission prompt
 	txInput  TextInput
 	txEnding serial.LineEnding
+
+	// Interactive Shell Passthrough mode ("minicom-inside-oml")
+	shellPrompt string // detected device shell prompt (e.g. "device:~$ " or "$device")
+	shellInput  TextInput
 
 	// Bench marker annotation prompt
 	markerInput      TextInput
@@ -483,6 +488,9 @@ func New(
 	m.fpNewFolderInput = NewTextInput(false)
 
 	m.txInput.History = txHist
+	m.shellInput = NewTextInput(true)
+	m.shellInput.History = txHist
+	m.shellPrompt = "$ "
 	m.loadFilters()
 	m.loadColumnCustomization()
 

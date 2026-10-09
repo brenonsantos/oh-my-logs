@@ -14,8 +14,8 @@ var (
 
 	// shellPromptRe matches leftover interactive shell prompts at the start of a line
 	// that were not followed by ANSI erasure codes.
-	// Examples: "device:~$ ", "uart:~$ ", "myboard:~$ ", "shell> ", "root@host# ".
-	shellPromptRe = regexp.MustCompile(`^(?:[a-zA-Z0-9_.-]+@)?[a-zA-Z0-9_.-]+(?::~?|~)?[$#>]\s*`)
+	// Examples: "device:~$ ", "uart:~$ ", "$device", "$ device", "[device]$ ", "shell> ", "root@host# ".
+	shellPromptRe = regexp.MustCompile(`^(?:[$#]\s*[a-zA-Z0-9_.-]+[:>]?\s*|\[[a-zA-Z0-9_.-]+\]\s*[$#>]\s*|(?:[a-zA-Z0-9_.-]+@)?[a-zA-Z0-9_.-]+(?::~?|~)?[$#>]\s*)`)
 
 	// residualCursorRe matches leading ANSI cursor movement or erase commands
 	// without removing SGR color codes (which end in 'm').
@@ -43,4 +43,15 @@ func CleanTerminalLine(line string) string {
 	cleaned = residualCursorRe.ReplaceAllLiteralString(cleaned, "")
 
 	return strings.TrimSpace(cleaned)
+}
+
+// DetectShellPrompt inspects line and returns the prompt string if line matches
+// a standalone or prefixed shell prompt (e.g. "device:~$ ", "$device", "uart:~$ ").
+func DetectShellPrompt(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return ""
+	}
+	m := shellPromptRe.FindString(trimmed)
+	return strings.TrimSpace(m)
 }

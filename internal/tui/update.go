@@ -180,7 +180,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── New line from source ─────────────────────────────────────────────────
 	case lineMsg:
-		line := serial.CleanTerminalLine(string(msg))
+		rawStr := string(msg)
+		if detected := serial.DetectShellPrompt(rawStr); detected != "" {
+			m.shellPrompt = detected + " "
+		}
+		line := serial.CleanTerminalLine(rawStr)
 		if m.lineStripRe != nil {
 			line = m.lineStripRe.ReplaceAllLiteralString(line, "")
 			line = strings.TrimSpace(line)

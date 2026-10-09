@@ -131,7 +131,8 @@ oml profile export 1 > copy.yaml         # Export profile YAML to customize
 | `t` | Cycle timestamp display: `Clock` $\rightarrow$ `Δt` $\rightarrow$ `Both` $\rightarrow$ `OFF` |
 | `\|` / `_` | Toggle Vertical / Horizontal split view |
 | `S` | Toggle Synchronized Chronological Scrolling in split view |
-| `i` | Open interactive Serial TX send prompt (`Ctrl+E` cycles line ending) |
+| `i` | Open single-line Serial TX send prompt (`Ctrl+E` cycles line ending) |
+| `I` / `Ctrl+I` | Enter **Interactive Shell Passthrough** mode (`<Tab>` completion, arrows, `^C`) |
 | `b` | Pin / bookmark focused record or selected batch |
 | `B` | Toggle Bookmarked-Only view filter |
 | `y` | Yank (copy) selected row(s) to system clipboard |

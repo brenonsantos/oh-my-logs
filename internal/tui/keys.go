@@ -56,6 +56,7 @@ type keyMap struct {
 	Help             key.Binding
 	Game             key.Binding
 	SendTX           key.Binding
+	ShellPassthrough key.Binding
 	Quit             key.Binding
 }
 
@@ -270,6 +271,10 @@ func defaultKeyMap() keyMap {
 		SendTX: key.NewBinding(
 			key.WithKeys("i", ":"),
 			key.WithHelp("i", "send"),
+		),
+		ShellPassthrough: key.NewBinding(
+			key.WithKeys("I", "ctrl+i"),
+			key.WithHelp("I", "shell passthrough"),
 		),
 		Quit: key.NewBinding(
 			key.WithKeys("q", "ctrl+c"),

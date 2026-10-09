@@ -384,3 +384,102 @@ func TestTXEchoProfileTransformAndFilter(t *testing.T) {
 		t.Errorf("expected Raw preserved after transform, got %q", recAfter.Raw)
 	}
 }
+
+func TestShellInteractiveMode_ActivationAndExit(t *testing.T) {
+	m := newTestModel()
+	mock := newTXMockSource()
+	m.source = mock
+	m.connState = ConnConnected
+
+	// 1. Press 'I' to enter shell passthrough mode
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'I'}})
+	m = updated.(Model)
+	if m.mode != modeShellInteractive {
+		t.Fatalf("expected modeShellInteractive after pressing 'I', got %v", m.mode)
+	}
+
+	// 2. Key bar should render shell indicator
+	keyBar := m.viewKeyBar()
+	if !strings.Contains(keyBar, "SHELL") || !strings.Contains(keyBar, "MCU completion") {
+		t.Errorf("expected key bar to display shell passthrough hints, got:\n%s", keyBar)
+	}
+
+	// 3. Status bar should render SHELL ACTIVE badge
+	statusBar := m.viewStatusBar()
+	if !strings.Contains(statusBar, "SHELL ACTIVE") {
+		t.Errorf("expected status bar to display 'SHELL ACTIVE', got:\n%s", statusBar)
+	}
+
+	// 4. Press Esc to exit back to log view
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.mode != modeNormal {
+		t.Fatalf("expected modeNormal after Esc, got %v", m.mode)
+	}
+}
+
+func TestShellInteractiveMode_TabForwardingAndCharacterStreaming(t *testing.T) {
+	m := newTestModel()
+	mock := newTXMockSource()
+	m.source = mock
+	m.connState = ConnConnected
+	m.mode = modeShellInteractive
+
+	// 1. Type characters 'h', 'e', 'l', 'p'
+	for _, r := range []rune{'h', 'e', 'l', 'p'} {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = updated.(Model)
+	}
+
+	if len(mock.written) != 4 {
+		t.Fatalf("expected 4 character writes to serial, got %d", len(mock.written))
+	}
+	if string(mock.written[0]) != "h" || string(mock.written[3]) != "p" {
+		t.Errorf("unexpected written characters: %v", mock.written)
+	}
+	if m.shellInput.Value != "help" {
+		t.Errorf("expected shellInput value 'help', got %q", m.shellInput.Value)
+	}
+
+	// 2. Press Tab: should forward ASCII 0x09 directly to device!
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+
+	lastWritten := mock.written[len(mock.written)-1]
+	if !bytes.Equal(lastWritten, []byte{'\t'}) {
+		t.Errorf("expected Tab (0x09) sent to serial, got %v", lastWritten)
+	}
+
+	// 3. Press Ctrl+C: should forward ASCII 0x03 interrupt signal!
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = updated.(Model)
+
+	lastWritten = mock.written[len(mock.written)-1]
+	if !bytes.Equal(lastWritten, []byte{0x03}) {
+		t.Errorf("expected Ctrl+C (0x03) sent to serial, got %v", lastWritten)
+	}
+	if m.shellInput.Value != "" {
+		t.Errorf("expected shellInput to reset on Ctrl+C, got %q", m.shellInput.Value)
+	}
+
+	// 4. Arrow keys: Up should send ANSI \x1b[A
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = updated.(Model)
+	lastWritten = mock.written[len(mock.written)-1]
+	if string(lastWritten) != "\x1b[A" {
+		t.Errorf("expected up arrow ANSI sequence, got %q", string(lastWritten))
+	}
+
+	// 5. Enter should send configured line ending and record TX badge
+	m.shellInput.SetText("version")
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+
+	if m.buffer.Len() != 1 {
+		t.Fatalf("expected 1 record in buffer for TX badge, got %d", m.buffer.Len())
+	}
+	if !strings.Contains(m.buffer.All()[0].Raw, "version") {
+		t.Errorf("expected TX badge record with 'version', got %q", m.buffer.All()[0].Raw)
+	}
+}
+
