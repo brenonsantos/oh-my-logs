@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode"
 
+	"regexp"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
 	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	"github.com/charmbracelet/lipgloss"
@@ -213,28 +214,46 @@ func (m Model) selectedRowPlainText(absIdx int) string {
 }
 
 // highlightSubstring wraps occurrences of q with theme.Highlight, using baseStyle for non-matching portions.
-func highlightSubstring(cell, q string, baseStyle lipgloss.Style) string {
-	lower := strings.ToLower(cell)
-	lowerQ := strings.ToLower(q)
-	if lowerQ == "" {
+func highlightSubstring(cell, q string, matchCase, wholeWord bool, baseStyle lipgloss.Style) string {
+	if q == "" {
 		return baseStyle.Render(cell)
 	}
+
+	pattern := regexp.QuoteMeta(q)
+	if wholeWord {
+		pattern = `\b` + pattern + `\b`
+	}
+	if !matchCase {
+		pattern = `(?i)` + pattern
+	}
+
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return baseStyle.Render(cell)
+	}
+
+	matches := re.FindAllStringIndex(cell, -1)
+	if len(matches) == 0 {
+		return baseStyle.Render(cell)
+	}
+
 	var sb strings.Builder
 	start := 0
-	for {
-		idx := strings.Index(lower[start:], lowerQ)
-		if idx < 0 {
-			sb.WriteString(baseStyle.Render(cell[start:]))
-			break
-		}
-		matchStart := start + idx
-		matchEnd := matchStart + len(q)
+	for _, match := range matches {
+		matchStart := match[0]
+		matchEnd := match[1]
+
 		if matchStart > start {
 			sb.WriteString(baseStyle.Render(cell[start:matchStart]))
 		}
 		sb.WriteString(theme.Highlight.Render(cell[matchStart:matchEnd]))
 		start = matchEnd
 	}
+	
+	if start < len(cell) {
+		sb.WriteString(baseStyle.Render(cell[start:]))
+	}
+
 	return sb.String()
 }
 

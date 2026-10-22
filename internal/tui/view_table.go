@@ -243,7 +243,7 @@ func (m Model) viewTable() string {
 
 				var renderedCell string
 				if isMatch && m.searchInput.Value != "" {
-					renderedCell = highlightSubstring(cellText, m.searchInput.Value, cellStyle)
+					renderedCell = highlightSubstring(cellText, m.searchInput.Value, m.searchCaseSensitive, m.searchWholeWord, cellStyle)
 				} else {
 					renderedCell = cellStyle.Render(cellText)
 				}
@@ -402,8 +402,9 @@ func formatUnparsedRow(r record.Record, availW int, hasBg bool, rowBg lipgloss.T
 	}
 
 	if isMatch && searchVal != "" {
-		return highlightSubstring(clean, searchVal, cellStyle)
+        matchCase := false
+        wholeWord := false
+        return highlightSubstring(clean, searchVal, matchCase, wholeWord, cellStyle)
 	}
 	return cellStyle.Render(clean)
 }
-

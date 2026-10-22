@@ -168,6 +168,9 @@ type Model struct {
 	// Filter
 	activeFilter *filter.Filter
 	filterInput  TextInput
+	searchCaseSensitive bool
+    searchWholeWord bool
+
 
 	// Search
 	searchInput   TextInput
