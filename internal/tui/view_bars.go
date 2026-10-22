@@ -521,6 +521,13 @@ func (m Model) renderKeyBarContent() string {
 			return "  " + theme.Muted.Render("Log Inspector: [↑/↓: scroll · ←/→: prev/next · d: delete marker · m: edit · Esc/Enter: close]")
 		}
 		return "  " + theme.Muted.Render("Log Inspector: [↑/↓: scroll · ←/→: prev/next · y: copy detail · Y: copy raw · b: pin · m: mark · Esc/Enter: close]")
+	
+	case modeClearConfirm:
+		return 	"  " + theme.Muted.Render("Clear screen buffer? [Press ") +
+				theme.KeyName.Render("y") + theme.Muted.Render(" / ") +
+				theme.KeyName.Render("Enter") + theme.Muted.Render(" to confirm, ") +
+				theme.KeyName.Render("n") + theme.Muted.Render(" / ") +
+				theme.KeyName.Render("Esc") + theme.Muted.Render(" to cancel]")
 
 	default:
 		hint := func(k, action string) string {

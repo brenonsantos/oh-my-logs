@@ -970,3 +970,22 @@ func centerBox(screenWidth, screenHeight int, box string) string {
 	}
 	return strings.TrimRight(res.String(), "\n")
 }
+
+
+// viewClearConfirmModal renders the centered confirmation modal for clearing the screen.
+func (m Model) viewClearConfirmModal() string {
+	modalWidth := 48
+	if modalWidth > m.width-6 {
+		modalWidth = m.width - 6
+	}
+
+	var sb strings.Builder
+	sb.WriteString(theme.ModalTitle.Render("Clear Screen Buffer"))
+	sb.WriteString("\n\n")
+	sb.WriteString(theme.Content.Render("Are you sure you want to clear all log entries?"))
+	sb.WriteString("\n\n")
+	sb.WriteString(theme.ModalFooter.Render("y / Enter confirm · n / Esc cancel"))
+
+	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
+	return centerBox(m.width, m.tableHeight+2, modalBox)
+}
