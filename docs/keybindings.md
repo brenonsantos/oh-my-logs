@@ -113,5 +113,5 @@ A complete reference of all keyboard shortcuts, mouse gestures, and interactive 
 | `s` | Save Log | Save entire buffer to timestamped `.log` file on disk. |
 | `c` | Clear Buffer | Reset in-memory log buffer across all tabs. |
 | `?` | Help Modal | Open quick reference cheat sheet modal. |
-| `Ctrl+G` | Mini-Games | Embedded retro games (Snake, Pong, etc.) during long compilation/flashes. |
+| `Ctrl+G` | Mini-Games | Embedded retro games (Snake, Pong, Aim Trainer Blitz, etc.) during long compilation/flashes. |
 | `q` | Quit | Cleanly exit `oml`. |

@@ -45,7 +45,7 @@
 - **Custom Process Streams & Stdin Pipeline**: Stream logs directly from external commands (`oml --cmd "adb logcat -v threadtime"` / `--exec`) or piped standard input (`adb logcat | oml`, `cat file.log | oml`) with terminal redirection for full keyboard/mouse TUI interactivity, bi-directional stdin TX (`i`), and hot process restart (`r`).
 - **Row Detail Inspector**: View all parsed fields, pretty-printed structured payloads (automatic detection of JSON, XML, YAML, and Logfmt with syntax colorization), word-wrapped raw text, and hex preview in an interactive modal (`Enter` or `v`), with vertical scrolling (`↑`/`↓`, `PgUp`/`PgDn`), row hopping (`←`/`→`, `[`/`]`), quick bookmarking (`b`), and clipboard copy (`y`/`Y`).
 - **Native Model Context Protocol (MCP) Server**: Headless `oml mcp` server exposing full hardware port control, log querying, watchdog triggers, and serial transmission over local IPC to AI coding assistants (Gemini CLI, Claude Desktop, Cursor).
-- **Mini-Games**: Built-in games (Snake, Pong, etc.) accessible with `Ctrl+G`.
+- **Mini-Games**: Built-in games (Snake, Pong, Tetris, 2048, and the 10-second mouse-driven **Aim Trainer Blitz**) accessible with `Ctrl+G` or `g` on empty buffer.
 
 ---
 
