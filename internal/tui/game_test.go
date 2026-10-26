@@ -77,7 +77,7 @@ func TestModel_GameLifecycleAndBackgroundIngest(t *testing.T) {
 	}
 }
 
-func TestModel_AimTrainerMouseClick(t *testing.T) {
+func TestModel_AimTrainerTargetClick(t *testing.T) {
 	m := newTestModel()
 	m.width = 120
 	m.height = 30
@@ -87,29 +87,75 @@ func TestModel_AimTrainerMouseClick(t *testing.T) {
 	m.mode = modeGame
 	m.activeGame = at
 
+	view := m.View()
+	lines := strings.Split(view, "\n")
+	for i, l := range lines {
+		t.Logf("Line %2d: %s", i, l)
+	}
+
 	originX, originY := m.gameModalBoardOrigin()
-	if originX <= 0 || originY <= 0 {
-		t.Fatalf("expected positive board origin, got (%d, %d)", originX, originY)
+	t.Logf("Calculated origin: originX=%d, originY=%d", originX, originY)
+
+	// Access aim trainer
+	aimTrainer, ok := m.activeGame.(*game.AimTrainer)
+	if !ok {
+		t.Fatalf("expected *game.AimTrainer")
 	}
 
-	// Initial score is 0
-	if m.activeGame.Score() != 0 {
-		t.Fatalf("expected initial score 0, got %d", m.activeGame.Score())
+	targets := aimTrainer.Targets()
+	if len(targets) != 3 {
+		t.Fatalf("expected 3 targets, got %d", len(targets))
 	}
 
-	// Click at board coordinate (0, 0)
+	tg := targets[0]
+	t.Logf("Target 0 at relX=%d, relY=%d", tg.X, tg.Y)
+
+	// Click directly at the bullseye of Target 0 (tg.X + 2, tg.Y + 1)
+	clickX := originX + tg.X + 2
+	clickY := originY + tg.Y + 1
+
 	clickMsg := tea.MouseMsg{
 		Action: tea.MouseActionPress,
 		Button: tea.MouseButtonLeft,
-		X:      originX,
-		Y:      originY,
+		X:      clickX,
+		Y:      clickY,
 	}
+
 	updated, _ := m.Update(clickMsg)
 	m = updated.(Model)
 
-	// Verify game processed the mouse click without panic or crash
-	if m.mode != modeGame {
-		t.Fatalf("expected modeGame to remain active after click")
+	if m.activeGame.Score() == 0 {
+		t.Fatalf("expected score > 0 after clicking target 0, got 0")
 	}
+	t.Logf("Success! Score after hit: %d", m.activeGame.Score())
+
+	// Test 2: Multiple tabs active (topChrome = 4 lines)
+	m2 := newTestModel()
+	m2.width = 120
+	m2.height = 30
+	m2.tabs = append(m2.tabs, Tab{Name: "Tab 2", ViewportState: ViewportState{Visible: m2.buffer.All()}})
+	m2.recalcLayout()
+
+	at2 := game.NewAimTrainer()
+	m2.mode = modeGame
+	m2.activeGame = at2
+
+	origin2X, origin2Y := m2.gameModalBoardOrigin()
+	aimTrainer2 := m2.activeGame.(*game.AimTrainer)
+	tg2 := aimTrainer2.Targets()[0]
+
+	click2Msg := tea.MouseMsg{
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+		X:      origin2X + tg2.X + 2,
+		Y:      origin2Y + tg2.Y + 1,
+	}
+	updated2, _ := m2.Update(click2Msg)
+	m2 = updated2.(Model)
+
+	if m2.activeGame.Score() == 0 {
+		t.Fatalf("expected score > 0 with multiple tabs, got 0")
+	}
+	t.Logf("Success with multiple tabs! Score: %d", m2.activeGame.Score())
 }
 

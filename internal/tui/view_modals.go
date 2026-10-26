@@ -422,7 +422,7 @@ func (m Model) viewGameModal() string {
 	}
 	reqW, _ := m.activeGame.Dimensions()
 	if reqW <= 0 {
-		reqW = 54
+		reqW = 62
 	}
 	modalWidth := reqW
 	if modalWidth > m.width-4 {
@@ -465,7 +465,7 @@ func (m Model) gameModalBoardOrigin() (int, int) {
 	}
 	reqW, _ := m.activeGame.Dimensions()
 	if reqW <= 0 {
-		reqW = 54
+		reqW = 62
 	}
 	modalWidth := reqW
 	if modalWidth > m.width-4 {
@@ -503,10 +503,15 @@ func (m Model) gameModalBoardOrigin() (int, int) {
 		leftPad = 0
 	}
 
+	topChrome := 2
+	if len(m.tabs) > 1 {
+		topChrome += 2
+	}
+
 	// ModalBox padding(2) + border(1) + inner game border(1) = 4
 	// ModalBox padding(1) + border(1) + title(1) + badge(1) + blank(1) + game header(1) + game top border(1) = 7
 	boardStartX := leftPad + 4
-	boardStartY := topPad + 7
+	boardStartY := topChrome + topPad + 7
 	return boardStartX, boardStartY
 }
 

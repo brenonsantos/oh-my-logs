@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"math/rand"
+	"sort"
 	"strings"
 	"time"
 
@@ -96,11 +97,18 @@ func (at *AimTrainer) Title() string {
 }
 
 func (at *AimTrainer) Dimensions() (width, height int) {
-	return at.playWidth + 4, at.playHeight + 7
+	return at.playWidth + 8, at.playHeight + 12
 }
 
 func (at *AimTrainer) Score() int {
 	return at.score
+}
+
+// Targets returns a copy of the active targets for testing and inspection.
+func (at *AimTrainer) Targets() []AimTarget {
+	out := make([]AimTarget, len(at.targets))
+	copy(out, at.targets)
+	return out
 }
 
 func (at *AimTrainer) IsGameOver() bool {
@@ -381,60 +389,63 @@ func (at *AimTrainer) View(width int) string {
 			sb.WriteString("\n")
 		}
 	} else {
-		// Active Playfield: Render 3 centered targets and flashes
-		canvas := make([][]rune, at.playHeight)
-		for r := range canvas {
-			canvas[r] = make([]rune, at.playWidth)
-			for c := range canvas[r] {
-				canvas[r][c] = ' '
-			}
-		}
-
-		// Draw targets
-		for _, tg := range at.targets {
-			if tg.Y < at.playHeight && tg.X+targetWidth <= at.playWidth {
-				// Row 0: ╭────╮ (6 runes)
-				copy(canvas[tg.Y][tg.X:], []rune("╭────╮"))
-				// Row 1: │ 🎯 │
-				// Note: '│', ' ', '🎯', ' ' (occupies 1 cell for space, 2 for 🎯, 1 for space, 1 for │)
-				// In rune slice: │(1), ' '(1), 🎯(1 rune, 2 display cols), ' '(1), │(1) -> total 5 runes occupying 6 visual cells
-				if tg.Y+1 < at.playHeight {
-					copy(canvas[tg.Y+1][tg.X:], []rune("│ 🎯 │"))
-				}
-				// Row 2: ╰────╯ (6 runes)
-				if tg.Y+2 < at.playHeight {
-					copy(canvas[tg.Y+2][tg.X:], []rune("╰────╯"))
-				}
-			}
+		// Active Playfield: Render 3 centered targets and flashes by visual columns
+		type visualSpan struct {
+			x     int
+			text  string
+			width int
 		}
 
 		for r := 0; r < at.playHeight; r++ {
-			rowStr := string(canvas[r])
-			// Check if any flash is on this row
+			var spans []visualSpan
+
+			// Targets on row r
+			for _, tg := range at.targets {
+				if r == tg.Y {
+					spans = append(spans, visualSpan{x: tg.X, text: styleAimTarget.Render("╭────╮"), width: targetWidth})
+				} else if r == tg.Y+1 {
+					spans = append(spans, visualSpan{x: tg.X, text: styleAimTarget.Render("│ 🎯 │"), width: targetWidth})
+				} else if r == tg.Y+2 {
+					spans = append(spans, visualSpan{x: tg.X, text: styleAimTarget.Render("╰────╯"), width: targetWidth})
+				}
+			}
+
+			// Flashes on row r
 			for _, fl := range at.flashes {
-				if fl.Y == r && fl.X < at.playWidth {
+				if fl.Y == r {
 					flStyle := styleAimHit
 					if fl.IsMiss {
 						flStyle = styleAimMiss
 					}
-					// Overlay flash text
 					flTxt := flStyle.Render(fl.Text)
 					wTxt := lipgloss.Width(fl.Text)
-					if fl.X+wTxt <= at.playWidth {
-						before := string(canvas[r][:fl.X])
-						after := string(canvas[r][fl.X+wTxt:])
-						rowStr = before + flTxt + after
-					}
+					spans = append(spans, visualSpan{x: fl.X, text: flTxt, width: wTxt})
 				}
 			}
 
-			w := lipgloss.Width(rowStr)
-			pad := at.playWidth - w
-			if pad < 0 {
-				pad = 0
+			// Sort spans by ascending X coordinate
+			sort.Slice(spans, func(i, j int) bool {
+				return spans[i].x < spans[j].x
+			})
+
+			// Build row by visual column
+			var rowBuf strings.Builder
+			curCol := 0
+			for _, sp := range spans {
+				if sp.x > curCol {
+					rowBuf.WriteString(strings.Repeat(" ", sp.x-curCol))
+					curCol = sp.x
+				}
+				if sp.x == curCol && curCol+sp.width <= at.playWidth {
+					rowBuf.WriteString(sp.text)
+					curCol += sp.width
+				}
 			}
-			styledRow := styleAimTarget.Render(rowStr)
-			sb.WriteString(styleAimBorder.Render("│") + styledRow + strings.Repeat(" ", pad) + styleAimBorder.Render("│"))
+			if curCol < at.playWidth {
+				rowBuf.WriteString(strings.Repeat(" ", at.playWidth-curCol))
+			}
+
+			sb.WriteString(styleAimBorder.Render("│") + rowBuf.String() + styleAimBorder.Render("│"))
 			sb.WriteString("\n")
 		}
 	}
