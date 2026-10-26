@@ -23,6 +23,26 @@ func ansiCut(s string, offset int, width int) string {
 	return ansi.Truncate(leftTrimmed, width, "")
 }
 
+// clampAndPadVisual ensures s has exact visual width targetWidth with zero newlines.
+// If s is wider than targetWidth, it is truncated via ansiCut.
+// If s is narrower than targetWidth, it is padded with spaces.
+func clampAndPadVisual(s string, targetWidth int) string {
+	if targetWidth <= 0 {
+		return ""
+	}
+	if strings.ContainsRune(s, '\n') {
+		s = strings.ReplaceAll(s, "\n", " ")
+	}
+	w := lipgloss.Width(s)
+	if w > targetWidth {
+		return ansiCut(s, 0, targetWidth)
+	}
+	if w < targetWidth {
+		return s + strings.Repeat(" ", targetWidth-w)
+	}
+	return s
+}
+
 // padOrFlex pads s to width, or if isFlex is true and len(runes) >= width, returns s without truncation.
 func padOrFlex(s string, width int, isFlex bool) string {
 	if width <= 0 {

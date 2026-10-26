@@ -745,3 +745,123 @@ func TestHorizontalSplitViewShowsCursorWhileScrolling(t *testing.T) {
 	}
 }
 
+func TestWidthSymbols(t *testing.T) {
+	t.Logf("Width of '▶': %d", lipgloss.Width("▶"))
+	t.Logf("Width of '★': %d", lipgloss.Width("★"))
+	t.Logf("Width of '▌': %d", lipgloss.Width("▌"))
+	t.Logf("Width of '▶  ': %d", lipgloss.Width("▶  "))
+	t.Logf("Width of '▶★ ': %d", lipgloss.Width("▶★ "))
+}
+
+func TestSplitView_AllActionsLineBudget(t *testing.T) {
+	for _, w := range []int{80, 120, 241} {
+		for _, h := range []int{24, 35, 61} {
+			m := newTestModel()
+			m.width = w
+			m.height = h
+			m.recalcLayout()
+
+			// Ingest logs
+			for i := 0; i < 300; i++ {
+				updated, _ := m.Update(lineMsg(fmt.Sprintf("[Module%d] message content %d with extra details", i%5, i)))
+				m = updated.(Model)
+			}
+
+			// Helper to check line budget
+			checkBudget := func(action string) {
+				t.Helper()
+				view := m.View()
+				lines := strings.Split(view, "\n")
+				if len(lines) != m.height {
+					for idx, l := range lines {
+						t.Logf("Line %2d (w=%3d): %q", idx, lipgloss.Width(l), l)
+					}
+					t.Fatalf("[%dx%d] %s: line count %d != expected %d", w, h, action, len(lines), m.height)
+				}
+				for i, l := range lines {
+					lineWidth := lipgloss.Width(l)
+					if lineWidth > m.width {
+						t.Fatalf("[%dx%d] %s line %d: visual width %d > m.width %d:\n%q", w, h, action, i, lineWidth, m.width, l)
+					}
+				}
+			}
+
+			checkBudget("initial single view")
+
+			// 1. Toggle vertical split
+			updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'|'}})
+			m = updated.(Model)
+			checkBudget("toggle vertical split")
+
+			// 2. Switch pane
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'w'}})
+			m = updated.(Model)
+			checkBudget("switch pane focus")
+
+			// 3. Toggle sync scroll
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'S'}})
+			m = updated.(Model)
+			checkBudget("toggle sync scroll")
+
+			// 4. Scroll down and up
+			for step := 0; step < 5; step++ {
+				updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+				m = updated.(Model)
+				checkBudget(fmt.Sprintf("scroll down step %d", step))
+			}
+
+			// 5. Select row and open detail modal
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+			m = updated.(Model)
+			checkBudget("open detail modal via Enter")
+
+			// Close detail modal
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+			m = updated.(Model)
+			checkBudget("close detail modal via Esc")
+
+			// 6. Pause
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
+			m = updated.(Model)
+			checkBudget("pause")
+
+			// 7. Clear
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+			m = updated.(Model)
+			checkBudget("clear logs")
+
+			// 8. Ingest logs while cleared & paused
+			for i := 0; i < 10; i++ {
+				updated, _ = m.Update(lineMsg(fmt.Sprintf("new log %d", i)))
+				m = updated.(Model)
+				checkBudget(fmt.Sprintf("ingest log %d while cleared", i))
+			}
+
+			// 9. Switch to horizontal split
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'_'}})
+			m = updated.(Model)
+			checkBudget("switch to horizontal split")
+
+			// 10. Switch back to vertical split
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'|'}})
+			m = updated.(Model)
+			checkBudget("switch back to vertical split")
+
+			// 11. Toggle Hex format (x) - opens inspector!
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+			m = updated.(Model)
+			checkBudget("toggle hex format (inspector open)")
+
+			// 12. Toggle Hex format back (x)
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+			m = updated.(Model)
+			checkBudget("toggle hex format back")
+
+			// 13. Close split view
+			updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'|'}})
+			m = updated.(Model)
+			checkBudget("close split view")
+		}
+	}
+}
+

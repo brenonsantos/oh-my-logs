@@ -2,6 +2,8 @@ package tui
 
 import (
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // View renders the full terminal UI.
@@ -109,5 +111,23 @@ func (m Model) View() string {
 	// 6. Key hints / input bar
 	sb.WriteString(m.viewKeyBar())
 
-	return sb.String()
+	rendered := sb.String()
+	if m.height <= 0 {
+		return rendered
+	}
+
+	// Hard layout clamp: Guarantee exact m.height lines and visual width <= m.width
+	lines := strings.Split(rendered, "\n")
+	if len(lines) > m.height {
+		lines = lines[:m.height]
+	}
+	for len(lines) < m.height {
+		lines = append(lines, strings.Repeat(" ", m.width))
+	}
+	for i, l := range lines {
+		if lipgloss.Width(l) > m.width {
+			lines[i] = ansiCut(l, 0, m.width)
+		}
+	}
+	return strings.Join(lines, "\n")
 }

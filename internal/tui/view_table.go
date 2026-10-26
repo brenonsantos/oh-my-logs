@@ -25,7 +25,7 @@ func (m Model) viewTableHeader() string {
 	if curW := lipgloss.Width(headerLine); curW < tw {
 		headerLine += strings.Repeat(" ", tw-curW)
 	} else if curW > tw {
-		headerLine = lipgloss.NewStyle().MaxWidth(tw).Render(headerLine)
+		headerLine = ansiCut(headerLine, 0, tw)
 	}
 	return headerLine
 }
@@ -279,9 +279,10 @@ func (m Model) viewTable() string {
 				fullRow += strings.Repeat(" ", rem)
 			}
 		} else if curW > contentW {
-			fullRow = lipgloss.NewStyle().MaxWidth(contentW).Render(fullRow)
+			fullRow = ansiCut(fullRow, 0, contentW)
 		}
 		fullRow += vScrollChar
+		fullRow = clampAndPadVisual(fullRow, tableWidth)
 
 		lines = append(lines, fullRow)
 	}

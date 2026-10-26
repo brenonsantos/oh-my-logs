@@ -73,7 +73,7 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 	} else if headerW < paneW {
 		headerLine = headerLine + strings.Repeat(" ", paneW-headerW)
 	} else if headerW > paneW {
-		headerLine = lipgloss.NewStyle().MaxWidth(paneW).Render(headerLine)
+		headerLine = ansiCut(headerLine, 0, paneW)
 	}
 	lines = append(lines, headerLine)
 
@@ -89,7 +89,7 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 		dividerLine = theme.Divider.Render(strings.Repeat("─", paneW))
 	}
 	if lipgloss.Width(dividerLine) > paneW {
-		dividerLine = lipgloss.NewStyle().MaxWidth(paneW).Render(dividerLine)
+		dividerLine = ansiCut(dividerLine, 0, paneW)
 	}
 	lines = append(lines, dividerLine)
 
@@ -381,9 +381,12 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 				fullRow += strings.Repeat(" ", rem)
 			}
 		} else if curW > contentW {
-			fullRow = lipgloss.NewStyle().MaxWidth(contentW).Render(fullRow)
+			fullRow = ansiCut(fullRow, 0, contentW)
 		}
 		fullRow += vScrollChar
+
+		// Ensure fullRow visual width strictly matches paneW
+		fullRow = clampAndPadVisual(fullRow, paneW)
 
 		lines = append(lines, fullRow)
 	}
@@ -401,7 +404,8 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 				vScrollChar = theme.Divider.Render("│")
 			}
 		}
-		lines = append(lines, strings.Repeat(" ", contentW)+vScrollChar)
+		emptyLine := clampAndPadVisual(strings.Repeat(" ", contentW)+vScrollChar, paneW)
+		lines = append(lines, emptyLine)
 	}
 
 	return lines
@@ -434,6 +438,8 @@ func (m Model) viewSplitTable() string {
 			if i < len(rightLines) {
 				r = rightLines[i]
 			}
+			l = clampAndPadVisual(l, leftW)
+			r = clampAndPadVisual(r, rightW)
 			sep := "│"
 			if i == 1 {
 				sep = "┼"
@@ -444,7 +450,7 @@ func (m Model) viewSplitTable() string {
 			}
 			row := l + sepStyle.Render(sep) + r
 			if lipgloss.Width(row) > m.width {
-				row = lipgloss.NewStyle().MaxWidth(m.width).Render(row)
+				row = ansiCut(row, 0, m.width)
 			}
 			joined = append(joined, row)
 		}
@@ -470,7 +476,7 @@ func (m Model) viewSplitTable() string {
 		divLine = theme.Accent.Render(strings.Repeat("━", m.width))
 	}
 	if lipgloss.Width(divLine) > m.width {
-		divLine = lipgloss.NewStyle().MaxWidth(m.width).Render(divLine)
+		divLine = ansiCut(divLine, 0, m.width)
 	}
 
 	var all []string
@@ -484,6 +490,9 @@ func (m Model) viewSplitTable() string {
 	}
 	for len(all) < totalH {
 		all = append(all, strings.Repeat(" ", m.width))
+	}
+	for i := range all {
+		all[i] = clampAndPadVisual(all[i], m.width)
 	}
 	return strings.Join(all, "\n")
 }

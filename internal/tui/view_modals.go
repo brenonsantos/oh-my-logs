@@ -788,11 +788,18 @@ func (m Model) viewRowDetailModal() string {
 	}
 
 	availHeight := m.tableHeight + 2
-	if availHeight < minRowDetailHeight {
-		availHeight = minRowDetailHeight
+	maxAvail := m.height - 5
+	if len(m.tabs) > 1 {
+		maxAvail = m.height - 7
 	}
-	if availHeight > m.height-4 {
-		availHeight = m.height - 4
+	if availHeight > maxAvail {
+		availHeight = maxAvail
+	}
+	if availHeight < 6 {
+		availHeight = 6
+	}
+	if availHeight > maxAvail && maxAvail >= 6 {
+		availHeight = maxAvail
 	}
 
 	var contentLines []string
@@ -994,7 +1001,13 @@ func (m Model) viewRowDetailModal() string {
 
 // centerBox centers a multi-line box horizontally and vertically within target dimensions.
 func centerBox(screenWidth, screenHeight int, box string) string {
+	if screenHeight <= 0 || screenWidth <= 0 {
+		return ""
+	}
 	lines := strings.Split(box, "\n")
+	if len(lines) > screenHeight {
+		lines = lines[:screenHeight]
+	}
 	boxHeight := len(lines)
 	topPad := (screenHeight - boxHeight) / 2
 	if topPad < 0 {
@@ -1012,8 +1025,13 @@ func centerBox(screenWidth, screenHeight int, box string) string {
 		if leftPad < 0 {
 			leftPad = 0
 		}
-		res.WriteString(strings.Repeat(" ", leftPad))
-		res.WriteString(l)
+		rowStr := strings.Repeat(" ", leftPad) + l
+		if lipgloss.Width(rowStr) > screenWidth {
+			rowStr = ansiCut(rowStr, 0, screenWidth)
+		} else if curW := lipgloss.Width(rowStr); curW < screenWidth {
+			rowStr += strings.Repeat(" ", screenWidth-curW)
+		}
+		res.WriteString(rowStr)
 		res.WriteByte('\n')
 	}
 	totalRendered := topPad + boxHeight

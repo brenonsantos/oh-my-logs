@@ -417,7 +417,7 @@ func (m Model) viewMarkerDrawer() string {
 	if curW := lipgloss.Width(headerLine); curW < w {
 		headerLine += baseStyle.Foreground(colorAccent).Render(strings.Repeat("─", w-curW))
 	} else if curW > w {
-		headerLine = baseStyle.MaxWidth(w).Render(headerLine)
+		headerLine = ansiCut(headerLine, 0, w)
 	}
 
 	// 2. Log preview line:  Log:  <message>
@@ -447,7 +447,7 @@ func (m Model) viewMarkerDrawer() string {
 	if curW := lipgloss.Width(logLine); curW < w {
 		logLine += baseStyle.Render(strings.Repeat(" ", w-curW))
 	} else if curW > w {
-		logLine = baseStyle.MaxWidth(w).Render(logLine)
+		logLine = ansiCut(logLine, 0, w)
 	}
 
 	// 3. Note input line:  Note: [ power cycle #1 █                                               ]
@@ -467,13 +467,13 @@ func (m Model) viewMarkerDrawer() string {
 	if curW := lipgloss.Width(inputLine); curW < w {
 		inputLine += baseStyle.Render(strings.Repeat(" ", w-curW))
 	} else if curW > w {
-		inputLine = baseStyle.MaxWidth(w).Render(inputLine)
+		inputLine = ansiCut(inputLine, 0, w)
 	}
 
 	// 4. Bottom divider line
 	bottomLine := baseStyle.Foreground(colorAccent).Render(strings.Repeat("─", w))
 	if curW := lipgloss.Width(bottomLine); curW > w {
-		bottomLine = baseStyle.MaxWidth(w).Render(bottomLine)
+		bottomLine = ansiCut(bottomLine, 0, w)
 	}
 
 	return headerLine + "\n" + logLine + "\n" + inputLine + "\n" + bottomLine

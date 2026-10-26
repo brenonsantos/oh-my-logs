@@ -110,7 +110,7 @@ func (m Model) viewInspectorDivider() string {
 	middle := theme.Divider.Render(strings.Repeat("─", rem))
 	fullDivider := leftRendered + middle
 	if lipgloss.Width(fullDivider) > w {
-		return lipgloss.NewStyle().MaxWidth(w).Render(fullDivider)
+		return ansiCut(fullDivider, 0, w)
 	}
 	return fullDivider
 }
@@ -137,7 +137,7 @@ func (m Model) viewInspectorDrawer() string {
 				if curW < w {
 					msg += strings.Repeat(" ", w-curW)
 				} else if curW > w {
-					msg = lipgloss.NewStyle().MaxWidth(w).Render(msg)
+					msg = ansiCut(msg, 0, w)
 				}
 				emptyLines = append(emptyLines, msg)
 			} else {
@@ -160,7 +160,7 @@ func (m Model) viewInspectorDrawer() string {
 			if curW < w {
 				lineStr += strings.Repeat(" ", w-curW)
 			} else if curW > w {
-				lineStr = lipgloss.NewStyle().MaxWidth(w).Render(lineStr)
+				lineStr = ansiCut(lineStr, 0, w)
 			}
 			formattedLines = append(formattedLines, lineStr)
 		}
@@ -175,7 +175,7 @@ func (m Model) viewInspectorDrawer() string {
 			if curW < w {
 				lineStr += strings.Repeat(" ", w-curW)
 			} else if curW > w {
-				lineStr = lipgloss.NewStyle().MaxWidth(w).Render(lineStr)
+				lineStr = ansiCut(lineStr, 0, w)
 			}
 			formattedLines = append(formattedLines, lineStr)
 		}

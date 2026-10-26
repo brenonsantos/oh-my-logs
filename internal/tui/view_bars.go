@@ -135,7 +135,7 @@ func (m Model) viewTabBar() string {
 		return left + strings.Repeat(" ", gap) + hints
 	}
 	if leftW > w {
-		return lipgloss.NewStyle().MaxWidth(w).Render(left)
+		return ansiCut(left, 0, w)
 	}
 	return left
 }
@@ -217,7 +217,7 @@ func (m Model) viewTitleBar() string {
 	if rem > 0 {
 		content += lipgloss.NewStyle().Background(theme.TitleBg).Render(strings.Repeat(" ", rem))
 	} else if contentWidth > m.width {
-		content = lipgloss.NewStyle().MaxWidth(m.width).Render(content)
+		content = ansiCut(content, 0, m.width)
 	}
 
 	return content
@@ -440,7 +440,7 @@ func (m Model) viewStatusBar() string {
 	sep := theme.Muted.Render("  │  ")
 	res := "  " + strings.Join(parts, sep)
 	if m.width > 0 && lipgloss.Width(res) > m.width {
-		return lipgloss.NewStyle().MaxWidth(m.width).Render(res)
+		return ansiCut(res, 0, m.width)
 	}
 	return res
 }
@@ -449,7 +449,7 @@ func (m Model) viewStatusBar() string {
 func (m Model) viewKeyBar() string {
 	res := m.renderKeyBarContent()
 	if m.width > 0 && lipgloss.Width(res) > m.width {
-		return lipgloss.NewStyle().MaxWidth(m.width).Render(res)
+		return ansiCut(res, 0, m.width)
 	}
 	return res
 }
