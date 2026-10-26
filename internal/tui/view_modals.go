@@ -457,6 +457,59 @@ func (m Model) viewGameModal() string {
 	return centerBox(m.width, m.tableHeight+splitPaneHeaderOverhead, modalBox)
 }
 
+// gameModalBoardOrigin calculates the top-left screen coordinate (X, Y) where the game's internal
+// playfield grid begins, allowing mouse clicks to be accurately translated into game coordinates.
+func (m Model) gameModalBoardOrigin() (int, int) {
+	if m.activeGame == nil {
+		return 0, 0
+	}
+	reqW, _ := m.activeGame.Dimensions()
+	if reqW <= 0 {
+		reqW = 54
+	}
+	modalWidth := reqW
+	if modalWidth > m.width-4 {
+		modalWidth = m.width - 4
+	}
+	if modalWidth < 30 {
+		modalWidth = 30
+	}
+
+	var sb strings.Builder
+	sb.WriteString(theme.ModalTitle.Render(m.activeGame.Title()))
+	sb.WriteString("\n")
+	if m.logsDuringGame > 0 {
+		sb.WriteString("  ● logs\n\n")
+	} else {
+		sb.WriteString("  waiting\n\n")
+	}
+	innerW := modalWidth - 6
+	if innerW < 10 {
+		innerW = 10
+	}
+	sb.WriteString(m.activeGame.View(innerW))
+
+	modalBox := theme.ModalBox.Width(modalWidth).Render(sb.String())
+	lines := strings.Split(modalBox, "\n")
+	boxHeight := len(lines)
+	screenHeight := m.tableHeight + splitPaneHeaderOverhead
+	topPad := (screenHeight - boxHeight) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+	boxW := lipgloss.Width(lines[0])
+	leftPad := (m.width - boxW) / 2
+	if leftPad < 0 {
+		leftPad = 0
+	}
+
+	// ModalBox padding(2) + border(1) + inner game border(1) = 4
+	// ModalBox padding(1) + border(1) + title(1) + badge(1) + blank(1) + game header(1) + game top border(1) = 7
+	boardStartX := leftPad + 4
+	boardStartY := topPad + 7
+	return boardStartX, boardStartY
+}
+
 // viewHelpModal renders a clean floating modal with categorized keyboard shortcuts.
 func (m Model) viewHelpModal() string {
 	colWidth := 40

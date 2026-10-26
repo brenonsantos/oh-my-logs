@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/clipboard"
+	"github.com/brenoniehues/oh-my-logs/internal/game"
 	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -60,6 +61,14 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.mode == modeHelp {
 		m.mode = modeNormal
 		return m, nil
+	}
+	if m.mode == modeGame && m.activeGame != nil {
+		originX, originY := m.gameModalBoardOrigin()
+		relX := msg.X - originX
+		relY := msg.Y - originY
+		var cmd tea.Cmd
+		m.activeGame, cmd = m.activeGame.Update(game.AimClickMsg{X: relX, Y: relY})
+		return m, cmd
 	}
 	if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter && m.mode != modeTimeJump {
 		return m, nil

@@ -39,6 +39,7 @@ var Registry = []func() MiniGame{
 	NewFlappyPacket,
 	NewPong,
 	NewMemorySweeper,
+	NewAimTrainer,
 }
 
 // RandomMiniGame selects and creates a new instance of a mini-game.

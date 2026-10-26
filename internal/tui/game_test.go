@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/brenoniehues/oh-my-logs/internal/game"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -75,3 +76,40 @@ func TestModel_GameLifecycleAndBackgroundIngest(t *testing.T) {
 		t.Errorf("expected buffered log to be visible in normal view, got:\n%s", normalView)
 	}
 }
+
+func TestModel_AimTrainerMouseClick(t *testing.T) {
+	m := newTestModel()
+	m.width = 120
+	m.height = 30
+	m.recalcLayout()
+
+	at := game.NewAimTrainer()
+	m.mode = modeGame
+	m.activeGame = at
+
+	originX, originY := m.gameModalBoardOrigin()
+	if originX <= 0 || originY <= 0 {
+		t.Fatalf("expected positive board origin, got (%d, %d)", originX, originY)
+	}
+
+	// Initial score is 0
+	if m.activeGame.Score() != 0 {
+		t.Fatalf("expected initial score 0, got %d", m.activeGame.Score())
+	}
+
+	// Click at board coordinate (0, 0)
+	clickMsg := tea.MouseMsg{
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+		X:      originX,
+		Y:      originY,
+	}
+	updated, _ := m.Update(clickMsg)
+	m = updated.(Model)
+
+	// Verify game processed the mouse click without panic or crash
+	if m.mode != modeGame {
+		t.Fatalf("expected modeGame to remain active after click")
+	}
+}
+
