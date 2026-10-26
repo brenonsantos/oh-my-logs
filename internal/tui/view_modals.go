@@ -422,7 +422,7 @@ func (m Model) viewGameModal() string {
 	}
 	reqW, _ := m.activeGame.Dimensions()
 	if reqW <= 0 {
-		reqW = 62
+		reqW = 76
 	}
 	modalWidth := reqW
 	if modalWidth > m.width-4 {
@@ -465,7 +465,7 @@ func (m Model) gameModalBoardOrigin() (int, int) {
 	}
 	reqW, _ := m.activeGame.Dimensions()
 	if reqW <= 0 {
-		reqW = 62
+		reqW = 76
 	}
 	modalWidth := reqW
 	if modalWidth > m.width-4 {

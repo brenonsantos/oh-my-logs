@@ -14,8 +14,8 @@ import (
 const (
 	targetWidth  = 6
 	targetHeight = 3
-	defaultPlayW = 54
-	defaultPlayH = 12
+	defaultPlayW = 68
+	defaultPlayH = 14
 	blitzTime    = 10 * time.Second
 	tickInterval = 50 * time.Millisecond
 )
@@ -184,7 +184,6 @@ func (at *AimTrainer) reset() {
 // HandleClick processes a click at board coordinate (x, y). Returns true if a target was hit.
 func (at *AimTrainer) HandleClick(x, y int) bool {
 	if at.gameOver {
-		at.reset()
 		return false
 	}
 
@@ -282,12 +281,14 @@ func (at *AimTrainer) Update(msg tea.Msg) (MiniGame, tea.Cmd) {
 		return at, nil
 
 	case tea.KeyMsg:
+		if at.gameOver {
+			at.reset()
+			return at, Tick(tickInterval)
+		}
 		switch msg.String() {
-		case "r", "R", " ":
-			if at.gameOver {
-				at.reset()
-				return at, Tick(tickInterval)
-			}
+		case "r", "R":
+			at.reset()
+			return at, Tick(tickInterval)
 		}
 	}
 
@@ -364,27 +365,53 @@ func (at *AimTrainer) View(width int) string {
 		fastestMs := at.fastestTime.Milliseconds()
 
 		card := []string{
-			"                  ★ GAME OVER ★                       ",
-			rankStyle.Render(fmt.Sprintf("   ★ ★ ★  %s  ★ ★ ★   ", rankStr)),
+			"★ GAME OVER ★",
+			rankStyle.Render(fmt.Sprintf("★ ★ ★  %s  ★ ★ ★", rankStr)),
 			"",
-			fmt.Sprintf("       FINAL SCORE: %s", styleAimStatVal.Render(fmt.Sprintf("%d", at.score))),
-			fmt.Sprintf("       TARGETS HIT: %s / %d clicks", styleAimStatVal.Render(fmt.Sprintf("%d", at.hits)), totalClicks),
-			fmt.Sprintf("          ACCURACY: %s%%", styleAimStatVal.Render(fmt.Sprintf("%d", accVal))),
-			fmt.Sprintf("       AVG REACTION: %s ms", styleAimStatVal.Render(fmt.Sprintf("%d", avgMs))),
-			fmt.Sprintf("      FASTEST FLICK: %s ms", styleAimStatVal.Render(fmt.Sprintf("%d", fastestMs))),
-			fmt.Sprintf("             SPEED: %s targets/sec", styleAimStatVal.Render(fmt.Sprintf("%.1f", cps))),
-			fmt.Sprintf("         MAX COMBO: %s", styleAimCombo.Render(fmt.Sprintf("🔥 x%d", at.maxCombo))),
+			fmt.Sprintf("FINAL SCORE: %s", styleAimStatVal.Render(fmt.Sprintf("%d", at.score))),
+			fmt.Sprintf("TARGETS HIT: %s / %d clicks", styleAimStatVal.Render(fmt.Sprintf("%d", at.hits)), totalClicks),
+			fmt.Sprintf("ACCURACY: %s%%", styleAimStatVal.Render(fmt.Sprintf("%d", accVal))),
+			fmt.Sprintf("AVG REACTION: %s ms", styleAimStatVal.Render(fmt.Sprintf("%d", avgMs))),
+			fmt.Sprintf("FASTEST FLICK: %s ms", styleAimStatVal.Render(fmt.Sprintf("%d", fastestMs))),
+			fmt.Sprintf("SPEED: %s targets/sec", styleAimStatVal.Render(fmt.Sprintf("%.1f", cps))),
+			fmt.Sprintf("MAX COMBO: %s", styleAimCombo.Render(fmt.Sprintf("🔥 x%d", at.maxCombo))),
 			"",
-			styleAimMuted.Render("       [R / Space] Play Again  ·  [Esc] Back to Logs"),
+			styleAimMuted.Render("[Any Key] Play Again  ·  [Esc] Back to Logs"),
+		}
+
+		cardTopPad := (at.playHeight - len(card)) / 2
+		if cardTopPad < 0 {
+			cardTopPad = 0
+		}
+		cardBottomPad := at.playHeight - len(card) - cardTopPad
+		if cardBottomPad < 0 {
+			cardBottomPad = 0
+		}
+
+		for i := 0; i < cardTopPad; i++ {
+			row := "│" + strings.Repeat(" ", at.playWidth) + "│"
+			sb.WriteString(styleAimBorder.Render(row))
+			sb.WriteString("\n")
 		}
 
 		for _, line := range card {
 			contentW := lipgloss.Width(line)
 			pad := at.playWidth - contentW
-			if pad < 0 {
-				pad = 0
+			leftPad := pad / 2
+			if leftPad < 0 {
+				leftPad = 0
 			}
-			row := "│" + line + strings.Repeat(" ", pad) + "│"
+			rightPad := pad - leftPad
+			if rightPad < 0 {
+				rightPad = 0
+			}
+			row := "│" + strings.Repeat(" ", leftPad) + line + strings.Repeat(" ", rightPad) + "│"
+			sb.WriteString(styleAimBorder.Render(row))
+			sb.WriteString("\n")
+		}
+
+		for i := 0; i < cardBottomPad; i++ {
+			row := "│" + strings.Repeat(" ", at.playWidth) + "│"
 			sb.WriteString(styleAimBorder.Render(row))
 			sb.WriteString("\n")
 		}

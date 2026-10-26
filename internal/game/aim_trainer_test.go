@@ -131,11 +131,26 @@ func TestAimTrainer_CountdownAndGameOver(t *testing.T) {
 		t.Fatalf("expected view to contain GAME OVER, got:\n%s", view)
 	}
 
-	// Restart via 'r' key
-	updated, _ := at.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	// Clicks during game over must NOT restart the game
+	hit := at.HandleClick(10, 5)
+	if hit {
+		t.Fatalf("click during game over should not hit")
+	}
+	if !at.IsGameOver() {
+		t.Fatalf("mouse click must not restart game when game over")
+	}
+
+	mouseUpdated, _ := at.Update(AimClickMsg{X: 10, Y: 5})
+	at = mouseUpdated.(*AimTrainer)
+	if !at.IsGameOver() {
+		t.Fatalf("AimClickMsg must not restart game when game over")
+	}
+
+	// Restart via keyboard key (e.g. space or 'r')
+	updated, _ := at.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
 	at = updated.(*AimTrainer)
 	if at.IsGameOver() {
-		t.Fatalf("game should be restarted after 'r'")
+		t.Fatalf("game should be restarted after keyboard press")
 	}
 	if at.timeLeft != 10*time.Second {
 		t.Fatalf("expected timeLeft 10s after restart, got %v", at.timeLeft)
