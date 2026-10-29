@@ -457,10 +457,22 @@ func (m Model) viewKeyBar() string {
 func (m Model) renderKeyBarContent() string {
 	switch m.mode {
 	case modeSearch:
+		flags := ""
+        if m.searchCaseSensitive {
+            flags += theme.Warning.Render("[Aa] ")
+        } else {
+            flags += theme.Muted.Render("[Aa] ")
+        }
+        if m.searchWholeWord {
+            flags += theme.Warning.Render("[\"ab\"] ")
+        } else {
+            flags += theme.Muted.Render("[\"ab\"] ")
+        }
+
 		prompt := theme.Primary.Render("Search: ")
 		text := m.searchInput.Render(theme.Content)
-		help := theme.Muted.Render("  [Enter: next · ↑/↓: matches · ←/→: cursor · ^V: paste · Esc: cancel]")
-		return "  " + prompt + text + help
+		help := theme.Muted.Render("  [alt+c: match case · alt+w: whole word · Enter: next · ↑/↓: matches · ←/→: cursor · ^V: paste · Esc: cancel]")
+		return "  " + prompt + text + "  " + flags + help
 
 	case modeFilter:
 		prompt := theme.Primary.Render("Filter: ")

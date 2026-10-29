@@ -798,6 +798,16 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case msg.String() == "up" || msg.Type == tea.KeyUp:
 		m.prevSearchMatch()
 		return m, nil
+	
+	case msg.String() == "alt+c":
+        m.searchCaseSensitive = !m.searchCaseSensitive
+        m.runSearch()
+        return m, nil
+
+    case msg.String() == "alt+w":
+        m.searchWholeWord = !m.searchWholeWord
+        m.runSearch()
+        return m, nil
 
 	default:
 		prev := m.searchInput.Value
