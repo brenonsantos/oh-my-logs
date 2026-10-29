@@ -367,17 +367,7 @@ func (m Model) handleKeyBarMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleStatusBarMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	// Toggle follow mode when status bar is clicked
-	m.follow = !m.follow
-	if m.follow {
-		m.scrollToBottom()
-		m.selectedRow = -1
-		m.selectionStart = -1
-		m.selectionEnd = -1
-		m.message = "Resumed stream (FOLLOW)"
-	} else {
-		m.message = "Stream paused"
-	}
+	m.toggleFollow()
 	return m, nil
 }
 

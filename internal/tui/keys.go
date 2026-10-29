@@ -105,8 +105,8 @@ func defaultKeyMap() keyMap {
 			key.WithHelp("c", "clear"),
 		),
 		Pause: key.NewBinding(
-			key.WithKeys(" "),
-			key.WithHelp("Space", "pause/resume"),
+			key.WithKeys(" ", "space"),
+			key.WithHelp("Space", "pause/resume follow"),
 		),
 		ScrollUp: key.NewBinding(
 			key.WithKeys("up", "k"),
