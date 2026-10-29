@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -92,12 +93,24 @@ func getAvailableTools() []Tool {
 						Type:        "integer",
 						Description: "Only return logs with ID greater than this checkpoint ID (useful for watching new logs after a milestone).",
 					},
+					"until_id": {
+						Type:        "integer",
+						Description: "Only return logs with ID less than or equal to this upper bound ID.",
+					},
+					"start_time": {
+						Type:        "string",
+						Description: "Optional start time boundary (uptime float like '250.0', clock time '14:15:00', or ISO-8601).",
+					},
+					"end_time": {
+						Type:        "string",
+						Description: "Optional end time boundary (uptime float like '255.0', clock time '14:15:30', or ISO-8601).",
+					},
 				},
 			},
 		},
 		{
 			Name:        "search_logs",
-			Description: "Search the log history buffer using plain text query or regular expression.",
+			Description: "Search the log history buffer using plain text query or regular expression, optionally filtered within a time range.",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertyDef{
@@ -115,8 +128,106 @@ func getAvailableTools() []Tool {
 						Description: "Maximum matching lines to return (default: 50, max: 500).",
 						Default:     50,
 					},
+					"start_time": {
+						Type:        "string",
+						Description: "Optional start time boundary (uptime float like '250.0', clock time '14:15:00', or ISO-8601).",
+					},
+					"end_time": {
+						Type:        "string",
+						Description: "Optional end time boundary (uptime float like '255.0', clock time '14:15:30', or ISO-8601).",
+					},
 				},
 				Required: []string{"query"},
+			},
+		},
+		{
+			Name:        "get_logs_in_timerange",
+			Description: "Retrieve log records within a specific time range or device uptime window (e.g. from uptime 250.0 to 255.0, or between timestamps 14:15:00 and 14:15:30), optionally filtered by query, min_level, or module.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertyDef{
+					"from_time": {
+						Type:        "string",
+						Description: "Start timestamp, clock time (e.g. '14:15:00', '14:15:00.000'), uptime seconds (e.g. '250.0', '250', '250.'), or ISO-8601 string.",
+					},
+					"to_time": {
+						Type:        "string",
+						Description: "End timestamp, clock time, uptime seconds, or ISO-8601 string.",
+					},
+					"query": {
+						Type:        "string",
+						Description: "Optional text or regex pattern to filter matching lines within the time range.",
+					},
+					"is_regex": {
+						Type:        "boolean",
+						Description: "Treat query as regular expression (default: false).",
+						Default:     false,
+					},
+					"min_level": {
+						Type:        "string",
+						Description: "Optional minimum severity level filter (DEBUG, INFO, WARN, ERROR, FATAL).",
+						Enum:        []string{"DEBUG", "INFO", "WARN", "WARNING", "ERROR", "FATAL"},
+					},
+					"module": {
+						Type:        "string",
+						Description: "Optional module or tag name substring filter.",
+					},
+					"max_results": {
+						Type:        "integer",
+						Description: "Maximum lines to return (default: 100, max: 2000).",
+						Default:     100,
+					},
+				},
+				Required: []string{"from_time", "to_time"},
+			},
+		},
+		{
+			Name:        "get_logs_around",
+			Description: "Inspect the context window of logs surrounding a specific event by record ID, timestamp/uptime, or search query. Perfect for seeing what happened immediately before and after an assert, reboot, state change, or uptime milestone.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertyDef{
+					"target_id": {
+						Type:        "integer",
+						Description: "Log record ID to center around (e.g. 452).",
+					},
+					"target_time": {
+						Type:        "string",
+						Description: "Timestamp, clock time, or device uptime to center around (e.g. '250.', '250.125', '14:15:30.123'). Finds the closest matching record.",
+					},
+					"target_query": {
+						Type:        "string",
+						Description: "Search query string or regex pattern to locate the pivot record (e.g. 'HardFault' or 'assert failed').",
+					},
+					"is_regex": {
+						Type:        "boolean",
+						Description: "Treat target_query as regular expression (default: false).",
+						Default:     false,
+					},
+					"before": {
+						Type:        "integer",
+						Description: "Number of lines to show before the target event (default: 20, max: 200).",
+						Default:     20,
+					},
+					"after": {
+						Type:        "integer",
+						Description: "Number of lines to show after the target event (default: 20, max: 200).",
+						Default:     20,
+					},
+					"window": {
+						Type:        "integer",
+						Description: "Total context window size. If before/after are omitted, splits window evenly around target.",
+					},
+					"min_level": {
+						Type:        "string",
+						Description: "Optional minimum severity level filter.",
+						Enum:        []string{"DEBUG", "INFO", "WARN", "WARNING", "ERROR", "FATAL"},
+					},
+					"module": {
+						Type:        "string",
+						Description: "Optional module or tag name substring filter.",
+					},
+				},
 			},
 		},
 		{
@@ -235,6 +346,10 @@ func (h *ToolHandler) Execute(name string, rawArgs json.RawMessage) CallToolResu
 		return h.handleGetRecentLogs(rawArgs)
 	case "search_logs":
 		return h.handleSearchLogs(rawArgs)
+	case "get_logs_in_timerange":
+		return h.handleGetLogsInTimerange(rawArgs)
+	case "get_logs_around":
+		return h.handleGetLogsAround(rawArgs)
 	case "send_serial_command":
 		return h.handleSendSerialCommand(rawArgs)
 	case "clear_log_buffer":
@@ -381,11 +496,63 @@ func (h *ToolHandler) handleGetDeviceStatus() CallToolResult {
 }
 
 type getLogsParams struct {
-	Count    int    `json:"count"`
-	All      bool   `json:"all"`
-	MinLevel string `json:"min_level"`
-	Module   string `json:"module"`
-	SinceID  uint64 `json:"since_id"`
+	Count     int    `json:"count"`
+	All       bool   `json:"all"`
+	MinLevel  string `json:"min_level"`
+	Module    string `json:"module"`
+	SinceID   uint64 `json:"since_id"`
+	UntilID   uint64 `json:"until_id"`
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+}
+
+func filterByTimeBounds(records []record.Record, startStr, endStr string) ([]record.Record, error) {
+	if startStr == "" && endStr == "" {
+		return records, nil
+	}
+	var startPt, endPt ParsedTime
+	var err error
+	if startStr != "" {
+		startPt, err = ParseTimeQuery(startStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid start_time %q: %w", startStr, err)
+		}
+	}
+	if endStr != "" {
+		endPt, err = ParseTimeQuery(endStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid end_time %q: %w", endStr, err)
+		}
+	}
+
+	// If only start provided, set end to maximum
+	if startStr != "" && endStr == "" {
+		endPt = startPt
+		if startPt.Kind == TimeKindUptimeSeconds {
+			endPt.Seconds = math.MaxFloat64
+		} else if startPt.Kind == TimeKindDateTime {
+			endPt.DateTime = time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
+		} else if startPt.Kind == TimeKindTimeOfDay {
+			endPt.Nanoseconds = math.MaxInt64
+		}
+	} else if startStr == "" && endStr != "" {
+		startPt = endPt
+		if endPt.Kind == TimeKindUptimeSeconds {
+			startPt.Seconds = 0
+		} else if endPt.Kind == TimeKindDateTime {
+			startPt.DateTime = time.Time{}
+		} else if endPt.Kind == TimeKindTimeOfDay {
+			startPt.Nanoseconds = 0
+		}
+	}
+
+	var res []record.Record
+	for _, r := range records {
+		if IsRecordInTimeRange(r, startPt, endPt) {
+			res = append(res, r)
+		}
+	}
+	return res, nil
 }
 
 func (h *ToolHandler) handleGetRecentLogs(rawArgs json.RawMessage) CallToolResult {
@@ -406,7 +573,13 @@ func (h *ToolHandler) handleGetRecentLogs(rawArgs json.RawMessage) CallToolResul
 	}
 
 	if h.session.IsIPCAvailable() {
-		logs, err := h.session.IPCClient().GetRecentLogs(fetchCount, params.MinLevel, params.Module)
+		// When time bounds or ID bounds are specified, retrieve full buffer from IPC to filter locally
+		ipcFetchCount := fetchCount
+		if params.StartTime != "" || params.EndTime != "" || params.UntilID > 0 {
+			ipcFetchCount = 0
+		}
+
+		logs, err := h.session.IPCClient().GetRecentLogs(ipcFetchCount, params.MinLevel, params.Module)
 		if err == nil {
 			if params.SinceID > 0 {
 				var filteredSince []record.Record
@@ -417,6 +590,27 @@ func (h *ToolHandler) handleGetRecentLogs(rawArgs json.RawMessage) CallToolResul
 				}
 				logs = filteredSince
 			}
+			if params.UntilID > 0 {
+				var filteredUntil []record.Record
+				for _, r := range logs {
+					if r.ID <= params.UntilID {
+						filteredUntil = append(filteredUntil, r)
+					}
+				}
+				logs = filteredUntil
+			}
+			if params.StartTime != "" || params.EndTime != "" {
+				bounded, err := filterByTimeBounds(logs, params.StartTime, params.EndTime)
+				if err != nil {
+					return textError(err.Error())
+				}
+				logs = bounded
+			}
+
+			if fetchCount > 0 && len(logs) > fetchCount {
+				logs = logs[len(logs)-fetchCount:]
+			}
+
 			if len(logs) == 0 {
 				return textSuccess("No new logs available matching filter in active TUI session.")
 			}
@@ -455,6 +649,24 @@ func (h *ToolHandler) handleGetRecentLogs(rawArgs json.RawMessage) CallToolResul
 		all = afterSince
 	}
 
+	if params.UntilID > 0 {
+		var beforeUntil []record.Record
+		for _, r := range all {
+			if r.ID <= params.UntilID {
+				beforeUntil = append(beforeUntil, r)
+			}
+		}
+		all = beforeUntil
+	}
+
+	if params.StartTime != "" || params.EndTime != "" {
+		bounded, err := filterByTimeBounds(all, params.StartTime, params.EndTime)
+		if err != nil {
+			return textError(err.Error())
+		}
+		all = bounded
+	}
+
 	filtered := filterRecords(all, params.MinLevel, params.Module)
 	if fetchCount > 0 && len(filtered) > fetchCount {
 		filtered = filtered[len(filtered)-fetchCount:]
@@ -478,6 +690,8 @@ type searchLogsParams struct {
 	Query      string `json:"query"`
 	IsRegex    bool   `json:"is_regex"`
 	MaxResults int    `json:"max_results"`
+	StartTime  string `json:"start_time"`
+	EndTime    string `json:"end_time"`
 }
 
 func (h *ToolHandler) handleSearchLogs(rawArgs json.RawMessage) CallToolResult {
@@ -499,13 +713,28 @@ func (h *ToolHandler) handleSearchLogs(rawArgs json.RawMessage) CallToolResult {
 	}
 
 	if h.session.IsIPCAvailable() {
-		matches, err := h.session.IPCClient().SearchLogs(params.Query, params.IsRegex, params.MaxResults)
+		// If time bounds are present, retrieve full search results or full buffer from IPC
+		matches, err := h.session.IPCClient().SearchLogs(params.Query, params.IsRegex, 0)
 		if err == nil {
+			if params.StartTime != "" || params.EndTime != "" {
+				bounded, err := filterByTimeBounds(matches, params.StartTime, params.EndTime)
+				if err != nil {
+					return textError(err.Error())
+				}
+				matches = bounded
+			}
+
 			if len(matches) == 0 {
 				return textSuccess(fmt.Sprintf("No logs matched search query: %q in active TUI session", params.Query))
 			}
+
+			totalMatches := len(matches)
+			if len(matches) > params.MaxResults {
+				matches = matches[len(matches)-params.MaxResults:]
+			}
+
 			var sb strings.Builder
-			sb.WriteString(fmt.Sprintf("Found %d match(es) for %q in active TUI session:\n", len(matches), params.Query))
+			sb.WriteString(fmt.Sprintf("Found %d match(es) for %q in active TUI session:\n", totalMatches, params.Query))
 			for _, r := range matches {
 				sb.WriteString(formatRecord(r))
 				sb.WriteString("\n")
@@ -525,6 +754,14 @@ func (h *ToolHandler) handleSearchLogs(rawArgs json.RawMessage) CallToolResult {
 
 	queryLower := strings.ToLower(params.Query)
 	all := h.session.Buffer().All()
+
+	if params.StartTime != "" || params.EndTime != "" {
+		bounded, err := filterByTimeBounds(all, params.StartTime, params.EndTime)
+		if err != nil {
+			return textError(err.Error())
+		}
+		all = bounded
+	}
 
 	var matches []record.Record
 	for _, r := range all {
@@ -570,6 +807,283 @@ func (h *ToolHandler) handleSearchLogs(rawArgs json.RawMessage) CallToolResult {
 	for _, r := range matches {
 		sb.WriteString(formatRecord(r))
 		sb.WriteString("\n")
+	}
+
+	return textSuccess(sb.String())
+}
+
+type getLogsInTimerangeParams struct {
+	FromTime   string `json:"from_time"`
+	ToTime     string `json:"to_time"`
+	Query      string `json:"query"`
+	IsRegex    bool   `json:"is_regex"`
+	MinLevel   string `json:"min_level"`
+	Module     string `json:"module"`
+	MaxResults int    `json:"max_results"`
+}
+
+func (h *ToolHandler) handleGetLogsInTimerange(rawArgs json.RawMessage) CallToolResult {
+	var params getLogsInTimerangeParams
+	if len(rawArgs) > 0 {
+		if err := json.Unmarshal(rawArgs, &params); err != nil {
+			return textError(fmt.Sprintf("invalid arguments: %v", err))
+		}
+	}
+
+	if params.FromTime == "" || params.ToTime == "" {
+		return textError("parameters 'from_time' and 'to_time' are required")
+	}
+
+	if params.MaxResults <= 0 {
+		params.MaxResults = 100
+	} else if params.MaxResults > 2000 {
+		params.MaxResults = 2000
+	}
+
+	var all []record.Record
+	if h.session.IsIPCAvailable() {
+		logs, err := h.session.IPCClient().GetRecentLogs(0, "", "")
+		if err == nil {
+			all = logs
+		}
+	}
+	if len(all) == 0 {
+		all = h.session.Buffer().All()
+	}
+
+	if len(all) == 0 {
+		status := h.session.GetStatus()
+		if !status.Connected {
+			return textSuccess("No logs available (device is disconnected and buffer is empty).")
+		}
+		return textSuccess("No logs recorded yet.")
+	}
+
+	inRange, err := filterByTimeBounds(all, params.FromTime, params.ToTime)
+	if err != nil {
+		return textError(err.Error())
+	}
+
+	filtered := filterRecords(inRange, params.MinLevel, params.Module)
+
+	if params.Query != "" {
+		var reg *regexp.Regexp
+		if params.IsRegex {
+			var err error
+			reg, err = regexp.Compile("(?i)" + params.Query)
+			if err != nil {
+				return textError(fmt.Sprintf("invalid regular expression: %v", err))
+			}
+		}
+		queryLower := strings.ToLower(params.Query)
+		var queryMatches []record.Record
+		for _, r := range filtered {
+			matched := false
+			if reg != nil {
+				matched = reg.MatchString(r.Raw)
+				if !matched {
+					for _, v := range r.Fields {
+						if reg.MatchString(v) {
+							matched = true
+							break
+						}
+					}
+				}
+			} else {
+				matched = strings.Contains(strings.ToLower(r.Raw), queryLower)
+				if !matched {
+					for _, v := range r.Fields {
+						if strings.Contains(strings.ToLower(v), queryLower) {
+							matched = true
+							break
+						}
+					}
+				}
+			}
+			if matched {
+				queryMatches = append(queryMatches, r)
+			}
+		}
+		filtered = queryMatches
+	}
+
+	if len(filtered) == 0 {
+		return textSuccess(fmt.Sprintf("No logs found between %s and %s matching criteria.", params.FromTime, params.ToTime))
+	}
+
+	total := len(filtered)
+	display := filtered
+	if len(display) > params.MaxResults {
+		display = display[:params.MaxResults]
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Found %d log record(s) between %s and %s (showing %d):\n", total, params.FromTime, params.ToTime, len(display)))
+	for _, r := range display {
+		sb.WriteString(formatRecord(r))
+		sb.WriteString("\n")
+	}
+
+	return textSuccess(sb.String())
+}
+
+type getLogsAroundParams struct {
+	TargetID    uint64 `json:"target_id"`
+	TargetTime  string `json:"target_time"`
+	TargetQuery string `json:"target_query"`
+	IsRegex     bool   `json:"is_regex"`
+	Before      int    `json:"before"`
+	After       int    `json:"after"`
+	Window      int    `json:"window"`
+	MinLevel    string `json:"min_level"`
+	Module      string `json:"module"`
+}
+
+func (h *ToolHandler) handleGetLogsAround(rawArgs json.RawMessage) CallToolResult {
+	var params getLogsAroundParams
+	if len(rawArgs) > 0 {
+		if err := json.Unmarshal(rawArgs, &params); err != nil {
+			return textError(fmt.Sprintf("invalid arguments: %v", err))
+		}
+	}
+
+	if params.TargetID == 0 && params.TargetTime == "" && params.TargetQuery == "" {
+		return textError("at least one of 'target_id', 'target_time', or 'target_query' must be provided")
+	}
+
+	before := params.Before
+	after := params.After
+	if before <= 0 && after <= 0 {
+		w := params.Window
+		if w <= 0 {
+			w = 40
+		}
+		before = w / 2
+		after = w - before
+	}
+	if before < 0 {
+		before = 0
+	} else if before > 200 {
+		before = 200
+	}
+	if after < 0 {
+		after = 0
+	} else if after > 200 {
+		after = 200
+	}
+
+	var all []record.Record
+	if h.session.IsIPCAvailable() {
+		logs, err := h.session.IPCClient().GetRecentLogs(0, "", "")
+		if err == nil {
+			all = logs
+		}
+	}
+	if len(all) == 0 {
+		all = h.session.Buffer().All()
+	}
+
+	if len(all) == 0 {
+		return textSuccess("No logs recorded yet (buffer is empty).")
+	}
+
+	targetIdx := -1
+
+	// 1. Locate by TargetID
+	if params.TargetID > 0 {
+		for i, r := range all {
+			if r.ID == params.TargetID {
+				targetIdx = i
+				break
+			}
+		}
+		if targetIdx == -1 {
+			return textError(fmt.Sprintf("record with ID %d not found in buffer", params.TargetID))
+		}
+	} else if params.TargetTime != "" {
+		pt, err := ParseTimeQuery(params.TargetTime)
+		if err != nil {
+			return textError(fmt.Sprintf("invalid target_time: %v", err))
+		}
+		bestDist := math.MaxFloat64
+		for i, r := range all {
+			dist, ok := RecordDistanceToTime(r, pt)
+			if ok && dist < bestDist {
+				bestDist = dist
+				targetIdx = i
+			}
+		}
+		if targetIdx == -1 {
+			return textError(fmt.Sprintf("no records with comparable timestamp or uptime found for %q", params.TargetTime))
+		}
+	} else if params.TargetQuery != "" {
+		var reg *regexp.Regexp
+		if params.IsRegex {
+			var err error
+			reg, err = regexp.Compile("(?i)" + params.TargetQuery)
+			if err != nil {
+				return textError(fmt.Sprintf("invalid regular expression: %v", err))
+			}
+		}
+		queryLower := strings.ToLower(params.TargetQuery)
+		// Find the last match in the buffer (most recent)
+		for i := len(all) - 1; i >= 0; i-- {
+			r := all[i]
+			matched := false
+			if reg != nil {
+				matched = reg.MatchString(r.Raw)
+				if !matched {
+					for _, v := range r.Fields {
+						if reg.MatchString(v) {
+							matched = true
+							break
+						}
+					}
+				}
+			} else {
+				matched = strings.Contains(strings.ToLower(r.Raw), queryLower)
+				if !matched {
+					for _, v := range r.Fields {
+						if strings.Contains(strings.ToLower(v), queryLower) {
+							matched = true
+							break
+						}
+					}
+				}
+			}
+			if matched {
+				targetIdx = i
+				break
+			}
+		}
+		if targetIdx == -1 {
+			return textSuccess(fmt.Sprintf("No logs matched target_query: %q", params.TargetQuery))
+		}
+	}
+
+	startIdx := targetIdx - before
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	endIdx := targetIdx + after + 1
+	if endIdx > len(all) {
+		endIdx = len(all)
+	}
+
+	window := all[startIdx:endIdx]
+	targetRecord := all[targetIdx]
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("--- Showing %d log record(s) centered around target (ID: %d, index %d of %d) ---\n",
+		len(window), targetRecord.ID, targetIdx+1, len(all)))
+
+	for _, r := range window {
+		if r.ID == targetRecord.ID {
+			sb.WriteString(fmt.Sprintf(">>> TARGET (ID:%d) >>> %s\n", r.ID, formatRecord(r)))
+		} else {
+			sb.WriteString(formatRecord(r))
+			sb.WriteString("\n")
+		}
 	}
 
 	return textSuccess(sb.String())
@@ -931,25 +1445,38 @@ func filterRecords(records []record.Record, minLevel, module string) []record.Re
 }
 
 func formatRecord(r record.Record) string {
-	if r.Raw != "" {
-		return r.Raw
+	content := r.Raw
+	if content == "" {
+		parts := make([]string, 0, len(r.Fields))
+		if ts := r.Get("time"); ts != "" {
+			parts = append(parts, ts)
+		}
+		if lvl := r.Get("level"); lvl != "" {
+			parts = append(parts, "["+lvl+"]")
+		}
+		if mod := r.Get("module"); mod != "" {
+			parts = append(parts, "["+mod+"]")
+		}
+		if msg := r.Get("message"); msg != "" {
+			parts = append(parts, msg)
+		}
+		if len(parts) > 0 {
+			content = strings.Join(parts, " ")
+		} else {
+			content = fmt.Sprintf("%v", r.Fields)
+		}
 	}
-	// Fallback to formatted fields
-	parts := make([]string, 0, len(r.Fields))
-	if ts := r.Get("time"); ts != "" {
-		parts = append(parts, ts)
+
+	var metaParts []string
+	if r.ID > 0 {
+		metaParts = append(metaParts, fmt.Sprintf("ID:%d", r.ID))
 	}
-	if lvl := r.Get("level"); lvl != "" {
-		parts = append(parts, "["+lvl+"]")
+	if !r.Timestamp.IsZero() {
+		metaParts = append(metaParts, r.Timestamp.Format("15:04:05.000"))
 	}
-	if mod := r.Get("module"); mod != "" {
-		parts = append(parts, "["+mod+"]")
+
+	if len(metaParts) > 0 {
+		return fmt.Sprintf("[%s] %s", strings.Join(metaParts, " | "), content)
 	}
-	if msg := r.Get("message"); msg != "" {
-		parts = append(parts, msg)
-	}
-	if len(parts) > 0 {
-		return strings.Join(parts, " ")
-	}
-	return fmt.Sprintf("%v", r.Fields)
+	return content
 }
