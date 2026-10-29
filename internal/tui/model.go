@@ -911,6 +911,56 @@ func (m Model) Init() tea.Cmd {
 	return nil
 }
 
+// toggleFollow inverts the log follow/pause state, scrolling to bottom and clearing row selections
+// when resuming follow, and synchronizing across active tabs and split view panes.
+func (m *Model) toggleFollow() {
+	m.follow = !m.follow
+	m.paused = false
+
+	if m.follow {
+		m.scrollToBottom()
+		m.selectedRow = -1
+		m.selectionStart = -1
+		m.selectionEnd = -1
+		m.cursorCol = -1
+		m.charSelStart = -1
+		m.charSelEnd = -1
+		m.scrollX = 0
+		m.message = "Resumed follow"
+	} else {
+		m.message = "Paused follow"
+	}
+
+	if curTab := m.currentTab(); curTab != nil {
+		curTab.Follow = m.follow
+		if m.follow {
+			curTab.SelectedRow = -1
+			curTab.CursorCol = -1
+			curTab.CharSelStart = -1
+			curTab.CharSelEnd = -1
+			curTab.ScrollX = 0
+			curTab.ScrollOffset = m.scrollOffset
+		}
+	}
+
+	if m.splitMode != SplitNone {
+		if t := m.currentTabForPane(m.activePane); t != nil {
+			t.Follow = m.follow
+			if m.follow {
+				t.SelectedRow = -1
+				t.CursorCol = -1
+				t.CharSelStart = -1
+				t.CharSelEnd = -1
+				t.ScrollX = 0
+				t.ScrollOffset = m.scrollOffset
+			}
+		}
+		if m.follow && m.syncScroll {
+			m.syncOtherPaneChronologically()
+		}
+	}
+}
+
 // SetProcessCommand sets or updates the shell command associated with a process source.
 func (m *Model) SetProcessCommand(command string) {
 	m.isProcessSource = true

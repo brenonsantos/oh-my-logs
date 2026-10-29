@@ -700,3 +700,128 @@ func TestMouseDragSelection_SquareSectionExample(t *testing.T) {
 		}
 	}
 }
+
+func TestSpaceKey_ToggleFollow_PauseAndResume(t *testing.T) {
+	m := newTestSelectionModel(t, 100)
+
+	// Ingest 20 records so we have enough lines
+	for i := 1; i <= 20; i++ {
+		updated, _ := m.Update(lineMsg(fmt.Sprintf("log line %d", i)))
+		m = updated.(Model)
+	}
+
+	// Initially, follow should be true and scrolled to bottom
+	if !m.follow {
+		t.Fatalf("expected follow=true initially")
+	}
+
+	// 1. Press Space -> pauses follow
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(Model)
+
+	if m.follow {
+		t.Errorf("expected follow=false after pressing Space once")
+	}
+	if curTab := m.currentTab(); curTab != nil && curTab.Follow {
+		t.Errorf("expected curTab.Follow=false after pressing Space")
+	}
+
+	// Ingest new lines while paused -> viewport should NOT auto-scroll
+	oldOffset := m.scrollOffset
+	for i := 21; i <= 25; i++ {
+		updated, _ = m.Update(lineMsg(fmt.Sprintf("new log line %d", i)))
+		m = updated.(Model)
+	}
+	if m.scrollOffset != oldOffset {
+		t.Errorf("expected scrollOffset=%d while paused, got %d", oldOffset, m.scrollOffset)
+	}
+
+	// 2. Press Space again -> resumes follow and scrolls to bottom
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(Model)
+
+	if !m.follow {
+		t.Errorf("expected follow=true after pressing Space a second time")
+	}
+	if curTab := m.currentTab(); curTab != nil && !curTab.Follow {
+		t.Errorf("expected curTab.Follow=true after resuming")
+	}
+
+	// Verify scroll offset moved to bottom
+	expectedOffset := len(m.visible) - m.tableHeight
+	if m.scrollOffset != expectedOffset {
+		t.Errorf("expected scrollOffset to be at bottom (%d), got %d", expectedOffset, m.scrollOffset)
+	}
+}
+
+func TestSpaceKey_ResumeFollow_ClearsRowSelection(t *testing.T) {
+	m := newTestSelectionModel(t, 100)
+
+	for i := 1; i <= 20; i++ {
+		updated, _ := m.Update(lineMsg(fmt.Sprintf("log line %d", i)))
+		m = updated.(Model)
+	}
+
+	// Select row 5 (which pauses follow)
+	m.selectedRow = 5
+	m.selectionStart = 5
+	m.selectionEnd = 5
+	m.follow = false
+	if curTab := m.currentTab(); curTab != nil {
+		curTab.Follow = false
+		curTab.SelectedRow = 5
+	}
+
+	// Press Space to resume follow
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(Model)
+
+	if !m.follow {
+		t.Fatalf("expected follow=true after Space")
+	}
+	if m.selectedRow != -1 {
+		t.Errorf("expected selectedRow to be cleared to -1 upon follow resume, got %d", m.selectedRow)
+	}
+	if m.selectionStart != -1 || m.selectionEnd != -1 {
+		t.Errorf("expected range selection to be cleared, got [%d..%d]", m.selectionStart, m.selectionEnd)
+	}
+
+	// Ingest new line -> follow must remain active
+	updated, _ = m.Update(lineMsg("line after space"))
+	m = updated.(Model)
+
+	if !m.follow {
+		t.Errorf("expected follow to remain true when new logs arrive after pressing Space")
+	}
+}
+
+func TestSpaceKey_EmptyBuffer_TogglesFollow(t *testing.T) {
+	m := newTestSelectionModel(t, 100)
+
+	if m.buffer.Len() != 0 {
+		t.Fatalf("expected buffer to be empty")
+	}
+	if !m.follow {
+		t.Fatalf("expected follow=true initially")
+	}
+
+	// Press Space on empty buffer -> should pause follow without opening mini-game
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(Model)
+
+	if m.mode == modeGame {
+		t.Fatalf("Space on empty buffer should NOT open mini-game, got modeGame")
+	}
+	if m.follow {
+		t.Errorf("expected follow=false after Space on empty buffer")
+	}
+
+	// Press Space again -> should resume follow
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(Model)
+
+	if !m.follow {
+		t.Errorf("expected follow=true after second Space on empty buffer")
+	}
+}
+

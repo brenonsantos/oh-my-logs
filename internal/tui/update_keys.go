@@ -535,6 +535,7 @@ func (m Model) handleNavigationKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 
 	case keyMatches(msg, m.keys.GoToBottom):
 		m.follow = true
+		m.paused = false
 		m.scrollToBottom()
 		m.selectedRow = -1
 		m.selectionStart = -1
@@ -543,8 +544,23 @@ func (m Model) handleNavigationKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 		m.charSelStart = -1
 		m.charSelEnd = -1
 		m.scrollX = 0
-		if m.splitMode != SplitNone && m.syncScroll {
-			m.syncOtherPaneChronologically()
+		if curTab := m.currentTab(); curTab != nil {
+			curTab.Follow = true
+			curTab.SelectedRow = -1
+			curTab.CursorCol = -1
+			curTab.CharSelStart = -1
+			curTab.CharSelEnd = -1
+			curTab.ScrollX = 0
+			curTab.ScrollOffset = m.scrollOffset
+		}
+		if m.splitMode != SplitNone {
+			if t := m.currentTabForPane(m.activePane); t != nil {
+				t.Follow = true
+				t.SelectedRow = -1
+			}
+			if m.syncScroll {
+				m.syncOtherPaneChronologically()
+			}
 		}
 		return m, nil, true
 
@@ -665,20 +681,8 @@ func (m Model) handleActionKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 		m.message = "Cleared"
 		return m, nil, true
 
-	case keyMatches(msg, m.keys.Pause):
-		if m.buffer.Len() == 0 {
-			m.activeGame = game.RandomMiniGame()
-			m.logsDuringGame = 0
-			m.mode = modeGame
-			return m, m.activeGame.Init(), true
-		}
-		m.paused = !m.paused
-		if !m.paused {
-			m.rebuildVisible()
-			if m.follow {
-				m.scrollToBottom()
-			}
-		}
+	case keyMatches(msg, m.keys.Pause) || msg.Type == tea.KeySpace || msg.String() == " " || msg.String() == "space":
+		m.toggleFollow()
 		return m, nil, true
 
 	case keyMatches(msg, m.keys.SaveLog):
