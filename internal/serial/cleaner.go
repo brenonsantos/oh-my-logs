@@ -30,6 +30,10 @@ var (
 	// cursorForwardRe matches ANSI cursor-forward sequences (\x1b[<n>C) used by VT100
 	// terminals and embedded shells (such as Zephyr) to space out autocompletion columns.
 	cursorForwardRe = regexp.MustCompile(`\x1b\[(\d*)C`)
+
+	// logHeaderIndicatorRe identifies log headers (timestamps, levels, brackets) that indicate
+	// the buffer contains an active in-flight log line rather than an idle interactive shell prompt.
+	logHeaderIndicatorRe = regexp.MustCompile(`(?i)(?:\[\s*\d+(?:\.\d+)?\s*\]|<(?:err|wrn|inf|dbg|trace|fatal|crit)>|\[(?:err|wrn|inf|dbg|error|warn|info|debug)\])`)
 )
 
 // ExpandTabs replaces tab characters with spaces aligned to tabWidth stops (default 8).
@@ -140,6 +144,41 @@ func DetectShellPrompt(line string) string {
 	}
 	m := shellPromptRe.FindString(trimmed)
 	return strings.TrimSpace(m)
+}
+
+// IsIdleShellPrompt returns true if line represents a genuine idle interactive shell prompt
+// waiting for engineer input (e.g. "device:~$ " or "uart:~$ os_") without a trailing newline.
+// It returns false if the line is an in-flight log message (e.g. prefixed by prompt-erasure
+// escape codes, or containing log timestamps/levels), preventing premature line splitting.
+func IsIdleShellPrompt(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+
+	// 1. If it contains prompt-erasure sequences, the shell was erasing the prompt
+	// to output an asynchronous log message.
+	if promptEraseRe.MatchString(line) {
+		return false
+	}
+
+	// 2. If it contains log level or timestamp signatures, it is an in-flight log line.
+	if logHeaderIndicatorRe.MatchString(line) {
+		return false
+	}
+
+	// 3. Must match an active shell prompt at the current cursor position.
+	_, remainder, ok := ExtractPromptRemainder(line)
+	if !ok {
+		return false
+	}
+
+	// 4. If the remainder itself contains log signatures, do not treat as idle prompt.
+	if logHeaderIndicatorRe.MatchString(remainder) {
+		return false
+	}
+
+	return true
 }
 
 // ResolveCarriageReturns handles in-band carriage returns (\r) in serial streams,

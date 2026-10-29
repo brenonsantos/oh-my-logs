@@ -50,3 +50,4 @@ plan-history.md
 PR_*.md
 *.png
 .oml.yaml
+__pycache__/

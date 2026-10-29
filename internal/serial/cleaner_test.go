@@ -293,4 +293,83 @@ func TestResolveCarriageReturns(t *testing.T) {
 	}
 }
 
+func TestIsIdleShellPrompt(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{
+			name:     "bare uart prompt",
+			input:    "uart:~$ ",
+			expected: true,
+		},
+		{
+			name:     "bare device prompt",
+			input:    "device:~$ ",
+			expected: true,
+		},
+		{
+			name:     "prompt with active command input",
+			input:    "device:~$ os_",
+			expected: true,
+		},
+		{
+			name:     "prompt with active command input no space",
+			input:    "device:~$ help",
+			expected: true,
+		},
+		{
+			name:     "in-flight log line with prompt-erase prefix",
+			input:    "device:~$ \x1b[9D\x1b[J[    262.937] <inf> [lib-mqtt]: HandlePublishToClo",
+			expected: false,
+		},
+		{
+			name:     "in-flight log line with carriage return prompt erase",
+			input:    "device:~$ \r\x1b[K[   123.456] <wrn> message",
+			expected: false,
+		},
+		{
+			name:     "in-flight log line without prompt",
+			input:    "[      6.246] <err> [0x10A]: OnCloudProvisioningStatusChanged: Connection is not ",
+			expected: false,
+		},
+		{
+			name:     "tail continuation fragment of severed log line",
+			input:    "udOsWork(): Published message successfully on topic",
+			expected: false,
+		},
+		{
+			name:     "log level indicator without prompt",
+			input:    "<inf> system booting",
+			expected: false,
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: false,
+		},
+		{
+			name:     "whitespace only",
+			input:    "   \t  ",
+			expected: false,
+		},
+		{
+			name:     "random text",
+			input:    "hello world",
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := serial.IsIdleShellPrompt(tc.input)
+			if actual != tc.expected {
+				t.Errorf("IsIdleShellPrompt(%q) = %v, want %v", tc.input, actual, tc.expected)
+			}
+		})
+	}
+}
+
+
 
