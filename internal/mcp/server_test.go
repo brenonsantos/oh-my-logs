@@ -589,4 +589,372 @@ func TestMCPSession_SeedFromRecentDiskLog(t *testing.T) {
 	}
 }
 
+func TestFormatRecord_WithIDAndTimestamp(t *testing.T) {
+	ts := time.Date(2026, 10, 29, 14, 15, 30, 123000000, time.UTC)
+	rec := record.Record{
+		ID:        105,
+		Timestamp: ts,
+		Raw:       "[  250.125] <inf> sys: ready",
+	}
+
+	formatted := formatRecord(rec)
+	expectedPrefix := "[ID:105 | 14:15:30.123]"
+	if !strings.HasPrefix(formatted, expectedPrefix) {
+		t.Errorf("expected prefix %q, got: %q", expectedPrefix, formatted)
+	}
+	if !strings.Contains(formatted, "[  250.125] <inf> sys: ready") {
+		t.Errorf("expected original content preserved, got: %q", formatted)
+	}
+
+	// Record with ID only (zero timestamp)
+	recIDOnly := record.Record{
+		ID:  42,
+		Raw: "plain message",
+	}
+	if got := formatRecord(recIDOnly); got != "[ID:42] plain message" {
+		t.Errorf("expected [ID:42] plain message, got %q", got)
+	}
+
+	// Record with no ID and no timestamp
+	recNone := record.Record{Raw: "raw message"}
+	if got := formatRecord(recNone); got != "raw message" {
+		t.Errorf("expected raw message, got %q", got)
+	}
+}
+
+func TestToolHandler_GetLogsInTimerange(t *testing.T) {
+	appCfg := &config.AppConfig{}
+	session := NewSession(appCfg, 200)
+
+	baseTime := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
+	for i := 1; i <= 100; i++ {
+		uptimeSec := float64(200 + i) // 201.0 .. 300.0
+		session.Buffer().Add(record.Record{
+			ID:        uint64(i),
+			Timestamp: baseTime.Add(time.Duration(i) * time.Second),
+			Fields: map[string]string{
+				"uptime":  fmt.Sprintf("%.3f", uptimeSec),
+				"level":   "INFO",
+				"message": fmt.Sprintf("event %d at uptime %.1f", i, uptimeSec),
+			},
+			Raw: fmt.Sprintf("[%8.3f] <inf> sys: event %d at uptime %.1f", uptimeSec, i, uptimeSec),
+		})
+	}
+
+	handler := NewToolHandler(session, appCfg)
+
+	// 1. Query uptime range 240.0 to 260.0
+	res := handler.handleGetLogsInTimerange([]byte(`{"from_time": "240.0", "to_time": "260.0"}`))
+	if res.IsError {
+		t.Fatalf("handleGetLogsInTimerange failed: %s", res.Content[0].Text)
+	}
+	txt := res.Content[0].Text
+	if !strings.Contains(txt, "Found 21 log record(s)") {
+		t.Errorf("expected 21 records between 240.0 and 260.0 (inclusive), got: %s", txt)
+	}
+	if !strings.Contains(txt, "240.000") || !strings.Contains(txt, "260.000") {
+		t.Errorf("expected range boundaries in output, got: %s", txt)
+	}
+
+	// 2. Query with query filter inside time range
+	resFiltered := handler.handleGetLogsInTimerange([]byte(`{
+		"from_time": "240.0",
+		"to_time": "260.0",
+		"query": "event 45"
+	}`))
+	if resFiltered.IsError {
+		t.Fatalf("handleGetLogsInTimerange with query failed: %s", resFiltered.Content[0].Text)
+	}
+	if !strings.Contains(resFiltered.Content[0].Text, "event 45") {
+		t.Errorf("expected event 45 in result, got: %s", resFiltered.Content[0].Text)
+	}
+
+	// 3. Error on missing parameters
+	resErr := handler.handleGetLogsInTimerange([]byte(`{"from_time": "240.0"}`))
+	if !resErr.IsError {
+		t.Errorf("expected error when to_time is missing")
+	}
+}
+
+func TestToolHandler_GetLogsAround(t *testing.T) {
+	appCfg := &config.AppConfig{}
+	session := NewSession(appCfg, 200)
+
+	baseTime := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
+	for i := 1; i <= 100; i++ {
+		uptimeSec := float64(200 + i)
+		msg := fmt.Sprintf("normal activity %d", i)
+		if i == 50 {
+			msg = "CRITICAL HARDFAULT DETECTED"
+		}
+		session.Buffer().Add(record.Record{
+			ID:        uint64(i),
+			Timestamp: baseTime.Add(time.Duration(i) * time.Second),
+			Fields: map[string]string{
+				"uptime":  fmt.Sprintf("%.3f", uptimeSec),
+				"message": msg,
+			},
+			Raw: fmt.Sprintf("[%8.3f] %s", uptimeSec, msg),
+		})
+	}
+
+	handler := NewToolHandler(session, appCfg)
+
+	// 1. Center around target_id: 50 with before: 5, after: 5
+	resID := handler.handleGetLogsAround([]byte(`{"target_id": 50, "before": 5, "after": 5}`))
+	if resID.IsError {
+		t.Fatalf("handleGetLogsAround by ID failed: %s", resID.Content[0].Text)
+	}
+	txtID := resID.Content[0].Text
+	if !strings.Contains(txtID, "Showing 11 log record(s) centered around target") {
+		t.Errorf("expected 11 records (5 before + 1 target + 5 after), got: %s", txtID)
+	}
+	if !strings.Contains(txtID, ">>> TARGET (ID:50)") {
+		t.Errorf("expected target line marker >>> TARGET (ID:50) >>>, got: %s", txtID)
+	}
+	if !strings.Contains(txtID, "CRITICAL HARDFAULT DETECTED") {
+		t.Errorf("expected target line text, got: %s", txtID)
+	}
+
+	// 2. Center around target_time: "250." (or "250.0")
+	resTime := handler.handleGetLogsAround([]byte(`{"target_time": "250.", "before": 3, "after": 3}`))
+	if resTime.IsError {
+		t.Fatalf("handleGetLogsAround by time failed: %s", resTime.Content[0].Text)
+	}
+	txtTime := resTime.Content[0].Text
+	// Record 50 corresponds to uptime 250.000
+	if !strings.Contains(txtTime, "TARGET (ID:50)") {
+		t.Errorf("expected closest record to 250. to be ID 50, got: %s", txtTime)
+	}
+
+	// 3. Center around target_query: "HARDFAULT"
+	resQuery := handler.handleGetLogsAround([]byte(`{"target_query": "HARDFAULT", "window": 10}`))
+	if resQuery.IsError {
+		t.Fatalf("handleGetLogsAround by query failed: %s", resQuery.Content[0].Text)
+	}
+	txtQuery := resQuery.Content[0].Text
+	if !strings.Contains(txtQuery, "TARGET (ID:50)") {
+		t.Errorf("expected query match on ID 50, got: %s", txtQuery)
+	}
+}
+
+func TestToolHandler_SearchAndRecentLogsWithTimeBounds(t *testing.T) {
+	appCfg := &config.AppConfig{}
+	session := NewSession(appCfg, 200)
+
+	baseTime := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
+	for i := 1; i <= 50; i++ {
+		uptimeSec := float64(100 + i)
+		session.Buffer().Add(record.Record{
+			ID:        uint64(i),
+			Timestamp: baseTime.Add(time.Duration(i) * time.Second),
+			Fields: map[string]string{
+				"uptime":  fmt.Sprintf("%.3f", uptimeSec),
+				"message": fmt.Sprintf("status beacon packet %d", i),
+			},
+			Raw: fmt.Sprintf("[%8.3f] status beacon packet %d", uptimeSec, i),
+		})
+	}
+
+	handler := NewToolHandler(session, appCfg)
+
+	// search_logs with start_time & end_time
+	resSearch := handler.handleSearchLogs([]byte(`{
+		"query": "beacon",
+		"start_time": "120.0",
+		"end_time": "125.0"
+	}`))
+	if resSearch.IsError {
+		t.Fatalf("search_logs with time bounds failed: %s", resSearch.Content[0].Text)
+	}
+	txtSearch := resSearch.Content[0].Text
+	if !strings.Contains(txtSearch, "Found 6 match(es)") { // 120.0 to 125.0 inclusive = 6 items (indices 20..25)
+		t.Errorf("expected 6 matches between 120.0 and 125.0, got: %s", txtSearch)
+	}
+
+	// get_recent_logs with until_id
+	resRecent := handler.handleGetRecentLogs([]byte(`{
+		"since_id": 10,
+		"until_id": 20
+	}`))
+	if resRecent.IsError {
+		t.Fatalf("get_recent_logs with until_id failed: %s", resRecent.Content[0].Text)
+	}
+	txtRecent := resRecent.Content[0].Text
+	if !strings.Contains(txtRecent, "Showing 10 log record(s)") {
+		t.Errorf("expected 10 records between ID 10 and 20, got: %s", txtRecent)
+	}
+}
+
+func TestMCPSession_IPCProxy_RangeAndAround(t *testing.T) {
+	tmpConfigDir := filepath.Join(os.TempDir(), fmt.Sprintf("oml_ipc_range_%d", time.Now().UnixNano()))
+	_ = os.MkdirAll(tmpConfigDir, 0o755)
+	defer os.RemoveAll(tmpConfigDir)
+
+	sockAddr := ipc.SocketPath(tmpConfigDir)
+	defer os.Remove(sockAddr)
+
+	records := make([]record.Record, 100)
+	baseTime := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
+	for i := 0; i < 100; i++ {
+		uptimeSec := float64(100 + i)
+		records[i] = record.Record{
+			ID:        uint64(i + 1),
+			Timestamp: baseTime.Add(time.Duration(i) * time.Second),
+			Raw:       fmt.Sprintf("[%8.3f] <inf> sys: device step %d", uptimeSec, i+1),
+			Fields: map[string]string{
+				"uptime":  fmt.Sprintf("%.3f", uptimeSec),
+				"message": fmt.Sprintf("device step %d", i+1),
+			},
+		}
+	}
+
+	mockTUI := &mockTUIIPCHandler{records: records}
+	srv, err := ipc.NewServer(sockAddr, mockTUI)
+	if err != nil {
+		t.Fatalf("failed starting mock TUI IPC server: %v", err)
+	}
+	defer srv.Close()
+
+	appCfg := &config.AppConfig{ConfigDir: tmpConfigDir}
+	session := NewSession(appCfg, 50)
+	handler := NewToolHandler(session, appCfg)
+
+	// 1. get_logs_in_timerange proxied through IPC
+	resRange := handler.handleGetLogsInTimerange([]byte(`{"from_time": "120.0", "to_time": "130.0"}`))
+	if resRange.IsError {
+		t.Fatalf("handleGetLogsInTimerange over IPC failed: %s", resRange.Content[0].Text)
+	}
+	if !strings.Contains(resRange.Content[0].Text, "Found 11 log record(s)") {
+		t.Errorf("expected 11 records in range over IPC, got: %s", resRange.Content[0].Text)
+	}
+
+	// 2. get_logs_around proxied through IPC
+	resAround := handler.handleGetLogsAround([]byte(`{"target_id": 25, "before": 2, "after": 2}`))
+	if resAround.IsError {
+		t.Fatalf("handleGetLogsAround over IPC failed: %s", resAround.Content[0].Text)
+	}
+	if !strings.Contains(resAround.Content[0].Text, "TARGET (ID:25)") {
+		t.Errorf("expected target ID:25 in output over IPC, got: %s", resAround.Content[0].Text)
+	}
+}
+
+func TestToolHandler_SearchLogsRegex(t *testing.T) {
+	appCfg := &config.AppConfig{}
+	session := NewSession(appCfg, 100)
+
+	baseTime := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
+	logs := []string{
+		"[  100.100] <inf> sys: normal operation started",
+		"[  100.250] <wrn> bus: I2C ACK retry 1 on addr 0x68",
+		"[  100.500] <err> bus: I2C ACK retry 2 on addr 0x68 failed",
+		"[  101.000] <err> kernel: HardFault exception detected at 0x08004120",
+		"[  101.200] <inf> sys: rebooting subsystem",
+	}
+
+	for i, raw := range logs {
+		uptimeSec := 100.0 + float64(i)*0.25
+		session.Buffer().Add(record.Record{
+			ID:        uint64(i + 1),
+			Timestamp: baseTime.Add(time.Duration(i) * time.Second),
+			Raw:       raw,
+			Fields: map[string]string{
+				"uptime":  fmt.Sprintf("%.3f", uptimeSec),
+				"message": raw,
+			},
+		})
+	}
+
+	handler := NewToolHandler(session, appCfg)
+
+	// 1. Regular expression search for disjunction: (HardFault|failed)
+	resDisjunction := handler.Execute("search_logs_regex", []byte(`{"pattern": "(HardFault|failed)"}`))
+	if resDisjunction.IsError {
+		t.Fatalf("search_logs_regex failed: %s", resDisjunction.Content[0].Text)
+	}
+	txt := resDisjunction.Content[0].Text
+	if !strings.Contains(txt, "Found 2 match(es)") {
+		t.Errorf("expected 2 matches for (HardFault|failed), got: %s", txt)
+	}
+	if !strings.Contains(txt, "HardFault exception") || !strings.Contains(txt, "retry 2 on addr 0x68 failed") {
+		t.Errorf("expected both matching lines in output, got: %s", txt)
+	}
+
+	// 2. Case-insensitivity verification (pattern "hardfault" matches "HardFault")
+	resCase := handler.Execute("search_logs_regex", []byte(`{"pattern": "hardfault"}`))
+	if resCase.IsError {
+		t.Fatalf("search_logs_regex case-insensitive failed: %s", resCase.Content[0].Text)
+	}
+	if !strings.Contains(resCase.Content[0].Text, "HardFault exception") {
+		t.Errorf("expected case-insensitive match on HardFault, got: %s", resCase.Content[0].Text)
+	}
+
+	// 3. Regex matching with time bounds
+	resBounded := handler.Execute("search_logs_regex", []byte(`{
+		"pattern": "addr 0x[0-9a-fA-F]+",
+		"start_time": "100.0",
+		"end_time": "100.3"
+	}`))
+	if resBounded.IsError {
+		t.Fatalf("search_logs_regex with time bounds failed: %s", resBounded.Content[0].Text)
+	}
+	// Only line 2 (100.250) falls in 100.0..100.3
+	if !strings.Contains(resBounded.Content[0].Text, "Found 1 match(es)") {
+		t.Errorf("expected 1 match within time window, got: %s", resBounded.Content[0].Text)
+	}
+
+	// 4. Invalid regex pattern returns descriptive error
+	resInvalid := handler.Execute("search_logs_regex", []byte(`{"pattern": "([unclosed"}`))
+	if !resInvalid.IsError {
+		t.Errorf("expected error on invalid regex syntax, got success: %s", resInvalid.Content[0].Text)
+	}
+	if !strings.Contains(resInvalid.Content[0].Text, "invalid regular expression") {
+		t.Errorf("expected error message to cite invalid regular expression, got: %s", resInvalid.Content[0].Text)
+	}
+
+	// 5. Missing pattern parameter error
+	resMissing := handler.Execute("search_logs_regex", []byte(`{}`))
+	if !resMissing.IsError || !strings.Contains(resMissing.Content[0].Text, "'pattern' is required") {
+		t.Errorf("expected error for missing pattern, got: %s", resMissing.Content[0].Text)
+	}
+}
+
+func TestTools_DescriptionsHaveHintsAndExamples(t *testing.T) {
+	tools := getAvailableTools()
+	toolMap := make(map[string]Tool)
+	for _, tool := range tools {
+		toolMap[tool.Name] = tool
+	}
+
+	// Verify search_logs_regex is present
+	if _, ok := toolMap["search_logs_regex"]; !ok {
+		t.Fatalf("expected search_logs_regex tool to be registered")
+	}
+
+	// Verify get_recent_logs mentions ID / timestamp hint
+	recentDesc := toolMap["get_recent_logs"].Description
+	if !strings.Contains(recentDesc, "ID") || !strings.Contains(recentDesc, "get_logs_around") {
+		t.Errorf("expected get_recent_logs to hint at get_logs_around, got: %s", recentDesc)
+	}
+
+	// Verify get_logs_around describes target_id and target_time with uptime examples
+	aroundDesc := toolMap["get_logs_around"].Description
+	if !strings.Contains(aroundDesc, "ID") || !strings.Contains(aroundDesc, "uptime") {
+		t.Errorf("expected get_logs_around description to mention ID and uptime, got: %s", aroundDesc)
+	}
+
+	targetTimeProp := toolMap["get_logs_around"].InputSchema.Properties["target_time"]
+	if !strings.Contains(targetTimeProp.Description, "250.") && !strings.Contains(targetTimeProp.Description, "250.0") {
+		t.Errorf("expected target_time property to give concrete uptime example like 250., got: %s", targetTimeProp.Description)
+	}
+
+	// Verify search_logs_regex has regex pattern examples
+	regexProp := toolMap["search_logs_regex"].InputSchema.Properties["pattern"]
+	if !strings.Contains(regexProp.Description, "(") || !strings.Contains(regexProp.Description, "|") {
+		t.Errorf("expected search_logs_regex pattern to include example regex like (assert|fault), got: %s", regexProp.Description)
+	}
+}
+
+
+
 
