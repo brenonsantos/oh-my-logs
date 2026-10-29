@@ -20,7 +20,7 @@ import (
 func TestMCPServer_HandshakeAndToolsList(t *testing.T) {
 	appCfg := &config.AppConfig{}
 	session := NewSession(appCfg, 100)
-	server := NewServer(session, appCfg, "1.4.1")
+	server := NewServer(session, appCfg, "1.5.0")
 
 	// 1. Send "initialize" request
 	initReq := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}` + "\n"
@@ -133,7 +133,7 @@ func TestMCPServer_ToolCalls(t *testing.T) {
 		Timestamp: time.Now(),
 	})
 
-	server := NewServer(session, appCfg, "1.4.1")
+	server := NewServer(session, appCfg, "1.5.0")
 
 	// Call get_device_status
 	statusReq := `{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"get_device_status","arguments":{}}}` + "\n"
@@ -205,7 +205,7 @@ func TestMCPServer_ToolCalls(t *testing.T) {
 func TestMCPServer_UnknownMethodAndTool(t *testing.T) {
 	appCfg := &config.AppConfig{}
 	session := NewSession(appCfg, 100)
-	server := NewServer(session, appCfg, "1.4.1")
+	server := NewServer(session, appCfg, "1.5.0")
 
 	// Unknown method
 	req1 := `{"jsonrpc":"2.0","id":99,"method":"unknown_rpc_method"}` + "\n"
@@ -249,7 +249,7 @@ func TestMCPServer_WaitForLogAndSinceID(t *testing.T) {
 		Timestamp: time.Now(),
 	})
 
-	server := NewServer(session, appCfg, "1.4.1")
+	server := NewServer(session, appCfg, "1.5.0")
 
 	// 1. Test since_id filtering
 	req1 := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_recent_logs","arguments":{"since_id":1}}}` + "\n"
@@ -305,7 +305,7 @@ func TestMCPServer_WatchSession(t *testing.T) {
 		Timestamp: time.Now(),
 	})
 
-	server := NewServer(session, appCfg, "1.4.1")
+	server := NewServer(session, appCfg, "1.5.0")
 
 	// Inject logs during watch session
 	go func() {

@@ -18,8 +18,8 @@ import (
 )
 
 var (
-	version  = "1.4.1"
-	codename = "Joinvillense"
+	version  = "1.5.0"
+	codename = "Pirabeirabense"
 )
 
 func main() {
