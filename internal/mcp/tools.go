@@ -66,7 +66,7 @@ func getAvailableTools() []Tool {
 		},
 		{
 			Name:        "get_recent_logs",
-			Description: "Retrieve recent log records from the in-memory ring buffer (including pre-existing logs from active oml TUI session), optionally filtered by minimum log level or module.",
+			Description: "Retrieve recent log records from the in-memory ring buffer (including pre-existing logs from active oml TUI session), optionally filtered by minimum log level or module. Tip: Every returned line is prefixed with '[ID:<id> | <timestamp>]'. To see what happened before or after any event, pass its ID to 'get_logs_around(target_id=...)' or its uptime to 'get_logs_around(target_time=...)'.",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertyDef{
@@ -110,7 +110,7 @@ func getAvailableTools() []Tool {
 		},
 		{
 			Name:        "search_logs",
-			Description: "Search the log history buffer using plain text query or regular expression, optionally filtered within a time range.",
+			Description: "Search the log history buffer using plain text query or regular expression, optionally filtered within a time range. Tip: Every returned line is prefixed with '[ID:<id> | <timestamp>]'. You can use this ID with 'get_logs_around(target_id=...)' to see what occurred before and after a matched event.",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertyDef{
@@ -120,7 +120,7 @@ func getAvailableTools() []Tool {
 					},
 					"is_regex": {
 						Type:        "boolean",
-						Description: "Treat query as a regular expression (default: false).",
+						Description: "Treat query as a regular expression (default: false). For pure regex searches, consider using 'search_logs_regex' directly.",
 						Default:     false,
 					},
 					"max_results": {
@@ -141,18 +141,54 @@ func getAvailableTools() []Tool {
 			},
 		},
 		{
+			Name:        "search_logs_regex",
+			Description: "Search log history using a regular expression. Evaluated case-insensitively by default. Ideal for finding error patterns, hex addresses, or disjunctions (e.g. '(assert|panic|fault)', '0x[0-9a-fA-F]+', 'packet\\[\\d+\\]', 'timeout after \\d+ms'). Tip: Use the returned [ID:<id>] with 'get_logs_around' to see context.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertyDef{
+					"pattern": {
+						Type:        "string",
+						Description: "Regular expression pattern to match (e.g. '(assert|panic|fault)', '0x[0-9a-fA-F]+', 'sensor_\\d+'). Case-insensitive by default.",
+					},
+					"start_time": {
+						Type:        "string",
+						Description: "Optional start time boundary (uptime float like '250.0' or '250.', clock time '14:15:00', or ISO-8601).",
+					},
+					"end_time": {
+						Type:        "string",
+						Description: "Optional end time boundary (uptime float like '255.0', clock time '14:15:30', or ISO-8601).",
+					},
+					"min_level": {
+						Type:        "string",
+						Description: "Optional minimum severity level filter (DEBUG, INFO, WARN, ERROR, FATAL).",
+						Enum:        []string{"DEBUG", "INFO", "WARN", "WARNING", "ERROR", "FATAL"},
+					},
+					"module": {
+						Type:        "string",
+						Description: "Optional module or tag name substring filter.",
+					},
+					"max_results": {
+						Type:        "integer",
+						Description: "Maximum matching lines to return (default: 50, max: 500).",
+						Default:     50,
+					},
+				},
+				Required: []string{"pattern"},
+			},
+		},
+		{
 			Name:        "get_logs_in_timerange",
-			Description: "Retrieve log records within a specific time range or device uptime window (e.g. from uptime 250.0 to 255.0, or between timestamps 14:15:00 and 14:15:30), optionally filtered by query, min_level, or module.",
+			Description: "Retrieve log records within a specific time range or device uptime window (e.g. from uptime 250.0 to 255.0, or between timestamps 14:15:00 and 14:15:30), optionally filtered by query, min_level, or module. Perfect for analyzing what happened during a specific test run or uptime window.",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertyDef{
 					"from_time": {
 						Type:        "string",
-						Description: "Start timestamp, clock time (e.g. '14:15:00', '14:15:00.000'), uptime seconds (e.g. '250.0', '250', '250.'), or ISO-8601 string.",
+						Description: "Start boundary: device uptime seconds (e.g. '250.0', '250.', '250'), clock time (e.g. '14:15:00', '14:15:00.000'), duration ('250s'), or ISO-8601 string.",
 					},
 					"to_time": {
 						Type:        "string",
-						Description: "End timestamp, clock time, uptime seconds, or ISO-8601 string.",
+						Description: "End boundary: device uptime seconds (e.g. '255.0'), clock time (e.g. '14:15:30'), or ISO-8601 string.",
 					},
 					"query": {
 						Type:        "string",
@@ -183,17 +219,17 @@ func getAvailableTools() []Tool {
 		},
 		{
 			Name:        "get_logs_around",
-			Description: "Inspect the context window of logs surrounding a specific event by record ID, timestamp/uptime, or search query. Perfect for seeing what happened immediately before and after an assert, reboot, state change, or uptime milestone.",
+			Description: "Inspect the context window of logs surrounding a specific event by record ID, timestamp/uptime, or search query. Perfect for seeing what happened immediately before and after an assert, reboot, state change, or uptime milestone. Tip: Look at the [ID:<id>] prefix on any log line to center around it.",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertyDef{
 					"target_id": {
 						Type:        "integer",
-						Description: "Log record ID to center around (e.g. 452).",
+						Description: "Record ID from the [ID:<id>] prefix (e.g. 452). Centers the output window around this exact log line.",
 					},
 					"target_time": {
 						Type:        "string",
-						Description: "Timestamp, clock time, or device uptime to center around (e.g. '250.', '250.125', '14:15:30.123'). Finds the closest matching record.",
+						Description: "Device uptime seconds (e.g. '250.', '250.0', '250.125') or clock time ('14:15:30.123'). Automatically finds the closest log event.",
 					},
 					"target_query": {
 						Type:        "string",
@@ -346,6 +382,8 @@ func (h *ToolHandler) Execute(name string, rawArgs json.RawMessage) CallToolResu
 		return h.handleGetRecentLogs(rawArgs)
 	case "search_logs":
 		return h.handleSearchLogs(rawArgs)
+	case "search_logs_regex":
+		return h.handleSearchLogsRegex(rawArgs)
 	case "get_logs_in_timerange":
 		return h.handleGetLogsInTimerange(rawArgs)
 	case "get_logs_around":
@@ -804,6 +842,102 @@ func (h *ToolHandler) handleSearchLogs(rawArgs json.RawMessage) CallToolResult {
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Found %d match(es) for %q (showing last %d):\n", totalMatches, params.Query, len(matches)))
+	for _, r := range matches {
+		sb.WriteString(formatRecord(r))
+		sb.WriteString("\n")
+	}
+
+	return textSuccess(sb.String())
+}
+
+type searchLogsRegexParams struct {
+	Pattern    string `json:"pattern"`
+	MaxResults int    `json:"max_results"`
+	StartTime  string `json:"start_time"`
+	EndTime    string `json:"end_time"`
+	MinLevel   string `json:"min_level"`
+	Module     string `json:"module"`
+}
+
+func (h *ToolHandler) handleSearchLogsRegex(rawArgs json.RawMessage) CallToolResult {
+	var params searchLogsRegexParams
+	if len(rawArgs) > 0 {
+		if err := json.Unmarshal(rawArgs, &params); err != nil {
+			return textError(fmt.Sprintf("invalid arguments: %v", err))
+		}
+	}
+
+	if params.Pattern == "" {
+		return textError("parameter 'pattern' is required")
+	}
+
+	if params.MaxResults <= 0 {
+		params.MaxResults = 50
+	} else if params.MaxResults > 500 {
+		params.MaxResults = 500
+	}
+
+	reg, err := regexp.Compile("(?i)" + params.Pattern)
+	if err != nil {
+		return textError(fmt.Sprintf("invalid regular expression %q: %v", params.Pattern, err))
+	}
+
+	var all []record.Record
+	if h.session.IsIPCAvailable() {
+		logs, err := h.session.IPCClient().GetRecentLogs(0, "", "")
+		if err == nil {
+			all = logs
+		}
+	}
+	if len(all) == 0 {
+		all = h.session.Buffer().All()
+	}
+
+	if len(all) == 0 {
+		status := h.session.GetStatus()
+		if !status.Connected {
+			return textSuccess("No logs available (device is disconnected and buffer is empty).")
+		}
+		return textSuccess("No logs recorded yet.")
+	}
+
+	if params.StartTime != "" || params.EndTime != "" {
+		bounded, err := filterByTimeBounds(all, params.StartTime, params.EndTime)
+		if err != nil {
+			return textError(err.Error())
+		}
+		all = bounded
+	}
+
+	filtered := filterRecords(all, params.MinLevel, params.Module)
+
+	var matches []record.Record
+	for _, r := range filtered {
+		matched := reg.MatchString(r.Raw)
+		if !matched {
+			for _, v := range r.Fields {
+				if reg.MatchString(v) {
+					matched = true
+					break
+				}
+			}
+		}
+		if matched {
+			matches = append(matches, r)
+		}
+	}
+
+	if len(matches) == 0 {
+		return textSuccess(fmt.Sprintf("No logs matched regular expression: %q", params.Pattern))
+	}
+
+	totalMatches := len(matches)
+	if len(matches) > params.MaxResults {
+		matches = matches[len(matches)-params.MaxResults:]
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Found %d match(es) for regex %q (showing last %d):\n", totalMatches, params.Pattern, len(matches)))
 	for _, r := range matches {
 		sb.WriteString(formatRecord(r))
 		sb.WriteString("\n")

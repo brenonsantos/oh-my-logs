@@ -839,5 +839,122 @@ func TestMCPSession_IPCProxy_RangeAndAround(t *testing.T) {
 	}
 }
 
+func TestToolHandler_SearchLogsRegex(t *testing.T) {
+	appCfg := &config.AppConfig{}
+	session := NewSession(appCfg, 100)
+
+	baseTime := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
+	logs := []string{
+		"[  100.100] <inf> sys: normal operation started",
+		"[  100.250] <wrn> bus: I2C ACK retry 1 on addr 0x68",
+		"[  100.500] <err> bus: I2C ACK retry 2 on addr 0x68 failed",
+		"[  101.000] <err> kernel: HardFault exception detected at 0x08004120",
+		"[  101.200] <inf> sys: rebooting subsystem",
+	}
+
+	for i, raw := range logs {
+		uptimeSec := 100.0 + float64(i)*0.25
+		session.Buffer().Add(record.Record{
+			ID:        uint64(i + 1),
+			Timestamp: baseTime.Add(time.Duration(i) * time.Second),
+			Raw:       raw,
+			Fields: map[string]string{
+				"uptime":  fmt.Sprintf("%.3f", uptimeSec),
+				"message": raw,
+			},
+		})
+	}
+
+	handler := NewToolHandler(session, appCfg)
+
+	// 1. Regular expression search for disjunction: (HardFault|failed)
+	resDisjunction := handler.Execute("search_logs_regex", []byte(`{"pattern": "(HardFault|failed)"}`))
+	if resDisjunction.IsError {
+		t.Fatalf("search_logs_regex failed: %s", resDisjunction.Content[0].Text)
+	}
+	txt := resDisjunction.Content[0].Text
+	if !strings.Contains(txt, "Found 2 match(es)") {
+		t.Errorf("expected 2 matches for (HardFault|failed), got: %s", txt)
+	}
+	if !strings.Contains(txt, "HardFault exception") || !strings.Contains(txt, "retry 2 on addr 0x68 failed") {
+		t.Errorf("expected both matching lines in output, got: %s", txt)
+	}
+
+	// 2. Case-insensitivity verification (pattern "hardfault" matches "HardFault")
+	resCase := handler.Execute("search_logs_regex", []byte(`{"pattern": "hardfault"}`))
+	if resCase.IsError {
+		t.Fatalf("search_logs_regex case-insensitive failed: %s", resCase.Content[0].Text)
+	}
+	if !strings.Contains(resCase.Content[0].Text, "HardFault exception") {
+		t.Errorf("expected case-insensitive match on HardFault, got: %s", resCase.Content[0].Text)
+	}
+
+	// 3. Regex matching with time bounds
+	resBounded := handler.Execute("search_logs_regex", []byte(`{
+		"pattern": "addr 0x[0-9a-fA-F]+",
+		"start_time": "100.0",
+		"end_time": "100.3"
+	}`))
+	if resBounded.IsError {
+		t.Fatalf("search_logs_regex with time bounds failed: %s", resBounded.Content[0].Text)
+	}
+	// Only line 2 (100.250) falls in 100.0..100.3
+	if !strings.Contains(resBounded.Content[0].Text, "Found 1 match(es)") {
+		t.Errorf("expected 1 match within time window, got: %s", resBounded.Content[0].Text)
+	}
+
+	// 4. Invalid regex pattern returns descriptive error
+	resInvalid := handler.Execute("search_logs_regex", []byte(`{"pattern": "([unclosed"}`))
+	if !resInvalid.IsError {
+		t.Errorf("expected error on invalid regex syntax, got success: %s", resInvalid.Content[0].Text)
+	}
+	if !strings.Contains(resInvalid.Content[0].Text, "invalid regular expression") {
+		t.Errorf("expected error message to cite invalid regular expression, got: %s", resInvalid.Content[0].Text)
+	}
+
+	// 5. Missing pattern parameter error
+	resMissing := handler.Execute("search_logs_regex", []byte(`{}`))
+	if !resMissing.IsError || !strings.Contains(resMissing.Content[0].Text, "'pattern' is required") {
+		t.Errorf("expected error for missing pattern, got: %s", resMissing.Content[0].Text)
+	}
+}
+
+func TestTools_DescriptionsHaveHintsAndExamples(t *testing.T) {
+	tools := getAvailableTools()
+	toolMap := make(map[string]Tool)
+	for _, tool := range tools {
+		toolMap[tool.Name] = tool
+	}
+
+	// Verify search_logs_regex is present
+	if _, ok := toolMap["search_logs_regex"]; !ok {
+		t.Fatalf("expected search_logs_regex tool to be registered")
+	}
+
+	// Verify get_recent_logs mentions ID / timestamp hint
+	recentDesc := toolMap["get_recent_logs"].Description
+	if !strings.Contains(recentDesc, "ID") || !strings.Contains(recentDesc, "get_logs_around") {
+		t.Errorf("expected get_recent_logs to hint at get_logs_around, got: %s", recentDesc)
+	}
+
+	// Verify get_logs_around describes target_id and target_time with uptime examples
+	aroundDesc := toolMap["get_logs_around"].Description
+	if !strings.Contains(aroundDesc, "ID") || !strings.Contains(aroundDesc, "uptime") {
+		t.Errorf("expected get_logs_around description to mention ID and uptime, got: %s", aroundDesc)
+	}
+
+	targetTimeProp := toolMap["get_logs_around"].InputSchema.Properties["target_time"]
+	if !strings.Contains(targetTimeProp.Description, "250.") && !strings.Contains(targetTimeProp.Description, "250.0") {
+		t.Errorf("expected target_time property to give concrete uptime example like 250., got: %s", targetTimeProp.Description)
+	}
+
+	// Verify search_logs_regex has regex pattern examples
+	regexProp := toolMap["search_logs_regex"].InputSchema.Properties["pattern"]
+	if !strings.Contains(regexProp.Description, "(") || !strings.Contains(regexProp.Description, "|") {
+		t.Errorf("expected search_logs_regex pattern to include example regex like (assert|fault), got: %s", regexProp.Description)
+	}
+}
+
+
 
 

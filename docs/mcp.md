@@ -104,7 +104,12 @@ The MCP server exposes standard tools discoverable automatically by LLMs:
   - `until_id`: Only return records with ID less than or equal to this upper bound ID.
   - `start_time`: Optional start time or device uptime boundary (e.g. `'250.0'`, `'14:15:00'`).
   - `end_time`: Optional end time or device uptime boundary (e.g. `'255.0'`, `'14:15:30'`).
-- `search_logs`: Searches the log buffer history using substring match or regular expression (`is_regex: true`), with optional `start_time` and `end_time` boundaries.
+- `search_logs`: Searches the log buffer history using plain text or substring match, with optional `start_time` and `end_time` boundaries.
+- `search_logs_regex`: Dedicated regular expression search evaluated case-insensitively by default. Ideal for finding patterns, memory addresses, or error disjunctions:
+  - `pattern`: Regular expression string (e.g. `'(assert|panic|fault)'`, `'0x[0-9a-fA-F]+'`, `'packet\\[\\d+\\]'`).
+  - `start_time` / `end_time`: Optional time or uptime bounds.
+  - `min_level`, `module`: Optional filters.
+  - `max_results`: Maximum matching lines to return (default: `50`, max: `500`).
 - `get_logs_in_timerange`: Retrieves records falling within a specified time interval or device uptime range.
   - `from_time`: Start boundary (e.g. uptime float `'250.0'`, clock time `'14:15:00'`, or ISO-8601).
   - `to_time`: End boundary (e.g. uptime float `'255.0'`, clock time `'14:15:30'`, or ISO-8601).
@@ -138,6 +143,7 @@ Once configured, you can prompt your AI assistant naturally:
 
 - *"Check which serial ports are open and connect to our board."*
 - *"Are there any ERROR or WARN logs in the device buffer?"*
+- *"Use regex search to find any lines matching '(fault|panic|assert)'."*
 - *"Show me what happened around uptime 250s (or around log ID 450)."*
 - *"Search for all logs between uptime 240.0 and 260.0."*
 - *"Find where 'assert failed' occurred and show me 30 lines before and after."*
