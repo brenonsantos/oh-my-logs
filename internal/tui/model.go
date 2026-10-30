@@ -45,6 +45,7 @@ const (
 	modeColumnModal
 	modeThemeModal
 	modeMarkerPrompt
+	modeClearConfirm
 )
 
 type filePickerPurpose int

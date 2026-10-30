@@ -513,7 +513,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.syncActiveTabToModel()
 			}
 			return m, nil
-
+			
 		default:
 			switch msg.Action {
 			case tea.MouseActionPress:
@@ -528,37 +528,76 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	// ── Key events ───────────────────────────────────────────────────────────
-	case tea.KeyMsg:
-		s := msg.String()
-		if msg.Type == tea.KeyRunes {
-			s = string(msg.Runes)
-		}
-		if isMouseSequence(s) {
-			if strings.Contains(s, "64") {
-				m.follow = false
-				m.scrollOffset -= mouseWheelScrollStep
-				m.clampScroll()
-				if m.splitMode != SplitNone && m.syncScroll {
-					m.syncOtherPaneChronologically()
-				}
-			} else if strings.Contains(s, "65") {
-				m.scrollOffset += mouseWheelScrollStep
-				m.clampScroll()
-				h := m.activeDataHeight()
-				if m.selectedRow >= 0 {
-					m.follow = false
-				} else if m.scrollOffset >= len(m.visible)-h {
-					m.follow = true
-				} else {
-					m.follow = false
-				}
-				if m.splitMode != SplitNone && m.syncScroll {
-					m.syncOtherPaneChronologically()
-				}
-			}
-			return m, nil
-		}
-		return m.handleKey(msg)
+    case tea.KeyMsg:
+		
+        // Intercept keys when the confirmation modal/prompt is active
+        if m.mode == modeClearConfirm {
+            s := msg.String()
+            if s == "y" || s == "Y" || msg.Type == tea.KeyEnter {
+                // Clear the main buffer and reset visible states, selection, and bookmarks
+                m.buffer.Clear()
+                m.visible = nil
+                m.selectedRow = -1
+                m.selectionStart = -1
+                m.selectionEnd = -1
+                m.bookmarks = make(map[uint64]struct{})
+                
+                for i := range m.tabs {
+                    m.tabs[i].Visible = nil
+                    m.tabs[i].SelectedRow = -1
+                }
+                
+                // Recalculate layout and clamp scroll positions
+                m.recalcLayout()
+                m.clampScroll()
+
+                m.mode = modeNormal
+                m.message = "Buffer cleared"
+                return m, nil
+            } else if s == "n" || s == "N" || msg.Type == tea.KeyEsc {
+                m.mode = modeNormal
+                m.message = "Clear cancelled"
+                return m, nil
+            }
+            return m, nil
+        }
+
+        // Intercept 'c' in normal mode to trigger the confirmation prompt instead of clearing instantly
+        if m.mode == modeNormal && (msg.String() == "c" || msg.String() == "C") {
+            m.mode = modeClearConfirm
+            return m, nil
+        }
+
+        s := msg.String()
+        if msg.Type == tea.KeyRunes {
+            s = string(msg.Runes)
+        }
+        if isMouseSequence(s) {
+            if strings.Contains(s, "64") {
+                m.follow = false
+                m.scrollOffset -= mouseWheelScrollStep
+                m.clampScroll()
+                if m.splitMode != SplitNone && m.syncScroll {
+                    m.syncOtherPaneChronologically()
+                }
+            } else if strings.Contains(s, "65") {
+                m.scrollOffset += mouseWheelScrollStep
+                m.clampScroll()
+                h := m.activeDataHeight()
+                if m.selectedRow >= 0 {
+                    m.follow = false
+                } else if m.scrollOffset >= len(m.visible)-h {
+                    m.follow = true
+                } else {
+                    m.follow = false
+                }
+                if m.splitMode != SplitNone && m.syncScroll {
+                    m.syncOtherPaneChronologically()
+                }
+            }
+            return m, nil
+        }
+        return m.handleKey(msg)
 	}
 
 	// ── FilePicker background messages (e.g. readDirMsg) ────────────────────
