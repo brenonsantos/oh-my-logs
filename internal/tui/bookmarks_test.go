@@ -205,8 +205,13 @@ func TestBookmarksVisualRenderingAndClear(t *testing.T) {
 		t.Errorf("expected keyBar to include 'pin', got: %s", keyBar)
 	}
 
-	// Press 'c' to clear buffer -> bookmarks should be cleared
+	// Press 'c' then 'y' to confirm clear buffer -> bookmarks should be cleared
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	m = updated.(Model)
+	if m.mode != modeClearConfirm {
+		t.Fatalf("expected modeClearConfirm after 'c', got %v", m.mode)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = updated.(Model)
 
 	if len(m.bookmarks) != 0 {

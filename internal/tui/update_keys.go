@@ -51,6 +51,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleThemeModalKey(msg)
 	case modeMarkerPrompt:
 		return m.handleMarkerPromptKey(msg)
+	case modeClearConfirm:
+		return m.handleClearConfirmKey(msg)
 	default:
 		return m.handleNormalKey(msg)
 	}
@@ -669,17 +671,7 @@ func (m Model) handleSplitKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 func (m Model) handleActionKey(msg tea.KeyMsg) (Model, tea.Cmd, bool) {
 	switch {
 	case keyMatches(msg, m.keys.Clear):
-		m.buffer.Clear()
-		for i := range m.tabs {
-			m.tabs[i].Visible = nil
-			m.tabs[i].ScrollOffset = 0
-			m.tabs[i].SearchMatches = nil
-		}
-		m.visible = nil
-		m.searchMatches = nil
-		m.scrollOffset = 0
-		m.bookmarks = make(map[uint64]struct{})
-		m.message = "Cleared"
+		m.mode = modeClearConfirm
 		return m, nil, true
 
 	case keyMatches(msg, m.keys.Pause) || msg.Type == tea.KeySpace || msg.String() == " " || msg.String() == "space":
@@ -800,15 +792,15 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.prevSearchMatch()
 		return m, nil
 	
-	case msg.String() == "alt+c":
-        m.searchCaseSensitive = !m.searchCaseSensitive
-        m.runSearch()
-        return m, nil
+	case isSearchToggleCase(msg):
+		m.searchCaseSensitive = !m.searchCaseSensitive
+		m.runSearch()
+		return m, nil
 
-    case msg.String() == "alt+w":
-        m.searchWholeWord = !m.searchWholeWord
-        m.runSearch()
-        return m, nil
+	case isSearchToggleWord(msg):
+		m.searchWholeWord = !m.searchWholeWord
+		m.runSearch()
+		return m, nil
 
 	default:
 		prev := m.searchInput.Value
@@ -818,6 +810,69 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func isSearchToggleCase(msg tea.KeyMsg) bool {
+	if msg.String() == "alt+c" || (msg.Alt && (msg.String() == "c" || msg.String() == "C")) {
+		return true
+	}
+	// macOS Option+c without Meta key produces 'ç' or 'Ç'
+	if msg.String() == "ç" || msg.String() == "Ç" || (len(msg.Runes) > 0 && (msg.Runes[0] == 'ç' || msg.Runes[0] == 'Ç')) {
+		return true
+	}
+	return false
+}
+
+func isSearchToggleWord(msg tea.KeyMsg) bool {
+	if msg.String() == "alt+w" || (msg.Alt && (msg.String() == "w" || msg.String() == "W")) {
+		return true
+	}
+	// macOS Option+w without Meta key produces '∑'
+	if msg.String() == "∑" || (len(msg.Runes) > 0 && msg.Runes[0] == '∑') {
+		return true
+	}
+	return false
+}
+
+func (m Model) handleClearConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	s := msg.String()
+	if s == "y" || s == "Y" || keyMatches(msg, m.keys.Confirm) || msg.Type == tea.KeyEnter {
+		m.clearBuffer()
+		m.mode = modeNormal
+		m.message = "Buffer cleared"
+		return m, nil
+	} else if s == "n" || s == "N" || keyMatches(msg, m.keys.Cancel) || msg.Type == tea.KeyEsc {
+		m.mode = modeNormal
+		m.message = "Clear cancelled"
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m *Model) clearBuffer() {
+	m.buffer.Clear()
+	for i := range m.tabs {
+		m.tabs[i].Visible = nil
+		m.tabs[i].ScrollOffset = 0
+		m.tabs[i].SearchMatches = nil
+		m.tabs[i].SelectedRow = -1
+		m.tabs[i].CursorCol = -1
+		m.tabs[i].CharSelStart = -1
+		m.tabs[i].CharSelEnd = -1
+	}
+	m.visible = nil
+	m.searchMatches = nil
+	m.searchCursor = -1
+	m.scrollOffset = 0
+	m.selectedRow = -1
+	m.selectionStart = -1
+	m.selectionEnd = -1
+	m.cursorCol = -1
+	m.charSelStart = -1
+	m.charSelEnd = -1
+	m.bookmarks = make(map[uint64]struct{})
+	m.recalcLayout()
+	m.clampScroll()
 }
 
 func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

@@ -157,10 +157,17 @@ func (m *Model) runSearch() {
 	}
 
 	for i, r := range m.visible {
+		matched := false
 		for _, v := range r.Fields {
 			if re.MatchString(v) {
 				m.searchMatches = append(m.searchMatches, i)
-				break 
+				matched = true
+				break
+			}
+		}
+		if !matched && r.Raw != "" {
+			if re.MatchString(r.Raw) {
+				m.searchMatches = append(m.searchMatches, i)
 			}
 		}
 	}

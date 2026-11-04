@@ -176,7 +176,7 @@ func (m Model) viewTable() string {
 		if r.IsMarker {
 			rowBody = formatMarkerRow(r, availW, hasBg, rowBg)
 		} else if isUnparsedRow(r, cols, curFormat) {
-			rowBody = formatUnparsedRow(r, availW, hasBg, rowBg, isMatch, m.searchInput.Value)
+			rowBody = formatUnparsedRow(r, availW, hasBg, rowBg, isMatch, m.searchInput.Value, m.searchCaseSensitive, m.searchWholeWord)
 			if hasCharSel {
 				rowCurCol := -1
 				if absIdx == m.selectionEnd {
@@ -398,7 +398,7 @@ func isUnparsedRow(r record.Record, cols []record.Column, curFormat DisplayForma
 	return true
 }
 
-func formatUnparsedRow(r record.Record, availW int, hasBg bool, rowBg lipgloss.TerminalColor, isMatch bool, searchVal string) string {
+func formatUnparsedRow(r record.Record, availW int, hasBg bool, rowBg lipgloss.TerminalColor, isMatch bool, searchVal string, matchCase, wholeWord bool) string {
 	val := r.Raw
 	if val == "" {
 		val = r.Fields["message"]
@@ -410,9 +410,7 @@ func formatUnparsedRow(r record.Record, availW int, hasBg bool, rowBg lipgloss.T
 	}
 
 	if isMatch && searchVal != "" {
-        matchCase := false
-        wholeWord := false
-        return highlightSubstring(clean, searchVal, matchCase, wholeWord, cellStyle)
+		return highlightSubstring(clean, searchVal, matchCase, wholeWord, cellStyle)
 	}
 	return cellStyle.Render(clean)
 }
