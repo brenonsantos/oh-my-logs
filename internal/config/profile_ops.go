@@ -21,6 +21,7 @@ type ProfileInfo struct {
 	Scope         string // "global", "local", "builtin"
 	ParserType    string
 	DecodersCount int
+	EncodersCount int
 	HasCompanion  bool // true if companion decoders exist in DecodersDir
 }
 
@@ -33,6 +34,7 @@ func ListProfiles(appCfg *AppConfig) []ProfileInfo {
 		name := strings.TrimSuffix(filepath.Base(p), filepath.Ext(p))
 		parserType := "custom"
 		decodersCount := 0
+		encodersCount := 0
 		version := ""
 		source := ""
 		if err == nil {
@@ -49,6 +51,7 @@ func ListProfiles(appCfg *AppConfig) []ProfileInfo {
 				parserType = prof.Parser.Type
 			}
 			decodersCount = len(prof.Decoders)
+			encodersCount = len(prof.Encoders)
 		}
 
 		isGlobal := false
@@ -88,6 +91,7 @@ func ListProfiles(appCfg *AppConfig) []ProfileInfo {
 			Scope:         scope,
 			ParserType:    parserType,
 			DecodersCount: decodersCount,
+			EncodersCount: encodersCount,
 			HasCompanion:  hasCompanion,
 		})
 	}
@@ -139,6 +143,7 @@ func ResolveProfile(appCfg *AppConfig, idOrName string) (*ProfileInfo, error) {
 		name := trimmed
 		parserType := "custom"
 		decodersCount := 0
+		encodersCount := 0
 		if err == nil {
 			if prof.Name != "" {
 				name = prof.Name
@@ -147,6 +152,7 @@ func ResolveProfile(appCfg *AppConfig, idOrName string) (*ProfileInfo, error) {
 				parserType = prof.Parser.Type
 			}
 			decodersCount = len(prof.Decoders)
+			encodersCount = len(prof.Encoders)
 		}
 		return &ProfileInfo{
 			ID:            0,
@@ -156,6 +162,7 @@ func ResolveProfile(appCfg *AppConfig, idOrName string) (*ProfileInfo, error) {
 			Scope:         "file",
 			ParserType:    parserType,
 			DecodersCount: decodersCount,
+			EncodersCount: encodersCount,
 		}, nil
 	}
 

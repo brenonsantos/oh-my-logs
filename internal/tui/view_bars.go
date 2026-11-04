@@ -292,7 +292,21 @@ func (m Model) viewEmptyState() string {
 	}
 
 	tableWidth := m.tableWidth()
-	totalHeight := m.tableHeight + 1 // replaces table header (1 line) + table rows (tableHeight lines)
+	drawerH := 0
+	if m.mode == modeMarkerPrompt {
+		drawerH = markerDrawerHeight
+	} else if m.mode == modeTXInput {
+		if len(m.txSuggestions) > 0 {
+			drawerH += txSuggestionsDrawerHeight(len(m.txSuggestions))
+		}
+		if m.txPreview != "" {
+			drawerH++
+		}
+	}
+	totalHeight := m.tableHeight + 2 - drawerH
+	if totalHeight < 0 {
+		totalHeight = 0
+	}
 	topPad := (totalHeight - len(contentLines)) / 2
 	if topPad < 0 {
 		topPad = 0
@@ -481,10 +495,30 @@ func (m Model) renderKeyBarContent() string {
 		return "  " + theme.Muted.Render("Save Filter Preset: [Enter: save · ←/→: cursor · Esc: cancel]")
 
 	case modeTXInput:
-		prompt := lipgloss.NewStyle().Foreground(colorMaple).Bold(true).Render(fmt.Sprintf("TX [%s] › ", m.txEnding.String()))
+		hasEncoders := m.encoders != nil && len(m.encoders.Encoders()) > 0
+		var prompt string
+		var help string
+		if hasEncoders {
+			encLabel := "RAW"
+			if m.activeEncoderIdx >= 0 && m.activeEncoderIdx < len(m.encoders.Encoders()) {
+				encLabel = m.encoders.Encoders()[m.activeEncoderIdx].Name()
+			} else if matched, _ := m.encoders.Match(m.txInput.Value); matched != nil {
+				encLabel = matched.Name()
+			}
+			prompt = lipgloss.NewStyle().Foreground(colorMaple).Bold(true).Render(fmt.Sprintf("TX [%s | %s] › ", encLabel, m.txEnding.String()))
+			help = theme.Muted.Render("  [Enter: send · Tab: line ending · ^T: encoder · ↑/↓: history · Esc: cancel]")
+		} else {
+			prompt = lipgloss.NewStyle().Foreground(colorMaple).Bold(true).Render(fmt.Sprintf("TX [%s] › ", m.txEnding.String()))
+			help = theme.Muted.Render("  [Enter: send · Tab: line ending · ↑/↓: history · Esc: cancel]")
+		}
 		text := m.txInput.Render(theme.Content)
-		help := theme.Muted.Render("  [Enter: send · Tab: line ending · ↑/↓: history · ←/→: cursor · ^V: paste · Esc: cancel]")
-		return "  " + prompt + text + help
+		inputLine := "  " + prompt + text + help
+		if m.txPreview != "" {
+			previewTag := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("  ↳ Decoded: ")
+			previewContent := lipgloss.NewStyle().Foreground(colorGreen).Render(m.txPreview)
+			return previewTag + previewContent + "\n" + inputLine
+		}
+		return inputLine
 
 	case modeShellInteractive:
 		promptLabel := m.shellPrompt

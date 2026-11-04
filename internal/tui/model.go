@@ -11,6 +11,7 @@ import (
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
 	"github.com/brenoniehues/oh-my-logs/internal/decoder"
+	"github.com/brenoniehues/oh-my-logs/internal/encoder"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/game"
 	"github.com/brenoniehues/oh-my-logs/internal/ipc"
@@ -316,6 +317,14 @@ type Model struct {
 	decoders        *decoder.Pipeline
 	projectDecoders []decoder.Config
 
+	// Encoders pipeline & autocomplete
+	encoders         *encoder.Pipeline
+	projectEncoders  []encoder.Config
+	activeEncoderIdx int // -1 for raw, or index into encoders.Encoders()
+	txSuggestions    []encoder.Suggestion
+	txSuggestionIdx  int
+	txPreview        string
+
 	// IPC Server
 	ipcServer io.Closer
 
@@ -552,6 +561,8 @@ func New(
 	m.cursorCol = -1
 	m.charSelStart = -1
 	m.charSelEnd = -1
+	m.activeEncoderIdx = -1
+	m.txSuggestionIdx = -1
 
 	if savedSettings != nil && savedSettings.DirectToDisk {
 		targetPath := ""
@@ -565,6 +576,9 @@ func New(
 
 	if profile != nil && len(profile.Decoders) > 0 {
 		m.rebuildDecodersPipeline(profile.Decoders)
+	}
+	if profile != nil && len(profile.Encoders) > 0 {
+		m.rebuildEncodersPipeline(profile.Encoders)
 	}
 
 	m.shared = &SharedState{
@@ -600,6 +614,16 @@ func (m *Model) SetProjectDecoders(decs []decoder.Config) {
 		profDecs = m.profile.Decoders
 	}
 	m.rebuildDecodersPipeline(profDecs)
+}
+
+// SetProjectEncoders configures project-level encoders and rebuilds the active pipeline.
+func (m *Model) SetProjectEncoders(encs []encoder.Config) {
+	m.projectEncoders = encs
+	var profEncs []encoder.Config
+	if m.profile != nil {
+		profEncs = m.profile.Encoders
+	}
+	m.rebuildEncodersPipeline(profEncs)
 }
 
 // SetProjectStripPrefix configures an optional line-strip regex from project-level config.
@@ -639,6 +663,57 @@ func (m *Model) rebuildDecodersPipeline(profileDecoders []decoder.Config) {
 	}
 }
 
+// rebuildEncodersPipeline rebuilds the active encoder pipeline from profile and project configs.
+func (m *Model) rebuildEncodersPipeline(profileEncoders []encoder.Config) {
+	if m.encoders != nil {
+		_ = m.encoders.Close()
+		m.encoders = nil
+	}
+	var all []encoder.Config
+	all = append(all, profileEncoders...)
+	all = append(all, m.projectEncoders...)
+	if len(all) > 0 {
+		var searchDirs []string
+		if m.appConfig != nil && m.appConfig.DecodersDir != "" {
+			_ = filepath.WalkDir(m.appConfig.DecodersDir, func(path string, d os.DirEntry, err error) error {
+				if err == nil && d.IsDir() {
+					searchDirs = append(searchDirs, path)
+				}
+				return nil
+			})
+		}
+		for i := range all {
+			if len(searchDirs) > 0 {
+				all[i].ExtraPaths = append(all[i].ExtraPaths, searchDirs...)
+			}
+		}
+
+		pipe, _ := encoder.NewPipeline(all)
+		m.encoders = pipe
+	}
+	m.activeEncoderIdx = -1
+	m.txSuggestions = nil
+	m.txSuggestionIdx = -1
+}
+
+// toggleActiveEncoder cycles the active encoder mode for the TX input bar.
+func (m *Model) toggleActiveEncoder() {
+	if m.encoders == nil || len(m.encoders.Encoders()) == 0 {
+		m.message = "No encoders configured in active profile or .oml.yaml"
+		return
+	}
+	encs := m.encoders.Encoders()
+	m.activeEncoderIdx++
+	if m.activeEncoderIdx >= len(encs) {
+		m.activeEncoderIdx = -1
+		m.message = "TX mode: RAW (direct serial)"
+	} else {
+		m.message = fmt.Sprintf("TX mode: [%s] active", encs[m.activeEncoderIdx].Name())
+	}
+	m.txSuggestions = nil
+	m.txSuggestionIdx = -1
+}
+
 // Close gracefully terminates background resources including decoders, disk loggers, and IPC server.
 func (m *Model) Close() error {
 	if m.ipcServer != nil {
@@ -648,6 +723,10 @@ func (m *Model) Close() error {
 	if m.decoders != nil {
 		_ = m.decoders.Close()
 		m.decoders = nil
+	}
+	if m.encoders != nil {
+		_ = m.encoders.Close()
+		m.encoders = nil
 	}
 	if m.diskLogger != nil {
 		_ = m.diskLogger.Close()

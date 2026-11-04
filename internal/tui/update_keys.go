@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/brenoniehues/oh-my-logs/internal/config"
+	"github.com/brenoniehues/oh-my-logs/internal/encoder"
 	"github.com/brenoniehues/oh-my-logs/internal/filter"
 	"github.com/brenoniehues/oh-my-logs/internal/game"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -871,21 +872,74 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case keyMatches(msg, m.keys.Cancel):
+		if len(m.txSuggestions) > 0 {
+			m.txSuggestions = nil
+			m.txSuggestionIdx = -1
+			return m, nil
+		}
 		m.mode = modeNormal
 		m.txInput.Reset()
+		m.txPreview = ""
+		return m, nil
+
+	case msg.Type == tea.KeyCtrlT || msg.String() == "ctrl+t" || msg.Type == tea.KeyF2 || msg.String() == "f2" || msg.String() == "alt+e" || (msg.Alt && (msg.String() == "e" || (msg.Type == tea.KeyRunes && len(msg.Runes) > 0 && msg.Runes[0] == 'e'))):
+		m.toggleActiveEncoder()
+		return m, m.triggerSuggestCmd()
+
+	case msg.Type == tea.KeyCtrlE || msg.String() == "ctrl+e":
+		m.txEnding = m.txEnding.Next()
+		m.saveSettings()
+		return m, nil
+
+	case msg.Type == tea.KeyUp || msg.String() == "up":
+		if len(m.txSuggestions) > 0 {
+			m.txSuggestionIdx--
+			if m.txSuggestionIdx < 0 {
+				m.txSuggestionIdx = len(m.txSuggestions) - 1
+			}
+			return m, nil
+		}
+		m.txInput.HandleKey(msg)
+		return m, m.triggerSuggestCmd()
+
+	case msg.Type == tea.KeyDown || msg.String() == "down":
+		if len(m.txSuggestions) > 0 {
+			m.txSuggestionIdx++
+			if m.txSuggestionIdx >= len(m.txSuggestions) {
+				m.txSuggestionIdx = 0
+			}
+			return m, nil
+		}
+		m.txInput.HandleKey(msg)
+		return m, m.triggerSuggestCmd()
+
+	case msg.Type == tea.KeyTab || msg.String() == "tab":
+		if len(m.txSuggestions) > 0 && m.txSuggestionIdx >= 0 && m.txSuggestionIdx < len(m.txSuggestions) {
+			sug := m.txSuggestions[m.txSuggestionIdx]
+			newVal, newCursor := applySuggestion(m.txInput.Value, m.txInput.Cursor, sug.Value)
+			m.txInput.SetTextAndCursor(newVal, newCursor)
+			m.txSuggestions = nil
+			m.txSuggestionIdx = -1
+			return m, m.triggerSuggestCmd()
+		}
+		m.txEnding = m.txEnding.Next()
+		m.saveSettings()
 		return m, nil
 
 	case keyMatches(msg, m.keys.Confirm) || msg.Type == tea.KeyEnter:
+		if len(m.txSuggestions) > 0 && m.txSuggestionIdx >= 0 && m.txSuggestionIdx < len(m.txSuggestions) {
+			sug := m.txSuggestions[m.txSuggestionIdx]
+			newVal, newCursor := applySuggestion(m.txInput.Value, m.txInput.Cursor, sug.Value)
+			m.txInput.SetTextAndCursor(newVal, newCursor)
+			m.txSuggestions = nil
+			m.txSuggestionIdx = -1
+			return m, m.triggerSuggestCmd()
+		}
+
 		val := m.txInput.Value
 		if len(val) == 0 && m.txEnding == serial.EndingNone {
 			m.mode = modeNormal
 			m.txInput.Reset()
-			return m, nil
-		}
-
-		payload, err := serial.FormatTXPayload(val, m.txEnding)
-		if err != nil {
-			m.message = fmt.Sprintf("TX format error: %v", err)
 			return m, nil
 		}
 
@@ -896,12 +950,47 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		var activeEnc encoder.Encoder
+		if m.activeEncoderIdx >= 0 && m.encoders != nil && m.activeEncoderIdx < len(m.encoders.Encoders()) {
+			activeEnc = m.encoders.Encoders()[m.activeEncoderIdx]
+		} else if m.encoders != nil {
+			activeEnc, _ = m.encoders.Match(val)
+		}
+
+		wireText := val
+		displayText := val
+		sentDesc := m.txEnding.String()
+
+		if activeEnc != nil {
+			res, err := activeEnc.Encode(val)
+			if err != nil {
+				m.message = fmt.Sprintf("Encoder [%s] error: %v", activeEnc.Name(), err)
+				return m, nil
+			}
+			wireText = res.Payload
+			if res.Display != "" {
+				displayText = res.Display
+			}
+			sentDesc = fmt.Sprintf("%s | %s", activeEnc.Name(), m.txEnding.String())
+		}
+
+		payload, err := serial.FormatTXPayload(wireText, m.txEnding)
+		if err != nil {
+			m.message = fmt.Sprintf("TX format error: %v", err)
+			return m, nil
+		}
+
 		n, err := m.source.Write(payload)
 		if err != nil {
 			m.message = fmt.Sprintf("TX error: %v", err)
 		} else {
-			m.message = fmt.Sprintf("✓ Sent %d bytes [%s]", n, m.txEnding.String())
-			m.recordTXMessage(val)
+			m.message = fmt.Sprintf("✓ Sent %d bytes [%s]", n, sentDesc)
+			if wireText != displayText && activeEnc != nil {
+				m.recordTXMessage(wireText)
+				m.recordTXContinuation(fmt.Sprintf("↳ %s", displayText))
+			} else {
+				m.recordTXMessage(displayText)
+			}
 		}
 
 		if m.txInput.AddHistory(val) {
@@ -909,18 +998,16 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		m.txInput.Reset()
+		m.txSuggestions = nil
+		m.txSuggestionIdx = -1
+		m.txPreview = ""
 		m.mode = modeNormal
-		return m, nil
-
-	case msg.Type == tea.KeyTab || msg.String() == "tab" || msg.Type == tea.KeyCtrlE || msg.String() == "ctrl+e":
-		m.txEnding = m.txEnding.Next()
-		m.saveSettings()
 		return m, nil
 
 	default:
 		m.txInput.HandleKey(msg)
+		return m, m.triggerSuggestCmd()
 	}
-	return m, nil
 }
 
 func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

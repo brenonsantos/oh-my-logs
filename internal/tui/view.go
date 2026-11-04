@@ -58,6 +58,9 @@ func (m Model) View() string {
 		if m.mode == modeMarkerPrompt {
 			sb.WriteByte('\n')
 			sb.WriteString(m.viewMarkerDrawer())
+		} else if m.mode == modeTXInput && len(m.txSuggestions) > 0 {
+			sb.WriteByte('\n')
+			sb.WriteString(m.viewTXSuggestionsDrawer())
 		}
 	} else if m.splitMode != SplitNone {
 		sb.WriteString(m.viewSplitTable())
@@ -70,6 +73,9 @@ func (m Model) View() string {
 		if m.mode == modeMarkerPrompt {
 			sb.WriteByte('\n')
 			sb.WriteString(m.viewMarkerDrawer())
+		} else if m.mode == modeTXInput && len(m.txSuggestions) > 0 {
+			sb.WriteByte('\n')
+			sb.WriteString(m.viewTXSuggestionsDrawer())
 		}
 	} else {
 		// Table Header
@@ -95,6 +101,9 @@ func (m Model) View() string {
 		if m.mode == modeMarkerPrompt {
 			sb.WriteByte('\n')
 			sb.WriteString(m.viewMarkerDrawer())
+		} else if m.mode == modeTXInput && len(m.txSuggestions) > 0 {
+			sb.WriteByte('\n')
+			sb.WriteString(m.viewTXSuggestionsDrawer())
 		}
 	}
 
@@ -116,10 +125,23 @@ func (m Model) View() string {
 		return rendered
 	}
 
-	// Hard layout clamp: Guarantee exact m.height lines and visual width <= m.width
+	// Hard layout clamp: Guarantee exact m.height lines and visual width <= m.width.
+	// If rendered lines exceed m.height, preserve the pinned bottom chrome (scrollbar divider,
+	// status bar, and key hints / TX input bar) and slice the overflow from the scrollable
+	// middle viewport or drawer area, ensuring the input bar remains strictly visible.
 	lines := strings.Split(rendered, "\n")
 	if len(lines) > m.height {
-		lines = lines[:m.height]
+		overflow := len(lines) - m.height
+		pinnedBottom := 3 // viewHorizontalScrollbarDivider (1) + viewStatusBar (1) + viewKeyBar (1)
+		if m.mode == modeTXInput && m.txPreview != "" {
+			pinnedBottom = 4 // + dedicated preview line above TX prompt
+		}
+		if len(lines) >= pinnedBottom+overflow {
+			cutStart := len(lines) - pinnedBottom - overflow
+			lines = append(lines[:cutStart], lines[cutStart+overflow:]...)
+		} else {
+			lines = lines[len(lines)-m.height:]
+		}
 	}
 	for len(lines) < m.height {
 		lines = append(lines, strings.Repeat(" ", m.width))

@@ -71,11 +71,41 @@ Press **`I`** or **`Ctrl+I`** to enter **Interactive Shell Passthrough** mode:
 | Key | Action |
 |-----|--------|
 | `i` / `:` | Open interactive serial send prompt |
-| `Enter` | Transmit command with active line ending |
-| `Ctrl+E` | Cycle line ending (`CRLF` $\rightarrow$ `LF` $\rightarrow$ `CR` $\rightarrow$ `None`) |
-| `↑` / `Ctrl+P` | Previous command in history |
-| `↓` / `Ctrl+N` | Next command in history / restore draft |
+| `Enter` | Transmit command with active line ending (or apply autocomplete if suggestions open) |
+| `Ctrl+E` / `Tab` | Cycle line ending (`CRLF` $\rightarrow$ `LF` $\rightarrow$ `CR` $\rightarrow$ `None`) |
+| `Ctrl+T` / `Alt+E` | Cycle encoder mode (`[RAW]` $\rightarrow$ `[Encoder]` $\rightarrow$ `[RAW]`) |
+| `↑` / `↓` | Navigate autocomplete suggestions (or history when no suggestions open) |
+| `Tab` / `Enter` | Complete selected suggestion |
+| `Ctrl+P` / `Ctrl+N` | Previous / Next command in history |
 | `Ctrl+V` | Paste text from system clipboard into prompt |
 | `I` / `Ctrl+I` | Enter **Interactive Shell Passthrough** mode (`<Tab>` completion, arrows, `^C`) |
 | `Ctrl+D` / `Ctrl+]` / `Esc` | Exit shell passthrough mode |
-| `Esc` | Cancel and close single-line TX prompt |
+| `Esc` | Close suggestions drawer / Cancel and close single-line TX prompt |
+
+---
+
+## 7. Command Encoders & Interactive Autocomplete
+
+When interfacing with modern firmware, commands are often formatted in complex binary, base64-framed, or structured protocols (e.g. CAN bus, binary management packets, custom RPCs). Manually typing raw encoded bytes is tedious and error-prone.
+
+`oml` provides a generic, decoupled **Encoder Worker Architecture**:
+
+### Profile & Project Configuration
+Define encoders in your profile YAML or `.oml/project.yaml`:
+
+```yaml
+encoders:
+  - name: "ManagementProtocol"
+    trigger: "mgmt "
+    description: "Encode management protocol RPC commands to base64 wire frames"
+    exec: "python3 ./encoders/mgmt_codec.py"
+    extra_paths:
+      - "./encoders"
+```
+
+### Dynamic Autocomplete Drawer
+- As you type into the `TX` bar, `oml` passes input queries asynchronously to the encoder subprocess.
+- Autocomplete suggestions appear docked directly above the TX input bar in an interactive drawer with descriptions.
+- Use **`↑` / `↓`** to navigate suggestions and **`Tab`** or **`Enter`** to apply.
+- Use **`Alt+E`** to cycle between `[RAW]` mode and available encoders at any time.
+- When an encoder is selected, transmitting transforms the human-readable text into the wire payload for the serial port, while logging the readable command with an encoder badge in the history buffer.

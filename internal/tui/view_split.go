@@ -414,7 +414,21 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 // viewSplitTable renders dual virtual tabs side-by-side (vertical) or stacked (horizontal).
 func (m Model) viewSplitTable() string {
 	m.syncActiveTabToModel()
-	totalH := m.tableHeight + 2
+	drawerH := 0
+	if m.mode == modeMarkerPrompt {
+		drawerH = markerDrawerHeight
+	} else if m.mode == modeTXInput {
+		if len(m.txSuggestions) > 0 {
+			drawerH += txSuggestionsDrawerHeight(len(m.txSuggestions))
+		}
+		if m.txPreview != "" {
+			drawerH++
+		}
+	}
+	totalH := m.tableHeight + 2 - drawerH
+	if totalH < 2 {
+		totalH = 2
+	}
 
 	t0 := m.currentTabForPane(0)
 	t0Idx := m.paneTabIdx(0)

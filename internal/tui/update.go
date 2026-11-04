@@ -179,6 +179,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case txSuggestMsg:
+		if m.mode == modeTXInput {
+			m.txPreview = msg.preview
+			if msg.err == nil && len(msg.suggestions) > 0 {
+				m.txSuggestions = msg.suggestions
+				if m.txSuggestionIdx < 0 || m.txSuggestionIdx >= len(msg.suggestions) {
+					m.txSuggestionIdx = 0
+				}
+			} else {
+				m.txSuggestions = nil
+				m.txSuggestionIdx = -1
+			}
+		}
+		return m, nil
+
 	// ── New line from source ─────────────────────────────────────────────────
 	case lineMsg:
 		rawStr := string(msg)
@@ -868,6 +883,17 @@ func (m *Model) recordTXMessage(cmdText string) {
 	r.Fields["message"] = raw
 	r.Fields["level"] = "TX"
 	r.Fields["ending"] = endingStr
+	r.Fields["raw"] = raw
+	r.Fields["cmd"] = cmdText
+	m.ingestRecord(r)
+}
+
+// recordTXContinuation adds an indented decoded representation under the transmitted wire command.
+func (m *Model) recordTXContinuation(cmdText string) {
+	raw := fmt.Sprintf("  %s", cmdText)
+	r := record.NewRecord(raw)
+	r.Fields["message"] = raw
+	r.Fields["level"] = "TX"
 	r.Fields["raw"] = raw
 	r.Fields["cmd"] = cmdText
 	m.ingestRecord(r)

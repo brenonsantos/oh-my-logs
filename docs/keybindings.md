@@ -101,7 +101,7 @@ A complete reference of all keyboard shortcuts, mouse gestures, and interactive 
 |-----|--------|-------------|
 | `Space` | Pause / Follow Stream | Toggle auto-scroll follow mode on new incoming logs. |
 | `Enter` / `v` | Inspect Row Detail | Open modal showing all fields, formatted JSON/XML/YAML, and hex dump. |
-| `i` / `:` | Single-line Serial TX | Open command send prompt with line endings (`Ctrl+E`) and history. |
+| `i` / `:` | Single-line Serial TX | Open command send prompt with line endings (`Ctrl+E`), encoders (`Ctrl+T` / `Alt+E`), autocomplete, and history. |
 | `I` / `Ctrl+I` | Shell Passthrough | Enter interactive raw shell mode (`<Tab>` completion, arrows, `^C`). |
 | `x` / `X` | Switch Display Format | Toggle row rendering: `Parsed` $\rightarrow$ `Raw` $\rightarrow$ `Hex Dump` $\rightarrow$ `Binary Bits`. |
 | `o` / `ctrl+o` | Column Customization | Open interactive modal to toggle column visibility and adjust widths. |

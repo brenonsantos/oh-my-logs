@@ -128,6 +128,7 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.parser = parser.NewRawParser()
 			m.columns = []record.Column{{Field: "message", Title: "Message", Width: 0}}
 			m.rebuildDecodersPipeline(nil)
+			m.rebuildEncodersPipeline(nil)
 		} else {
 			prof, err := parser.LoadProfile(selected.Path)
 			if err != nil {
@@ -151,8 +152,9 @@ func (m Model) handleProfilePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.lineStripRe, _ = regexp.Compile(prof.Ingest.StripPrefix)
 			}
 
-			// Update decoders from new profile + project decoders
+			// Update decoders and encoders from new profile + project decoders
 			m.rebuildDecodersPipeline(prof.Decoders)
+			m.rebuildEncodersPipeline(prof.Encoders)
 
 			// Update timestamp settings if configured
 			if prof.Ingest.Timestamp.Enabled {

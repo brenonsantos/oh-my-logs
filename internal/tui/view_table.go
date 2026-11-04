@@ -311,9 +311,16 @@ func (m Model) effectiveTableHeight() int {
 	h := m.tableHeight
 	if m.mode == modeMarkerPrompt {
 		h -= markerDrawerHeight
-		if h < minDrawerTableHeight {
-			h = minDrawerTableHeight
+	} else if m.mode == modeTXInput {
+		if len(m.txSuggestions) > 0 {
+			h -= txSuggestionsDrawerHeight(len(m.txSuggestions))
 		}
+		if m.txPreview != "" {
+			h--
+		}
+	}
+	if h < minDrawerTableHeight {
+		h = minDrawerTableHeight
 	}
 	return h
 }

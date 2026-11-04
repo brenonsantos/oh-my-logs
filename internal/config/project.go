@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/brenoniehues/oh-my-logs/internal/decoder"
+	"github.com/brenoniehues/oh-my-logs/internal/encoder"
 	"gopkg.in/yaml.v3"
 )
 
@@ -15,6 +16,7 @@ type ProjectConfig struct {
 	Baud        int              `yaml:"baud,omitempty"`
 	StripPrefix string           `yaml:"strip_prefix,omitempty"`
 	Decoders    []decoder.Config `yaml:"decoders,omitempty"`
+	Encoders    []encoder.Config `yaml:"encoders,omitempty"`
 
 	// ConfigPath stores the absolute path to the loaded configuration file.
 	ConfigPath string `yaml:"-"`

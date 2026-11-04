@@ -405,6 +405,19 @@ func cmdProfileShow(appCfg *config.AppConfig, args []string) int {
 		}
 	}
 
+	if len(p.Encoders) > 0 {
+		fmt.Printf("\nCommand Encoders (%d):\n", len(p.Encoders))
+		for idx, e := range p.Encoders {
+			triggerStr := ""
+			if len(e.Triggers) > 0 {
+				triggerStr = fmt.Sprintf(" triggers: %v", e.Triggers)
+			} else if e.Trigger != "" {
+				triggerStr = fmt.Sprintf(" trigger: %q", e.Trigger)
+			}
+			fmt.Printf("  %d. [%s]%s command: %s\n", idx+1, e.Name, triggerStr, e.Exec)
+		}
+	}
+
 	return 0
 }
 

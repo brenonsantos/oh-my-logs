@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/brenoniehues/oh-my-logs/internal/decoder"
+	"github.com/brenoniehues/oh-my-logs/internal/encoder"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	"gopkg.in/yaml.v3"
@@ -80,6 +81,7 @@ type Profile struct {
 	Ingest   IngestConfig     `yaml:"ingest"`
 	Timing   TimingConfig     `yaml:"timing"`
 	Decoders []decoder.Config `yaml:"decoders,omitempty"`
+	Encoders []encoder.Config `yaml:"encoders,omitempty"`
 }
 
 // TimingParameters converts TimingConfig to timing.Config, parsing duration strings.
