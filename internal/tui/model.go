@@ -46,6 +46,7 @@ const (
 	modeColumnModal
 	modeThemeModal
 	modeMarkerPrompt
+	modeClearConfirm
 )
 
 type filePickerPurpose int
@@ -169,6 +170,9 @@ type Model struct {
 	// Filter
 	activeFilter *filter.Filter
 	filterInput  TextInput
+	searchCaseSensitive bool
+    searchWholeWord bool
+
 
 	// Search
 	searchInput   TextInput

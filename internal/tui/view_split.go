@@ -345,7 +345,7 @@ func (m Model) renderPaneView(tab *Tab, tabIdx int, paneW int, paneH int, isFocu
 
 				var renderedCell string
 				if isMatch && tab.SearchInput != "" {
-					renderedCell = highlightSubstring(cellText, tab.SearchInput, cellStyle)
+					renderedCell = highlightSubstring(cellText, tab.SearchInput, m.searchCaseSensitive, m.searchWholeWord, cellStyle)
 				} else {
 					renderedCell = cellStyle.Render(cellText)
 				}

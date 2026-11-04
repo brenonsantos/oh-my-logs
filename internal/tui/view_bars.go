@@ -471,10 +471,22 @@ func (m Model) viewKeyBar() string {
 func (m Model) renderKeyBarContent() string {
 	switch m.mode {
 	case modeSearch:
+		flags := ""
+        if m.searchCaseSensitive {
+            flags += theme.Warning.Render("[Aa] ")
+        } else {
+            flags += theme.Muted.Render("[Aa] ")
+        }
+        if m.searchWholeWord {
+            flags += theme.Warning.Render("[\"ab\"] ")
+        } else {
+            flags += theme.Muted.Render("[\"ab\"] ")
+        }
+
 		prompt := theme.Primary.Render("Search: ")
 		text := m.searchInput.Render(theme.Content)
-		help := theme.Muted.Render("  [Enter: next · ↑/↓: matches · ←/→: cursor · ^V: paste · Esc: cancel]")
-		return "  " + prompt + text + help
+		help := theme.Muted.Render("  [alt+c: match case · alt+w: whole word · Enter: next · ↑/↓: matches · ←/→: cursor · ^V: paste · Esc: cancel]")
+		return "  " + prompt + text + "  " + flags + help
 
 	case modeFilter:
 		prompt := theme.Primary.Render("Filter: ")
@@ -555,6 +567,13 @@ func (m Model) renderKeyBarContent() string {
 			return "  " + theme.Muted.Render("Log Inspector: [↑/↓: scroll · ←/→: prev/next · d: delete marker · m: edit · Esc/Enter: close]")
 		}
 		return "  " + theme.Muted.Render("Log Inspector: [↑/↓: scroll · ←/→: prev/next · y: copy detail · Y: copy raw · b: pin · m: mark · Esc/Enter: close]")
+	
+	case modeClearConfirm:
+		return 	"  " + theme.Muted.Render("Clear screen buffer? [Press ") +
+				theme.KeyName.Render("y") + theme.Muted.Render(" / ") +
+				theme.KeyName.Render("Enter") + theme.Muted.Render(" to confirm, ") +
+				theme.KeyName.Render("n") + theme.Muted.Render(" / ") +
+				theme.KeyName.Render("Esc") + theme.Muted.Render(" to cancel]")
 
 	default:
 		hint := func(k, action string) string {

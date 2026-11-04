@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/brenoniehues/oh-my-logs/internal/record"
@@ -137,22 +138,39 @@ func (m *Model) scrollToMatch(idx int) {
 // runSearch finds all visible rows matching the search string.
 func (m *Model) runSearch() {
 	m.searchMatches = nil
-	q := strings.ToLower(m.searchInput.Value)
+	q := m.searchInput.Value
 	if q == "" {
 		return
 	}
+
+	pattern := regexp.QuoteMeta(q)
+	if m.searchWholeWord {
+		pattern = `\b` + pattern + `\b`
+	}
+	if !m.searchCaseSensitive {
+		pattern = `(?i)` + pattern
+	}
+
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return
+	}
+
 	for i, r := range m.visible {
 		for _, v := range r.Fields {
-			if strings.Contains(strings.ToLower(v), q) {
+			if re.MatchString(v) {
 				m.searchMatches = append(m.searchMatches, i)
+				break 
 			}
 		}
 	}
+
 	m.searchCursor = 0
 	if len(m.searchMatches) > 0 {
 		m.scrollToMatch(m.searchMatches[0])
 	}
 }
+
 
 func (m *Model) nextSearchMatch() {
 	if len(m.searchMatches) == 0 {
