@@ -7,9 +7,18 @@ import (
 
 	"github.com/brenoniehues/oh-my-logs/internal/clipboard"
 	"github.com/brenoniehues/oh-my-logs/internal/game"
+	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/timing"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+func rowClipboardText(r record.Record) string {
+	clip := r.Raw
+	if decoded, ok := r.DecodedMessage(); ok {
+		clip += "\n  ↳ " + decoded
+	}
+	return clip
+}
 
 func (m Model) handleCopyKey() (tea.Model, tea.Cmd) {
 	if len(m.visible) == 0 {
@@ -51,7 +60,7 @@ func (m Model) handleCopyKey() (tea.Model, tea.Cmd) {
 	}
 
 	if targetIdx >= 0 && targetIdx < len(m.visible) {
-		_ = clipboard.Copy(m.visible[targetIdx].Raw)
+		_ = clipboard.Copy(rowClipboardText(m.visible[targetIdx]))
 		m.message = "✓ Copied row to clipboard"
 	}
 	return m, nil
@@ -149,7 +158,7 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 					_ = clipboard.Copy(word)
 					m.message = fmt.Sprintf("✓ Copied '%s' to clipboard", word)
 				} else {
-					_ = clipboard.Copy(m.visible[absIdx].Raw)
+					_ = clipboard.Copy(rowClipboardText(m.visible[absIdx]))
 					m.message = "✓ Copied row to clipboard"
 				}
 			}
@@ -241,7 +250,7 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 						_ = clipboard.Copy(word)
 						m.message = fmt.Sprintf("✓ Copied '%s' to clipboard", word)
 					} else {
-						_ = clipboard.Copy(m.visible[absIdx].Raw)
+						_ = clipboard.Copy(rowClipboardText(m.visible[absIdx]))
 						m.message = "✓ Copied row to clipboard"
 					}
 				}
@@ -306,7 +315,7 @@ func (m Model) handleSplitTableMouseClick(msg tea.MouseMsg) (tea.Model, tea.Cmd)
 					_ = clipboard.Copy(word)
 					m.message = fmt.Sprintf("✓ Copied '%s' to clipboard", word)
 				} else {
-					_ = clipboard.Copy(m.visible[absIdx].Raw)
+					_ = clipboard.Copy(rowClipboardText(m.visible[absIdx]))
 					m.message = "✓ Copied row to clipboard"
 				}
 			}

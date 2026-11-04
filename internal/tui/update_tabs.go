@@ -289,6 +289,15 @@ func (m *Model) cmdSaveLogToPath(path string) tea.Cmd {
 			if _, err := fmt.Fprintln(f, line); err != nil {
 				return LogSavedMsg{Path: path, Err: fmt.Errorf("save log: %w", err)}
 			}
+			if decoded, ok := r.DecodedMessage(); ok {
+				decodedLine := "  ↳ " + decoded
+				if !r.Timestamp.IsZero() {
+					decodedLine = "[" + r.Timestamp.Format(saveTimestampFmt) + "] " + decodedLine
+				}
+				if _, err := fmt.Fprintln(f, decodedLine); err != nil {
+					return LogSavedMsg{Path: path, Err: fmt.Errorf("save log: %w", err)}
+				}
+			}
 		}
 		return LogSavedMsg{Path: path, Count: len(all)}
 	}

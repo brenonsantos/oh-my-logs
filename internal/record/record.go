@@ -51,6 +51,23 @@ func (r Record) Get(field string) string {
 	return r.Fields[field]
 }
 
+// DecodedMessage returns the transformed summary if this record was processed
+// by an external decoder, along with true. Otherwise returns "", false.
+func (r Record) DecodedMessage() (string, bool) {
+	if r.Fields == nil {
+		return "", false
+	}
+	rawMsg := r.Fields["_raw_message"]
+	msg := r.Fields["message"]
+	if msg == "" {
+		msg = r.Fields["msg"]
+	}
+	if rawMsg != "" && msg != "" && msg != rawMsg {
+		return msg, true
+	}
+	return "", false
+}
+
 // Column describes a single display column in the TUI table.
 type Column struct {
 	Field  string            // the Record.Fields key to render

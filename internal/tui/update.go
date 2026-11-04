@@ -641,6 +641,15 @@ func parseTimeString(s string) time.Time {
 
 func parseLineWithTimestampFallback(p parser.Parser, line string) (record.Record, time.Time) {
 	if p == nil {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") {
+			if idx := strings.Index(trimmed, "]"); idx > 1 {
+				tsCandidate := trimmed[1:idx]
+				if parsedTs := parseTimeString(tsCandidate); !parsedTs.IsZero() {
+					return record.NewRecord(line), parsedTs
+				}
+			}
+		}
 		return record.NewRecord(line), time.Time{}
 	}
 	r, err := p.Parse(line)
@@ -659,6 +668,8 @@ func parseLineWithTimestampFallback(p parser.Parser, line string) (record.Record
 						subRec.Raw = line
 						return subRec, parsedTs
 					}
+					r.Raw = line
+					return r, parsedTs
 				}
 			}
 		}
@@ -762,6 +773,15 @@ func (m *Model) ingestRecord(r record.Record) {
 				line = "[" + r.Timestamp.Format(saveTimestampFmt) + "] " + raw
 			}
 			m.diskLogger.WriteLine(line)
+
+			if decoded, ok := r.DecodedMessage(); ok {
+				decodedLine := "  ↳ " + decoded
+				if !r.Timestamp.IsZero() {
+					const saveTimestampFmt = "2006-01-02T15:04:05.000"
+					decodedLine = "[" + r.Timestamp.Format(saveTimestampFmt) + "] " + decodedLine
+				}
+				m.diskLogger.WriteLine(decodedLine)
+			}
 		}
 	}
 

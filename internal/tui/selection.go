@@ -147,7 +147,12 @@ func (m Model) selectedText() string {
 		if m.charSelStart < 0 || m.charSelEnd < 0 || m.charSelStart == m.charSelEnd {
 			var b strings.Builder
 			for i := topRow; i <= bottomRow; i++ {
-				b.WriteString(m.visible[i].Raw)
+				r := m.visible[i]
+				b.WriteString(r.Raw)
+				if decoded, ok := r.DecodedMessage(); ok {
+					b.WriteString("\n  ↳ ")
+					b.WriteString(decoded)
+				}
 				if i < bottomRow {
 					b.WriteByte('\n')
 				}
