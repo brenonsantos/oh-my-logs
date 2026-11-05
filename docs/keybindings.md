@@ -110,7 +110,7 @@ A complete reference of all keyboard shortcuts, mouse gestures, and interactive 
 | `r` | Reconnect Port / Restart| Re-open serial port connection or restart custom process stream. |
 | `D` | Disconnect Port | Release serial port handle (freeing UART for `west flash` or `pyocd`). |
 | `,` / `C` | Settings & Preferences | Open settings modal (themes, direct-to-disk recording, buffer capacity). |
-| `s` | Save Log | Save entire buffer to timestamped `.log` file on disk. |
+| `s` | Save Log | Save entire buffer to timestamped `.txt` file on disk. |
 | `c` | Clear Buffer | Reset in-memory log buffer across all tabs. |
 | `?` | Help Modal | Open quick reference cheat sheet modal. |
 | `Ctrl+G` | Mini-Games | Embedded retro games (Snake, Pong, Aim Trainer Blitz, etc.) during long compilation/flashes. |

@@ -132,7 +132,7 @@ func (s *Session) SeedFromRecentDiskLog(maxAge time.Duration) (string, int) {
 	var newestPath string
 	var newestMod time.Time
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".log") {
+		if entry.IsDir() || (!strings.HasSuffix(entry.Name(), ".txt") && !strings.HasSuffix(entry.Name(), ".log")) {
 			continue
 		}
 		info, err := entry.Info()

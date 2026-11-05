@@ -142,12 +142,12 @@ func TestDiskLogger_NilAndEmptyPathSafety(t *testing.T) {
 
 func TestDiskLogger_GenerateTimestampLogPath(t *testing.T) {
 	path := GenerateTimestampLogPath("/var/log/oml")
-	if !strings.HasPrefix(path, "/var/log/oml/oml-") || !strings.HasSuffix(path, ".log") {
+	if !strings.HasPrefix(path, "/var/log/oml/oml-") || !strings.HasSuffix(path, ".txt") {
 		t.Errorf("unexpected generated log path: %s", path)
 	}
 
 	curDirPath := GenerateTimestampLogPath("")
-	if !strings.HasPrefix(curDirPath, "oml-") && !strings.HasPrefix(curDirPath, "./oml-") {
+	if (!strings.HasPrefix(curDirPath, "oml-") && !strings.HasPrefix(curDirPath, "./oml-")) || !strings.HasSuffix(curDirPath, ".txt") {
 		t.Errorf("unexpected generated log path for empty dir: %s", curDirPath)
 	}
 }

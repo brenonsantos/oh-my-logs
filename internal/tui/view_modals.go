@@ -718,7 +718,7 @@ func (m Model) viewFilePickerModal() string {
 		sb.WriteString("  " + theme.Secondary.Bold(true).Render("Filename Prefix:") + "\n")
 		input := m.fpPrefixInput.RenderWindow(modalWidth-8, theme.ModalSelected)
 		sb.WriteString("  " + input + "\n\n")
-		sampleFile := fmt.Sprintf("%s-YYYY-MM-DD_HH-MM-SS.log", strings.TrimSpace(m.fpPrefixInput.Value))
+		sampleFile := fmt.Sprintf("%s-YYYY-MM-DD_HH-MM-SS.txt", strings.TrimSpace(m.fpPrefixInput.Value))
 		sb.WriteString("  " + theme.Muted.Render("Preview: ") + theme.Accent.Render(sampleFile) + "\n\n")
 
 		sb.WriteString(m.filePicker.View())
@@ -727,7 +727,7 @@ func (m Model) viewFilePickerModal() string {
 		sb.WriteString(theme.ModalFooter.Render("Enter save prefix · Esc cancel"))
 
 	default:
-		sampleFile := fmt.Sprintf("%s-YYYY-MM-DD_HH-MM-SS.log", prefix)
+		sampleFile := fmt.Sprintf("%s-YYYY-MM-DD_HH-MM-SS.txt", prefix)
 		if m.fpPurpose == fpPurposeSaveLog {
 			sb.WriteString("  " + theme.Muted.Render("Save to:   ") + theme.Accent.Bold(true).Render(currDir) + "\n")
 			sb.WriteString("  " + theme.Muted.Render("Filename:  ") + theme.Accent.Render(sampleFile) + theme.Muted.Render(" (press p to change prefix)") + "\n\n")

@@ -188,6 +188,6 @@ func GenerateTimestampLogPathWithPrefix(targetDir, prefix string) string {
 	if prefix == "" {
 		prefix = "oml"
 	}
-	filename := fmt.Sprintf("%s-%s.log", prefix, time.Now().Format("2006-01-02T15-04-05"))
+	filename := fmt.Sprintf("%s-%s.txt", prefix, time.Now().Format("2006-01-02T15-04-05"))
 	return filepath.Join(targetDir, filename)
 }
