@@ -59,6 +59,8 @@ columns:
 | `columns` | `list` | Ordered list of table column definitions. |
 | `ingest` | `object` | Optional pipeline ingest settings (automatic timestamping). |
 | `timing` | `object` | Optional latency tracking thresholds and ratios. |
+| `decoders` | `list` | Optional list of declarative or procedural companion decoders (see below). |
+| `encoders` | `list` | Optional list of interactive TX encoders and autocomplete bridges (see below). |
 
 ---
 
@@ -127,6 +129,46 @@ timing:
 ```
 
 When set, fixed thresholds override dynamic moving-average ratios, making it ideal for strict communication protocols (e.g. CAN bus, Modbus, or UART heartbeats).
+
+---
+
+### Decoders Configuration (`decoders`)
+
+Profiles can define payload decoders to automatically parse, translate, and unpack structured binary, Base64, or compact telemetry within the log stream.
+
+```yaml
+decoders:
+  # 1. Declarative Zero-Code Decoder: matches regex and formats display
+  - match: '^telemetry:\s*(?P<temp>\d+\.\d+),(?P<pressure>\d+)'
+    format: 'Temp: {temp}°C | Pressure: {pressure}hPa'
+
+  # 2. Procedural Companion Script Decoder: delegates to Python/Go/Node worker
+  - match: '^PKT:(?P<payload>[A-Za-z0-9+/=]+)'
+    exec: 'python3 custom_packet_decoder.py'
+```
+
+- **Declarative (`format`)**: Named regex capture groups are injected into `Record.Fields` and formatted directly using `{field}` placeholders.
+- **Procedural (`exec`)**: Spawns a background worker process communicating via JSON over standard input/output. If bundled as a companion decoder, script paths like `python3 custom_packet_decoder.py` are resolved automatically without requiring absolute paths.
+
+For a complete guide on writing and testing custom decoder scripts, see [Project Decoders & Terminal Sanitization Guide](file:///Users/brenoniehues/Documents/GitHub/oh-my-logs/docs/decoders.md).
+
+---
+
+### Encoders Configuration (`encoders`)
+
+Profiles can also define interactive TX encoders that provide live command autocomplete, syntax validation, and human-to-wire translations in TX input mode (`i`):
+
+```yaml
+encoders:
+  - name: "DeviceCommand"
+    triggers:
+      - "cmd "
+      - "set "
+    description: "Encode device commands with live database autocomplete"
+    exec: "python3 custom_encoder.py"
+```
+
+For detailed specifications on TX encoders, triggers, and autocomplete bridges, see [Interactive Serial TX & Encoder Guide](file:///Users/brenoniehues/Documents/GitHub/oh-my-logs/docs/serial-tx.md).
 
 ---
 
