@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/brenoniehues/oh-my-logs/internal/config"
+	"github.com/brenoniehues/oh-my-logs/internal/encoder"
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 	"github.com/brenoniehues/oh-my-logs/internal/serial"
 )
@@ -134,6 +135,19 @@ func TestTXCommandContinuationWithLivePreview(t *testing.T) {
 	mockSrc := newTXMockSource()
 	m := New(serial.DefaultConfig(), nil, nil, buf, mockSrc, nil)
 
+	mockEnc := &mockTestEncoder{
+		name:    "DeviceControl",
+		trigger: "app_cmd ",
+		encodeFunc: func(text string) (encoder.EncodeResult, error) {
+			return encoder.EncodeResult{
+				Payload: "app_cmd publish 83 92 0 10 213",
+				Display: "DeviceControl: setTemp=21.3C",
+			}, nil
+		},
+	}
+	m.encoders = encoder.NewPipelineWithEncoders([]encoder.Encoder{mockEnc})
+
+	// Case 1: Matching trigger -> encodes and captures continuation
 	m.mode = modeTXInput
 	m.txInput.SetText("app_cmd publish 83 92 0 10 213")
 	m.txPreview = "DeviceControl: setTemp=21.3C"
@@ -145,7 +159,7 @@ func TestTXCommandContinuationWithLivePreview(t *testing.T) {
 	// Verify buffer received 2 records: the wire command and the decoded continuation
 	records := m.buffer.All()
 	if len(records) != 2 {
-		t.Fatalf("expected 2 records in buffer after TX with preview, got %d", len(records))
+		t.Fatalf("expected 2 records in buffer after TX with matching trigger, got %d", len(records))
 	}
 
 	if !strings.Contains(records[0].Raw, "app_cmd publish 83 92 0 10 213") {
@@ -153,6 +167,28 @@ func TestTXCommandContinuationWithLivePreview(t *testing.T) {
 	}
 	if !strings.Contains(records[1].Raw, "↳ DeviceControl: setTemp=21.3C") {
 		t.Errorf("expected record 1 to contain continuation line, got %q", records[1].Raw)
+	}
+
+	// Case 2: Non-matching command (e.g. "help") -> strictly sent as RAW serial text with NO continuation
+	m.mode = modeTXInput
+	m.txInput.SetText("help")
+	m.txPreview = ""
+
+	resM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = resM.(Model)
+
+	records = m.buffer.All()
+	if len(records) != 3 {
+		t.Fatalf("expected 3 records in buffer total (2 from case 1 + 1 raw command), got %d", len(records))
+	}
+	if !strings.Contains(records[2].Raw, "help") {
+		t.Errorf("expected record 2 to be raw 'help', got %q", records[2].Raw)
+	}
+	if strings.Contains(records[2].Raw, "↳") {
+		t.Errorf("raw command should not contain decoded continuation line, got %q", records[2].Raw)
+	}
+	if !strings.Contains(m.message, m.txEnding.String()) || strings.Contains(m.message, "DeviceControl") {
+		t.Errorf("expected sent message to show ending [%s] and NOT [DeviceControl], got %q", m.txEnding.String(), m.message)
 	}
 }
 

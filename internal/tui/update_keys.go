@@ -96,6 +96,10 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.SendTX):
 		m.mode = modeTXInput
 		m.txInput.Reset()
+		m.txSuggestions = nil
+		m.txSuggestionIdx = -1
+		m.txSuggestionOffset = 0
+		m.txPreview = ""
 		return m, nil
 
 	case keyMatches(msg, m.keys.ShellPassthrough):
@@ -1060,25 +1064,10 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			wireText = res.Payload
 			if res.Display != "" {
 				displayText = res.Display
+			} else if m.txPreview != "" {
+				displayText = m.txPreview
 			}
 			sentDesc = fmt.Sprintf("%s | %s", activeEnc.Name(), m.txEnding.String())
-		} else if m.encoders != nil {
-			// If not matched by trigger prefix, try encoders in pipeline
-			for _, enc := range m.encoders.Encoders() {
-				if res, err := enc.Encode(val); err == nil && res.Payload != "" {
-					wireText = res.Payload
-					if res.Display != "" {
-						displayText = res.Display
-					}
-					sentDesc = fmt.Sprintf("%s | %s", enc.Name(), m.txEnding.String())
-					break
-				}
-			}
-		}
-
-		// Fallback to active live preview if display was not transformed
-		if displayText == wireText && m.txPreview != "" {
-			displayText = m.txPreview
 		}
 
 		payload, err := serial.FormatTXPayload(wireText, m.txEnding)

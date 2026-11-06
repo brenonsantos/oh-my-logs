@@ -72,7 +72,12 @@ func (m Model) triggerSuggestCmd() tea.Cmd {
 	}
 
 	if enc == nil {
-		return nil
+		return func() tea.Msg {
+			return txSuggestMsg{
+				suggestions: nil,
+				preview:     "",
+			}
+		}
 	}
 
 	return func() tea.Msg {

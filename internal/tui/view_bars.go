@@ -525,7 +525,11 @@ func (m Model) renderKeyBarContent() string {
 		}
 		text := m.txInput.Render(theme.Content)
 		inputLine := "  " + prompt + text + help
-		if m.txPreview != "" {
+		isEncoderActive := m.activeEncoderIdx >= 0 || (m.encoders != nil && func() bool {
+			enc, _ := m.encoders.Match(m.txInput.Value)
+			return enc != nil
+		}())
+		if isEncoderActive && m.txPreview != "" {
 			previewTag := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("  ↳ Decoded: ")
 			previewContent := lipgloss.NewStyle().Foreground(colorGreen).Render(m.txPreview)
 			return previewTag + previewContent + "\n" + inputLine
