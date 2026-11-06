@@ -79,6 +79,24 @@ func (m Model) handleMousePress(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.activeGame, cmd = m.activeGame.Update(game.AimClickMsg{X: relX, Y: relY})
 		return m, cmd
 	}
+	if m.mode == modeTXInput && len(m.txSuggestions) > 0 {
+		dH := txSuggestionsDrawerHeight(len(m.txSuggestions))
+		topY := (m.height - hScrollbarBottomOffset) - dH
+		if msg.Y >= topY+1 && msg.Y < topY+dH {
+			relRow := msg.Y - (topY + 1)
+			targetIdx := m.txSuggestionOffset + relRow
+			if targetIdx >= 0 && targetIdx < len(m.txSuggestions) {
+				sug := m.txSuggestions[targetIdx]
+				newVal, newCursor := applySuggestion(m.txInput.Value, m.txInput.Cursor, sug.Value)
+				m.txInput.SetTextAndCursor(newVal, newCursor)
+				m.txSuggestions = nil
+				m.txSuggestionIdx = -1
+				m.txSuggestionOffset = 0
+				return m, m.triggerSuggestCmd()
+			}
+		}
+		return m, nil
+	}
 	if m.mode != modeNormal && m.mode != modeSearch && m.mode != modeFilter && m.mode != modeTimeJump {
 		return m, nil
 	}

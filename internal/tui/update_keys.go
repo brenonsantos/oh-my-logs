@@ -940,6 +940,7 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(m.txSuggestions) > 0 {
 			m.txSuggestions = nil
 			m.txSuggestionIdx = -1
+			m.txSuggestionOffset = 0
 			return m, nil
 		}
 		m.mode = modeNormal
@@ -962,6 +963,7 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.txSuggestionIdx < 0 {
 				m.txSuggestionIdx = len(m.txSuggestions) - 1
 			}
+			m.clampTXSuggestionOffset()
 			return m, nil
 		}
 		m.txInput.HandleKey(msg)
@@ -973,10 +975,31 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.txSuggestionIdx >= len(m.txSuggestions) {
 				m.txSuggestionIdx = 0
 			}
+			m.clampTXSuggestionOffset()
 			return m, nil
 		}
 		m.txInput.HandleKey(msg)
 		return m, m.triggerSuggestCmd()
+
+	case msg.Type == tea.KeyPgUp || msg.String() == "pgup":
+		if len(m.txSuggestions) > 0 {
+			m.txSuggestionIdx -= txMaxSuggestionsVisible
+			if m.txSuggestionIdx < 0 {
+				m.txSuggestionIdx = 0
+			}
+			m.clampTXSuggestionOffset()
+		}
+		return m, nil
+
+	case msg.Type == tea.KeyPgDown || msg.String() == "pgdown":
+		if len(m.txSuggestions) > 0 {
+			m.txSuggestionIdx += txMaxSuggestionsVisible
+			if m.txSuggestionIdx >= len(m.txSuggestions) {
+				m.txSuggestionIdx = len(m.txSuggestions) - 1
+			}
+			m.clampTXSuggestionOffset()
+		}
+		return m, nil
 
 	case msg.Type == tea.KeyTab || msg.String() == "tab":
 		if len(m.txSuggestions) > 0 && m.txSuggestionIdx >= 0 && m.txSuggestionIdx < len(m.txSuggestions) {
@@ -985,6 +1008,7 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.txInput.SetTextAndCursor(newVal, newCursor)
 			m.txSuggestions = nil
 			m.txSuggestionIdx = -1
+			m.txSuggestionOffset = 0
 			return m, m.triggerSuggestCmd()
 		}
 		m.txEnding = m.txEnding.Next()
@@ -998,6 +1022,7 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.txInput.SetTextAndCursor(newVal, newCursor)
 			m.txSuggestions = nil
 			m.txSuggestionIdx = -1
+			m.txSuggestionOffset = 0
 			return m, m.triggerSuggestCmd()
 		}
 
@@ -1082,6 +1107,7 @@ func (m Model) handleTXKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.txInput.Reset()
 		m.txSuggestions = nil
 		m.txSuggestionIdx = -1
+		m.txSuggestionOffset = 0
 		m.txPreview = ""
 		m.mode = modeNormal
 		return m, nil

@@ -322,12 +322,13 @@ type Model struct {
 	projectDecoders []decoder.Config
 
 	// Encoders pipeline & autocomplete
-	encoders         *encoder.Pipeline
-	projectEncoders  []encoder.Config
-	activeEncoderIdx int // -1 for raw, or index into encoders.Encoders()
-	txSuggestions    []encoder.Suggestion
-	txSuggestionIdx  int
-	txPreview        string
+	encoders           *encoder.Pipeline
+	projectEncoders    []encoder.Config
+	activeEncoderIdx   int // -1 for raw, or index into encoders.Encoders()
+	txSuggestions      []encoder.Suggestion
+	txSuggestionIdx    int
+	txSuggestionOffset int
+	txPreview          string
 
 	// IPC Server
 	ipcServer io.Closer

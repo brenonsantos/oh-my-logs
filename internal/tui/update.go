@@ -187,9 +187,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.txSuggestionIdx < 0 || m.txSuggestionIdx >= len(msg.suggestions) {
 					m.txSuggestionIdx = 0
 				}
+				m.clampTXSuggestionOffset()
 			} else {
 				m.txSuggestions = nil
 				m.txSuggestionIdx = -1
+				m.txSuggestionOffset = 0
 			}
 		}
 		return m, nil
@@ -447,6 +449,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.detailScrollOffset = 0
 					}
 				}
+			case modeTXInput:
+				if len(m.txSuggestions) > 0 {
+					m.txSuggestionIdx--
+					if m.txSuggestionIdx < 0 {
+						m.txSuggestionIdx = len(m.txSuggestions) - 1
+					}
+					m.clampTXSuggestionOffset()
+				}
 			case modeHelp, modeGame, modeSavePresetPrompt, modeMarkerPrompt:
 				// ignore scrolling while modal or game is active
 			default:
@@ -486,6 +496,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case modeRowDetail:
 				m.detailScrollOffset += detailModalScrollStep
+			case modeTXInput:
+				if len(m.txSuggestions) > 0 {
+					m.txSuggestionIdx++
+					if m.txSuggestionIdx >= len(m.txSuggestions) {
+						m.txSuggestionIdx = 0
+					}
+					m.clampTXSuggestionOffset()
+				}
 			case modeHelp, modeGame, modeSavePresetPrompt, modeMarkerPrompt:
 				// ignore scrolling while modal or game is active
 			default:
@@ -550,6 +568,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if isMouseSequence(s) {
 			if strings.Contains(s, "64") {
+				if m.mode == modeTXInput && len(m.txSuggestions) > 0 {
+					m.txSuggestionIdx--
+					if m.txSuggestionIdx < 0 {
+						m.txSuggestionIdx = len(m.txSuggestions) - 1
+					}
+					m.clampTXSuggestionOffset()
+					return m, nil
+				}
 				m.follow = false
 				m.scrollOffset -= mouseWheelScrollStep
 				m.clampScroll()
@@ -557,6 +583,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.syncOtherPaneChronologically()
 				}
 			} else if strings.Contains(s, "65") {
+				if m.mode == modeTXInput && len(m.txSuggestions) > 0 {
+					m.txSuggestionIdx++
+					if m.txSuggestionIdx >= len(m.txSuggestions) {
+						m.txSuggestionIdx = 0
+					}
+					m.clampTXSuggestionOffset()
+					return m, nil
+				}
 				m.scrollOffset += mouseWheelScrollStep
 				m.clampScroll()
 				h := m.activeDataHeight()

@@ -16,15 +16,47 @@ type txSuggestMsg struct {
 	err         error
 }
 
+// txMaxSuggestionsVisible is the maximum number of suggestion rows visible in the drawer.
+const txMaxSuggestionsVisible = 5
+
 // txSuggestionsDrawerHeight returns the vertical lines required to display suggestions.
 func txSuggestionsDrawerHeight(count int) int {
 	if count <= 0 {
 		return 0
 	}
-	if count > 5 {
-		count = 5
+	if count > txMaxSuggestionsVisible {
+		count = txMaxSuggestionsVisible
 	}
-	return count + 1 // 1 header line + up to 5 items
+	return count + 1 // 1 header line + up to txMaxSuggestionsVisible items
+}
+
+// clampTXSuggestionOffset adjusts the visible window so txSuggestionIdx is always visible.
+func (m *Model) clampTXSuggestionOffset() {
+	total := len(m.txSuggestions)
+	if total <= txMaxSuggestionsVisible {
+		m.txSuggestionOffset = 0
+		return
+	}
+	if m.txSuggestionIdx < 0 {
+		m.txSuggestionIdx = 0
+	}
+	if m.txSuggestionIdx >= total {
+		m.txSuggestionIdx = total - 1
+	}
+
+	if m.txSuggestionIdx < m.txSuggestionOffset {
+		m.txSuggestionOffset = m.txSuggestionIdx
+	} else if m.txSuggestionIdx >= m.txSuggestionOffset+txMaxSuggestionsVisible {
+		m.txSuggestionOffset = m.txSuggestionIdx - txMaxSuggestionsVisible + 1
+	}
+
+	maxOffset := total - txMaxSuggestionsVisible
+	if m.txSuggestionOffset > maxOffset {
+		m.txSuggestionOffset = maxOffset
+	}
+	if m.txSuggestionOffset < 0 {
+		m.txSuggestionOffset = 0
+	}
 }
 
 // triggerSuggestCmd queries the active or matched encoder for autocomplete suggestions.
@@ -125,11 +157,17 @@ func (m Model) viewTXSuggestionsDrawer() string {
 		}
 	}
 
+	total := len(m.txSuggestions)
 	title := fmt.Sprintf("─── 💡 SUGGESTIONS [%s] ", encName)
+	if total > txMaxSuggestionsVisible {
+		title = fmt.Sprintf("─── 💡 SUGGESTIONS [%s] (%d/%d) ", encName, m.txSuggestionIdx+1, total)
+	} else if total > 0 {
+		title = fmt.Sprintf("─── 💡 SUGGESTIONS [%s] (%d) ", encName, total)
+	}
 	titleStyled := baseStyle.Foreground(colorYellow).Bold(true).Render(title)
 	titleW := lipgloss.Width(titleStyled)
 
-	help := " [Tab/Enter: complete · ↑/↓: navigate · Esc: close] ───"
+	help := " [Tab/Enter: complete · ↑/↓: scroll · Esc: close] ───"
 	helpStyled := baseStyle.Foreground(colorMuted).Render(help)
 	helpW := lipgloss.Width(helpStyled)
 
@@ -147,15 +185,47 @@ func (m Model) viewTXSuggestionsDrawer() string {
 
 	lines := []string{headerLine}
 
-	// Show up to 5 items
-	maxShow := 5
-	items := m.txSuggestions
-	if len(items) > maxShow {
-		items = items[:maxShow]
+	// Calculate visible slice
+	offset := m.txSuggestionOffset
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > total {
+		offset = total
+	}
+	end := offset + txMaxSuggestionsVisible
+	if end > total {
+		end = total
+	}
+	items := m.txSuggestions[offset:end]
+
+	hasVScroll := total > txMaxSuggestionsVisible
+	trackH := txMaxSuggestionsVisible
+	thumbH := 1
+	if total > 0 {
+		thumbH = (trackH * txMaxSuggestionsVisible) / total
+		if thumbH < 1 {
+			thumbH = 1
+		}
+		if thumbH > trackH {
+			thumbH = trackH
+		}
+	}
+	maxOffset := total - txMaxSuggestionsVisible
+	thumbTop := 0
+	if maxOffset > 0 {
+		thumbTop = (offset * (trackH - thumbH)) / maxOffset
+		if thumbTop+thumbH > trackH {
+			thumbTop = trackH - thumbH
+		}
+		if thumbTop < 0 {
+			thumbTop = 0
+		}
 	}
 
 	for i, s := range items {
-		isSelected := i == m.txSuggestionIdx
+		actualIdx := offset + i
+		isSelected := actualIdx == m.txSuggestionIdx
 		rowStyle := baseStyle
 		prefix := "   "
 		if isSelected {
@@ -170,13 +240,24 @@ func (m Model) viewTXSuggestionsDrawer() string {
 		}
 
 		rowContent := prefix + valPart + descPart
-		rowW := lipgloss.Width(rowContent)
-		if rowW < w {
-			rowContent += baseStyle.Render(strings.Repeat(" ", w-rowW))
-		} else if rowW > w {
-			rowContent = ansiCut(rowContent, 0, w)
+		contentW := w
+		vScrollChar := ""
+		if hasVScroll {
+			contentW = w - 1
+			if i >= thumbTop && i < thumbTop+thumbH {
+				vScrollChar = baseStyle.Foreground(colorYellow).Bold(true).Render("█")
+			} else {
+				vScrollChar = baseStyle.Foreground(colorAccent).Render("│")
+			}
 		}
-		lines = append(lines, rowContent)
+
+		rowW := lipgloss.Width(rowContent)
+		if rowW < contentW {
+			rowContent += baseStyle.Render(strings.Repeat(" ", contentW-rowW))
+		} else if rowW > contentW {
+			rowContent = ansiCut(rowContent, 0, contentW)
+		}
+		lines = append(lines, rowContent+vScrollChar)
 	}
 
 	return strings.Join(lines, "\n")

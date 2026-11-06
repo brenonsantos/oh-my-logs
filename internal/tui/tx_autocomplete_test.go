@@ -381,3 +381,189 @@ func TestTXSuggestionsDrawerLayoutVisibility(t *testing.T) {
 		t.Errorf("expected last line in small viewport to strictly preserve TX input bar, got: %q", lastLineSmall)
 	}
 }
+
+func TestTXSuggestionsScrollWindow(t *testing.T) {
+	m := newTestModel()
+	m.mode = modeTXInput
+	m.width = 80
+	m.height = 24
+
+	// Populate 20 suggestions
+	suggs := make([]encoder.Suggestion, 20)
+	for i := 0; i < 20; i++ {
+		suggs[i] = encoder.Suggestion{
+			Value:       fmt.Sprintf("cmd_%02d", i),
+			Description: fmt.Sprintf("Command %d description", i),
+		}
+	}
+	m.txSuggestions = suggs
+	m.txSuggestionIdx = 0
+	m.txSuggestionOffset = 0
+
+	// Initial view: top 5 items visible (0..4), item 0 selected
+	v0 := m.viewTXSuggestionsDrawer()
+	if !strings.Contains(v0, "cmd_00") || !strings.Contains(v0, "cmd_04") {
+		t.Errorf("expected cmd_00 and cmd_04 in initial view, got:\n%s", v0)
+	}
+	if strings.Contains(v0, "cmd_05") {
+		t.Errorf("cmd_05 should not be visible initially, got:\n%s", v0)
+	}
+	if !strings.Contains(v0, "(1/20)") {
+		t.Errorf("expected position indicator '(1/20)' in header, got:\n%s", v0)
+	}
+	if !strings.Contains(v0, "█") {
+		t.Errorf("expected scrollbar thumb in scrollable drawer, got:\n%s", v0)
+	}
+
+	// Press Down 5 times to reach item 5 -> offset should become 1
+	for i := 0; i < 5; i++ {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		m = updated.(Model)
+	}
+	if m.txSuggestionIdx != 5 {
+		t.Fatalf("expected txSuggestionIdx 5, got %d", m.txSuggestionIdx)
+	}
+	if m.txSuggestionOffset != 1 {
+		t.Fatalf("expected txSuggestionOffset 1, got %d", m.txSuggestionOffset)
+	}
+
+	v1 := m.viewTXSuggestionsDrawer()
+	if strings.Contains(v1, "cmd_00") {
+		t.Errorf("cmd_00 should have scrolled out of view, got:\n%s", v1)
+	}
+	if !strings.Contains(v1, "cmd_05") {
+		t.Errorf("cmd_05 should now be visible, got:\n%s", v1)
+	}
+	if !strings.Contains(v1, "(6/20)") {
+		t.Errorf("expected position indicator '(6/20)' in header, got:\n%s", v1)
+	}
+
+	// Navigate to the last item (idx 19)
+	for m.txSuggestionIdx < 19 {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		m = updated.(Model)
+	}
+	if m.txSuggestionOffset != 15 {
+		t.Fatalf("expected offset 15 at bottom of 20 items, got %d", m.txSuggestionOffset)
+	}
+
+	vLast := m.viewTXSuggestionsDrawer()
+	if !strings.Contains(vLast, "cmd_19") || !strings.Contains(vLast, "cmd_15") {
+		t.Errorf("expected cmd_15 through cmd_19 visible at bottom, got:\n%s", vLast)
+	}
+	if strings.Contains(vLast, "cmd_14") {
+		t.Errorf("cmd_14 should not be visible at bottom offset, got:\n%s", vLast)
+	}
+	if !strings.Contains(vLast, "(20/20)") {
+		t.Errorf("expected '(20/20)' at bottom, got:\n%s", vLast)
+	}
+
+	// Wrap around from bottom to top on Down
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	if m.txSuggestionIdx != 0 || m.txSuggestionOffset != 0 {
+		t.Fatalf("expected wrap around to idx 0, offset 0, got idx %d, offset %d", m.txSuggestionIdx, m.txSuggestionOffset)
+	}
+
+	// Wrap around from top to bottom on Up
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = updated.(Model)
+	if m.txSuggestionIdx != 19 || m.txSuggestionOffset != 15 {
+		t.Fatalf("expected wrap around to idx 19, offset 15, got idx %d, offset %d", m.txSuggestionIdx, m.txSuggestionOffset)
+	}
+
+	// PgUp jumps back by 5 (from 19 to 14, setting window offset to 14)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m = updated.(Model)
+	if m.txSuggestionIdx != 14 || m.txSuggestionOffset != 14 {
+		t.Fatalf("expected pgup jump to idx 14, offset 14, got idx %d, offset %d", m.txSuggestionIdx, m.txSuggestionOffset)
+	}
+
+	// Tab completes the selected item (cmd_14)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	if !strings.Contains(m.txInput.Value, "cmd_14") {
+		t.Errorf("expected completion of cmd_14, got %q", m.txInput.Value)
+	}
+	if m.txSuggestionOffset != 0 || len(m.txSuggestions) != 0 {
+		t.Errorf("expected offset reset and suggestions cleared on apply")
+	}
+}
+
+func TestTXSuggestionsMouseWheelScroll(t *testing.T) {
+	m := newTestModel()
+	m.mode = modeTXInput
+	m.width = 80
+	m.height = 24
+
+	suggs := make([]encoder.Suggestion, 10)
+	for i := 0; i < 10; i++ {
+		suggs[i] = encoder.Suggestion{Value: fmt.Sprintf("val_%02d", i)}
+	}
+	m.txSuggestions = suggs
+	m.txSuggestionIdx = 0
+	m.txSuggestionOffset = 0
+
+	// Wheel Down scrolls down
+	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	m = updated.(Model)
+	if m.txSuggestionIdx != 1 {
+		t.Errorf("expected idx 1 on wheel down, got %d", m.txSuggestionIdx)
+	}
+
+	// Wheel Up scrolls back up
+	updated, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
+	m = updated.(Model)
+	if m.txSuggestionIdx != 0 {
+		t.Errorf("expected idx 0 on wheel up, got %d", m.txSuggestionIdx)
+	}
+
+	// Terminal mouse sequence "65" (down)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("\x1b[<65;20;20M")})
+	m = updated.(Model)
+	if m.txSuggestionIdx != 1 {
+		t.Errorf("expected idx 1 on mouse seq 65, got %d", m.txSuggestionIdx)
+	}
+
+	// Terminal mouse sequence "64" (up)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("\x1b[<64;20;20M")})
+	m = updated.(Model)
+	if m.txSuggestionIdx != 0 {
+		t.Errorf("expected idx 0 on mouse seq 64, got %d", m.txSuggestionIdx)
+	}
+}
+
+func TestTXSuggestionsMouseClickApply(t *testing.T) {
+	m := newTestModel()
+	m.mode = modeTXInput
+	m.width = 80
+	m.height = 30
+	m.txInput.SetTextAndCursor("test_", 5)
+
+	suggs := make([]encoder.Suggestion, 15)
+	for i := 0; i < 15; i++ {
+		suggs[i] = encoder.Suggestion{Value: fmt.Sprintf("target_%02d", i)}
+	}
+	m.txSuggestions = suggs
+	m.txSuggestionIdx = 0
+	m.txSuggestionOffset = 5 // Visible: target_05 .. target_09
+
+	// dH = 6. topY = (30 - 3) - 6 = 21.
+	// Header is at Y = 21.
+	// Row 0 (target_05) is at Y = 22.
+	// Row 2 (target_07) is at Y = 24.
+	updated, _ := m.Update(tea.MouseMsg{
+		X:      15,
+		Y:      24,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	m = updated.(Model)
+
+	if !strings.Contains(m.txInput.Value, "target_07") {
+		t.Errorf("expected clicked suggestion 'target_07' to be applied, got %q", m.txInput.Value)
+	}
+	if len(m.txSuggestions) != 0 || m.txSuggestionOffset != 0 {
+		t.Errorf("expected suggestions cleared and offset reset after click")
+	}
+}
