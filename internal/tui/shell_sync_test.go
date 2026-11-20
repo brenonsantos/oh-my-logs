@@ -24,8 +24,15 @@ func feedLine(m Model, s string) Model {
 }
 
 func pressKey(m Model, k tea.KeyMsg) Model {
-	u, _ := m.Update(k)
-	return u.(Model)
+	u, cmd := m.Update(k)
+	m = u.(Model)
+	if cmd != nil {
+		if msg := cmd(); msg != nil {
+			u, _ = m.Update(msg)
+			m = u.(Model)
+		}
+	}
+	return m
 }
 
 func TestShell_InputBarSyncsFromDeviceRow(t *testing.T) {

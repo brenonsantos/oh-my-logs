@@ -1132,8 +1132,7 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// 3. Tab: Forward ASCII 0x09 directly to MCU shell for native autocompletion!
 	if msg.Type == tea.KeyTab || msg.String() == "tab" {
 		m.shellAwaitingTab = true
-		m.shellWrite([]byte{'\t'})
-		return m, nil
+		return m, m.shellWrite([]byte{'\t'})
 	}
 
 	// Any non-Tab key clears active Tab completion expectation
@@ -1141,55 +1140,47 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// 4. Ctrl+C: Send ASCII 0x03 interrupt signal to MCU shell
 	if msg.Type == tea.KeyCtrlC || msg.String() == "ctrl+c" {
-		m.shellWrite([]byte{0x03})
 		m.shellInput.Reset()
-		return m, nil
+		return m, m.shellWrite([]byte{0x03})
 	}
 
 	// 5. Ctrl+D: Send EOF (0x04)
 	if msg.Type == tea.KeyCtrlD || msg.String() == "ctrl+d" {
-		m.shellWrite([]byte{0x04})
-		return m, nil
+		return m, m.shellWrite([]byte{0x04})
 	}
 
 	// 6. Up / Down: Send ANSI arrow sequences for MCU shell history navigation,
 	// and update local input history
 	if msg.Type == tea.KeyUp || msg.String() == "up" {
-		m.shellWrite([]byte("\x1b[A"))
 		m.shellInput.HistoryPrev()
-		return m, nil
+		return m, m.shellWrite([]byte("\x1b[A"))
 	}
 	if msg.Type == tea.KeyDown || msg.String() == "down" {
-		m.shellWrite([]byte("\x1b[B"))
 		m.shellInput.HistoryNext()
-		return m, nil
+		return m, m.shellWrite([]byte("\x1b[B"))
 	}
 
 	// 7. Left / Right: Send ANSI cursor movement to MCU shell
 	if msg.Type == tea.KeyLeft || msg.String() == "left" {
-		m.shellWrite([]byte("\x1b[D"))
 		m.shellInput.HandleKey(msg)
-		return m, nil
+		return m, m.shellWrite([]byte("\x1b[D"))
 	}
 	if msg.Type == tea.KeyRight || msg.String() == "right" {
-		m.shellWrite([]byte("\x1b[C"))
 		m.shellInput.HandleKey(msg)
-		return m, nil
+		return m, m.shellWrite([]byte("\x1b[C"))
 	}
 
 	// 8. Backspace: Forward backspace (0x7F) to MCU shell
 	if msg.Type == tea.KeyBackspace || msg.String() == "backspace" {
-		m.shellWrite([]byte{0x7F})
 		m.shellInput.HandleKey(msg)
-		return m, nil
+		return m, m.shellWrite([]byte{0x7F})
 	}
 
 	// 8b. Line-editing keys supported by common embedded shells (Zephyr, FreeRTOS+CLI, NuttX):
 	// forward the control bytes / sequences and mirror locally for immediate feedback.
 	if seq, ok := shellEditSequence(msg); ok {
-		m.shellWrite([]byte(seq))
 		m.shellInput.HandleKey(msg)
-		return m, nil
+		return m, m.shellWrite([]byte(seq))
 	}
 
 	// 9. Enter: Transmit command line ending, save history, record TX badge.
@@ -1207,7 +1198,7 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if ending == "" {
 			ending = "\r"
 		}
-		m.shellWrite([]byte(ending))
+		cmd := m.shellWrite([]byte(ending))
 		if val != "" {
 			m.recordTXMessage(val)
 			m.lastTXCommand = strings.TrimSpace(val)
@@ -1218,7 +1209,7 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.shellInput.Reset()
 		m.shellDeviceRow = ""
 		m.shellSyncHold = true // ignore stale echo snapshots until the prompt is redrawn empty
-		return m, nil
+		return m, cmd
 	}
 
 	// 10. Normal character typing: send characters directly over serial TX
@@ -1226,8 +1217,7 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if len(runes) > 0 {
 		if msg.Alt {
 			// Meta-modified runes are ESC-prefixed on the wire (e.g. Alt+b = ESC b).
-			m.shellWrite(append([]byte{0x1b}, []byte(string(runes))...))
-			return m, nil
+			return m, m.shellWrite(append([]byte{0x1b}, []byte(string(runes))...))
 		}
 		text := string(runes)
 		if msg.Paste {
@@ -1235,23 +1225,23 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			text = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(text)
 		}
 		rawBytes := []byte(text)
-		m.shellWrite(rawBytes)
 		m.shellInput.Insert(text)
-		return m, nil
+		return m, m.shellWrite(rawBytes)
 	}
 
 	return m, nil
 }
 
-// shellWrite transmits raw bytes to the device and reports failures in the status
-// message instead of silently showing text that was never sent.
-func (m *Model) shellWrite(p []byte) {
+// shellWrite enqueues raw bytes for ordered asynchronous transmission so a
+// stalled serial port never blocks the Bubble Tea Update loop.
+func (m *Model) shellWrite(p []byte) tea.Cmd {
 	if m.source == nil {
-		return
+		return nil
 	}
-	if _, err := m.source.Write(p); err != nil {
-		m.message = fmt.Sprintf("Shell TX failed: %v", err)
+	if m.shellTX == nil {
+		m.shellTX = newShellTXQueue()
 	}
+	return m.shellTX.enqueue(m.source, p)
 }
 
 // shellEditSequence maps editing keys to the bytes an ANSI terminal would send.

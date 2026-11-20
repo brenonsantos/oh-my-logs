@@ -427,9 +427,18 @@ func TestShellInteractiveMode_TabForwardingAndCharacterStreaming(t *testing.T) {
 	m.mode = modeShellInteractive
 
 	// 1. Type characters 'h', 'e', 'l', 'p'
-	for _, r := range []rune{'h', 'e', 'l', 'p'} {
-		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	execKey := func(k tea.KeyMsg) {
+		updated, cmd := m.Update(k)
 		m = updated.(Model)
+		if cmd != nil {
+			if msg := cmd(); msg != nil {
+				updated, _ = m.Update(msg)
+				m = updated.(Model)
+			}
+		}
+	}
+	for _, r := range []rune{'h', 'e', 'l', 'p'} {
+		execKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
 
 	if len(mock.written) != 4 {
@@ -443,8 +452,7 @@ func TestShellInteractiveMode_TabForwardingAndCharacterStreaming(t *testing.T) {
 	}
 
 	// 2. Press Tab: should forward ASCII 0x09 directly to device!
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m = updated.(Model)
+	execKey(tea.KeyMsg{Type: tea.KeyTab})
 
 	lastWritten := mock.written[len(mock.written)-1]
 	if !bytes.Equal(lastWritten, []byte{'\t'}) {
@@ -452,8 +460,7 @@ func TestShellInteractiveMode_TabForwardingAndCharacterStreaming(t *testing.T) {
 	}
 
 	// 3. Press Ctrl+C: should forward ASCII 0x03 interrupt signal!
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
-	m = updated.(Model)
+	execKey(tea.KeyMsg{Type: tea.KeyCtrlC})
 
 	lastWritten = mock.written[len(mock.written)-1]
 	if !bytes.Equal(lastWritten, []byte{0x03}) {
@@ -464,8 +471,7 @@ func TestShellInteractiveMode_TabForwardingAndCharacterStreaming(t *testing.T) {
 	}
 
 	// 4. Arrow keys: Up should send ANSI \x1b[A
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	m = updated.(Model)
+	execKey(tea.KeyMsg{Type: tea.KeyUp})
 	lastWritten = mock.written[len(mock.written)-1]
 	if string(lastWritten) != "\x1b[A" {
 		t.Errorf("expected up arrow ANSI sequence, got %q", string(lastWritten))
@@ -473,8 +479,7 @@ func TestShellInteractiveMode_TabForwardingAndCharacterStreaming(t *testing.T) {
 
 	// 5. Enter should send configured line ending only (preventing command duplication) and record TX badge
 	m.shellInput.SetText("version")
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = updated.(Model)
+	execKey(tea.KeyMsg{Type: tea.KeyEnter})
 
 	lastWritten = mock.written[len(mock.written)-1]
 	if string(lastWritten) != "\r\n" {
