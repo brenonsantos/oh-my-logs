@@ -104,7 +104,6 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case keyMatches(msg, m.keys.ShellPassthrough):
 		m.mode = modeShellInteractive
-		m.shellAwaitingTab = false
 		m.shellSyncHold = false
 		m.shellInput.Reset()
 		// The device may still hold text typed in a previous session; show it.
@@ -1116,7 +1115,6 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// 1. Esc or Ctrl+] returns cleanly to normal log navigation
 	if keyMatches(msg, m.keys.Cancel) || msg.Type == tea.KeyEsc || msg.String() == "ctrl+]" {
 		m.mode = modeNormal
-		m.shellAwaitingTab = false
 		m.shellInput.Reset()
 		return m, nil
 	}
@@ -1125,18 +1123,13 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.source == nil {
 		m.message = "Shell TX failed: disconnected"
 		m.mode = modeNormal
-		m.shellAwaitingTab = false
 		return m, nil
 	}
 
 	// 3. Tab: Forward ASCII 0x09 directly to MCU shell for native autocompletion!
 	if msg.Type == tea.KeyTab || msg.String() == "tab" {
-		m.shellAwaitingTab = true
 		return m, m.shellWrite([]byte{'\t'})
 	}
-
-	// Any non-Tab key clears active Tab completion expectation
-	m.shellAwaitingTab = false
 
 	// 4. Ctrl+C: Send ASCII 0x03 interrupt signal to MCU shell
 	if msg.Type == tea.KeyCtrlC || msg.String() == "ctrl+c" {

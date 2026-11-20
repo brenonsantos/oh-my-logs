@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/brenoniehues/oh-my-logs/internal/game"
 	"github.com/brenoniehues/oh-my-logs/internal/parser"
@@ -909,53 +910,44 @@ func (m *Model) recordTXContinuation(cmdText string) {
 
 // processIncomingLine handles a single raw line or prompt snapshot from the active source.
 func (m *Model) processIncomingLine(rawStr string) {
-	if snap, isSnap := serial.SplitPromptSnapshot(rawStr); isSnap {
+	if snap, snapCol, isSnap := serial.SplitPromptSnapshotWithCol(rawStr); isSnap {
 		// Non-committing idle-prompt snapshot: shell state for the input bar, never a log row.
 		if prompt, remainder, ok := serial.ExtractPromptRemainder(snap); ok {
 			if prompt != "" {
 				m.shellPrompt = prompt + " "
 			}
 			// The device row is the source of truth for the input bar: it keeps the
-			// local mirror correct across Tab, MCU history (Up/Down), cursor edits and
-			// prompt redraws after asynchronous logs.
+			// local mirror and cursor position aligned across Tab, MCU history (Up/Down),
+			// Left/Right/Home/End cursor edits, and prompt redraws after async logs.
 			rem := serial.CleanTerminalLine(remainder)
 			m.shellDeviceRow = rem
 			if m.mode == modeShellInteractive {
 				if rem == "" {
 					m.shellSyncHold = false
 				}
-				if !m.shellSyncHold && m.shellInput.Value != rem {
-					m.shellInput.SetText(rem)
+				if !m.shellSyncHold {
+					if snapCol >= 0 {
+						remRunes := utf8.RuneCountInString(rem)
+						prefixRunes := utf8.RuneCountInString(snap) - remRunes
+						targetCursor := snapCol - prefixRunes
+						if targetCursor < 0 {
+							targetCursor = 0
+						} else if targetCursor > remRunes {
+							targetCursor = remRunes
+						}
+						if m.shellInput.Value != rem || m.shellInput.Cursor != targetCursor {
+							m.shellInput.SetTextAndCursor(rem, targetCursor)
+						}
+					} else if m.shellInput.Value != rem {
+						m.shellInput.SetText(rem)
+					}
 				}
 			}
 		}
 		return
 	}
-	if prompt, remainder, ok := serial.ExtractPromptRemainder(rawStr); ok {
-		if prompt != "" {
-			m.shellPrompt = prompt + " "
-		}
-		if m.mode == modeShellInteractive && m.shellAwaitingTab {
-			m.shellAwaitingTab = false
-			cleanRemainder := serial.CleanTerminalLine(remainder)
-			if m.lastTXCommand != "" && strings.TrimSpace(cleanRemainder) == m.lastTXCommand {
-				m.lastTXCommand = ""
-				return
-			}
-			isLog := false
-			if m.parser != nil && cleanRemainder != "" {
-				parsedRec, err := m.parser.Parse(cleanRemainder)
-				if err == nil && parsedRec.Fields["level"] != "" {
-					isLog = true
-				}
-			}
-			if !isLog {
-				if cleanRemainder != "" {
-					m.shellInput.SetText(cleanRemainder)
-				}
-				return
-			}
-		}
+	if prompt, _, ok := serial.ExtractPromptRemainder(rawStr); ok && prompt != "" {
+		m.shellPrompt = prompt + " "
 	}
 
 	line := serial.CleanTerminalLine(rawStr)

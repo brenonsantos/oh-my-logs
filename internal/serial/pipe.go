@@ -1,10 +1,8 @@
 package serial
 
 import (
-	"bufio"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 )
 
@@ -35,30 +33,15 @@ func (p *PipeSource) readLoop(r io.Reader) {
 	defer close(p.lines)
 	defer close(p.errors)
 
-	reader := bufio.NewReader(r)
-	for {
-		line, err := reader.ReadString('\n')
-		if len(line) > 0 {
-			cleanLine := strings.TrimRight(line, "\r\n")
-			select {
-			case <-p.stop:
-				return
-			case p.lines <- cleanLine:
-			}
-		}
-		if err != nil {
-			select {
-			case <-p.stop:
-				return
-			default:
-			}
-			if err != io.EOF {
-				select {
-				case p.errors <- fmt.Errorf("pipe read: %w", err):
-				default:
-				}
-			}
+	if err := streamReaderToLines(r, p.stop, p.lines); err != nil {
+		select {
+		case <-p.stop:
 			return
+		default:
+		}
+		select {
+		case p.errors <- fmt.Errorf("pipe read: %w", err):
+		default:
 		}
 	}
 }

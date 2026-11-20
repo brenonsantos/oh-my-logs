@@ -1,7 +1,6 @@
 package serial
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os/exec"
@@ -87,21 +86,7 @@ func NewProcessSource(command string) (*ProcessSource, error) {
 
 	readPipe := func(r io.Reader) {
 		defer pipeWg.Done()
-		reader := bufio.NewReader(r)
-		for {
-			line, err := reader.ReadString('\n')
-			if len(line) > 0 {
-				cleanLine := strings.TrimRight(line, "\r\n")
-				select {
-				case <-ps.stop:
-					return
-				case ps.lines <- cleanLine:
-				}
-			}
-			if err != nil {
-				return
-			}
-		}
+		_ = streamReaderToLines(r, ps.stop, ps.lines)
 	}
 
 	go readPipe(stdout)
