@@ -93,7 +93,7 @@ func TestSerialSource_InFlightLogNeverSplitOnTimeout(t *testing.T) {
 	// Chunk 2: Finishes the log line and sends \r\n.
 	mock := &mockSerialPort{
 		reads: [][]byte{
-			[]byte("device:~$ \x1b[9D\x1b[J[    262.937] <inf> [lib-mqtt]: HandlePublishToClo"),
+			[]byte("device:~$ \x1b[10D\x1b[J[    262.937] <inf> [lib-mqtt]: HandlePublishToClo"),
 			[]byte(""), // timeout event!
 			[]byte("udOsWork(): Published message successfully\r\n"),
 		},
@@ -129,18 +129,18 @@ func TestSerialSource_InFlightLogNeverSplitOnTimeout(t *testing.T) {
 		t.Fatalf("expected 1 combined log line, got %d: %q", len(lines), lines)
 	}
 
-	wantPrefix := "device:~$ \x1b[9D\x1b[J[    262.937] <inf> [lib-mqtt]: HandlePublishToCloudOsWork(): Published message successfully"
+	// The prompt-erase sequence is resolved by the line discipline, so only the log remains.
+	wantPrefix := "[    262.937] <inf> [lib-mqtt]: HandlePublishToCloudOsWork(): Published message successfully"
 	if lines[0] != wantPrefix {
 		t.Errorf("line got %q, want %q", lines[0], wantPrefix)
 	}
 }
 
-func TestSerialSource_IdlePromptFlushedOnTimeout(t *testing.T) {
+func TestSerialSource_IdlePromptSnapshotWithoutTimer(t *testing.T) {
 	// Genuine idle prompt without newline followed by timeout
 	mock := &mockSerialPort{
 		reads: [][]byte{
 			[]byte("device:~$ "),
-			[]byte(""), // timeout event flushes idle prompt!
 		},
 	}
 
@@ -172,8 +172,8 @@ func TestSerialSource_IdlePromptFlushedOnTimeout(t *testing.T) {
 	if len(lines) != 1 {
 		t.Fatalf("expected 1 flushed prompt, got %d: %q", len(lines), lines)
 	}
-	if lines[0] != "device:~$ " {
-		t.Errorf("flushed prompt got %q, want %q", lines[0], "device:~$ ")
+	if snap, ok := SplitPromptSnapshot(lines[0]); !ok || snap != "device:~$ " {
+		t.Errorf("flushed prompt got %q, want snapshot of %q", lines[0], "device:~$ ")
 	}
 }
 

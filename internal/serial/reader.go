@@ -67,24 +67,26 @@ func (s *SerialSource) readLoop() {
 	defer close(s.lines)
 	defer close(s.errors)
 
-	// Set a small read timeout so the reader can emit partial interactive prompts
-	// (e.g. "uart:~$ os_") when UART goes idle waiting for engineer input, rather
-	// than blocking indefinitely waiting for a trailing newline.
-	_ = s.port.SetReadTimeout(25 * time.Millisecond)
+	// The read timeout only bounds how long a blocked Read can delay noticing
+	// Stop(); it carries no framing semantics. Line boundaries are decided
+	// exclusively by the VT line discipline, so a pause mid-line never splits it.
+	_ = s.port.SetReadTimeout(100 * time.Millisecond)
 
-	buf := make([]byte, 1024)
-	var lineBuf []byte
-
-	emitLine := func(l string) bool {
-		cleanLine := strings.TrimRight(l, "\r\n")
-		if cleanLine == "" {
-			return true
+	buf := make([]byte, 4096)
+	ld := NewLineDiscipline()
+	stopped := false
+	emit := func(e Event) {
+		if stopped {
+			return
+		}
+		text := e.Text
+		if e.Kind == EventPrompt {
+			text = MarkPromptSnapshot(text)
 		}
 		select {
 		case <-s.stop:
-			return false
-		case s.lines <- cleanLine:
-			return true
+			stopped = true
+		case s.lines <- text:
 		}
 	}
 
@@ -96,63 +98,25 @@ func (s *SerialSource) readLoop() {
 		}
 
 		n, err := s.port.Read(buf)
+		if n > 0 {
+			ld.Feed(buf[:n], emit)
+			if stopped {
+				return
+			}
+		}
 		if err != nil {
 			select {
 			case <-s.stop:
 				return
 			default:
 			}
+			// Deliver any complete-but-unterminated row before reporting the error.
+			ld.Flush(emit)
 			select {
 			case s.errors <- fmt.Errorf("serial read: %w", err):
 			default:
 			}
 			return
-		}
-
-		if n > 0 {
-			chunk := buf[:n]
-			for len(chunk) > 0 {
-				idx := -1
-				for i, b := range chunk {
-					if b == '\n' {
-						idx = i
-						break
-					}
-				}
-
-				if idx >= 0 {
-					lineBuf = append(lineBuf, chunk[:idx]...)
-					lineStr := string(lineBuf)
-					lineBuf = lineBuf[:0]
-					if !emitLine(lineStr) {
-						return
-					}
-					chunk = chunk[idx+1:]
-				} else {
-					lineBuf = append(lineBuf, chunk...)
-					break
-				}
-			}
-		} else {
-			// n == 0: Read timed out (25ms idle UART). If lineBuf contains a genuine idle interactive shell prompt
-			// (e.g. "device:~$ " or "device:~$ os_") waiting for user input without a trailing newline,
-			// flush it immediately so the TUI can update prompt & completion.
-			// Never flush in-flight log messages (which may pause across USB or MCU workqueue delays).
-			if len(lineBuf) > 0 {
-				lineStr := string(lineBuf)
-				if IsIdleShellPrompt(lineStr) {
-					lineBuf = lineBuf[:0]
-					if !emitLine(lineStr) {
-						return
-					}
-				} else if len(lineBuf) > 65536 {
-					// Safety failsafe against unbounded memory growth on corrupt streams without newlines.
-					lineBuf = lineBuf[:0]
-					if !emitLine(lineStr) {
-						return
-					}
-				}
-			}
 		}
 	}
 }

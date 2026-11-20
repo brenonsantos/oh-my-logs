@@ -617,15 +617,16 @@ func TestShellInteractiveMode_KeystrokeEchoFiltered(t *testing.T) {
 	m.connState = ConnConnected
 	m.mode = modeShellInteractive
 
-	// Keystrokes echoed by MCU shell while typing
-	for _, ch := range []string{"o", "s", "_", "m", "s", "g"} {
-		updated, _ := m.Update(lineMsg(ch))
+	// The serial line discipline reports echoed keystrokes as growing prompt
+	// snapshots (never as committed rows).
+	for _, snap := range []string{"uart:~$ o", "uart:~$ os", "uart:~$ os_", "uart:~$ os_m", "uart:~$ os_ms", "uart:~$ os_msg"} {
+		updated, _ := m.Update(lineMsg(serial.MarkPromptSnapshot(snap)))
 		m = updated.(Model)
 	}
 
 	// None of the single-character keystroke echoes should have been added to the buffer
 	if m.buffer.Len() != 0 {
-		t.Errorf("expected keystroke echoes to be filtered out, got %d records in buffer", m.buffer.Len())
+		t.Errorf("expected prompt snapshots to stay out of the table, got %d records in buffer", m.buffer.Len())
 	}
 
 	// Real multiline output from MCU should still be ingested normally
@@ -633,6 +634,13 @@ func TestShellInteractiveMode_KeystrokeEchoFiltered(t *testing.T) {
 	m = updated.(Model)
 	if m.buffer.Len() != 1 {
 		t.Errorf("expected real command output to be ingested, got %d records", m.buffer.Len())
+	}
+
+	// Short legitimate lines must no longer be dropped by a length heuristic.
+	updated, _ = m.Update(lineMsg("OK"))
+	m = updated.(Model)
+	if m.buffer.Len() != 2 {
+		t.Errorf("expected short line %q to be ingested, got %d records", "OK", m.buffer.Len())
 	}
 }
 

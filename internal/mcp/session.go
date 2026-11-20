@@ -382,6 +382,9 @@ func (s *Session) readLoop(src serial.Source, p parser.Parser, stop <-chan struc
 				s.handleDisconnect(src, nil)
 				return
 			}
+			if _, isPrompt := serial.SplitPromptSnapshot(line); isPrompt {
+				continue // shell state, not a log record
+			}
 			clean := serial.CleanTerminalLine(line)
 			if clean == "" {
 				continue
