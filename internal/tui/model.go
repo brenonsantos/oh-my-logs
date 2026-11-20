@@ -227,8 +227,9 @@ type Model struct {
 	shellInput       TextInput
 	shellAwaitingTab bool   // true when user pressed Tab and is awaiting remote shell completion token
 	lastTXCommand    string // last transmitted command to suppress duplicate MCU device echo
-	shellDeviceRow   string // text the device shell currently shows after its prompt (from idle-prompt snapshots)
-	shellSyncHold    bool   // after Enter, ignore stale echo snapshots until the device redraws an empty prompt
+	shellDeviceRow   string        // text the device shell currently shows after its prompt (from idle-prompt snapshots)
+	shellSyncHold    bool          // after Enter, ignore stale echo snapshots until the device redraws an empty prompt
+	shellTX          *shellTXQueue // ordered non-blocking TX queue for interactive shell mode
 
 	// Bench marker annotation prompt
 	markerInput      TextInput
@@ -530,6 +531,7 @@ func New(
 	m.shellInput = NewTextInput(true)
 	m.shellInput.History = txHist
 	m.shellPrompt = "$ "
+	m.shellTX = newShellTXQueue()
 	m.loadFilters()
 	m.loadColumnCustomization()
 

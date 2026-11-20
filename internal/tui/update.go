@@ -15,7 +15,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// listenToSource returns a command that waits for the next line from the source.
+const maxLineBatchSize = 128
+
+// listenToSource returns a command that waits for the next line from the source
+// and non-blockingly drains up to maxLineBatchSize already-buffered lines into
+// a single lineBatchMsg so high-throughput bursts don't saturate Bubble Tea.
 func listenToSource(src serial.Source) tea.Cmd {
 	if src == nil {
 		return nil
@@ -32,7 +36,20 @@ func listenToSource(src serial.Source) tea.Cmd {
 		if !ok {
 			return ConnStateMsg{State: ConnDisconnected, Detail: "source closed"}
 		}
-		return lineMsg(line)
+		batch := make([]string, 1, 16)
+		batch[0] = line
+		for len(batch) < maxLineBatchSize {
+			select {
+			case next, ok := <-linesCh:
+				if !ok {
+					return lineBatchMsg(batch)
+				}
+				batch = append(batch, next)
+			default:
+				return lineBatchMsg(batch)
+			}
+		}
+		return lineBatchMsg(batch)
 	}
 }
 
@@ -59,6 +76,9 @@ func listenToSourceErrors(src serial.Source) tea.Cmd {
 
 // lineMsg is an internal message carrying a raw line from the source.
 type lineMsg string
+
+// lineBatchMsg carries a batch of raw lines drained from the source in one tick.
+type lineBatchMsg []string
 
 // sourceReadyMsg is sent when a new serial connection has been established.
 type sourceReadyMsg struct {
@@ -196,103 +216,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	// ── New line from source ─────────────────────────────────────────────────
+	// ── New line(s) from source ──────────────────────────────────────────────
 	case lineMsg:
-		rawStr := string(msg)
-		if snap, isSnap := serial.SplitPromptSnapshot(rawStr); isSnap {
-			// Non-committing idle-prompt snapshot: shell state for the input bar, never a log row.
-			if prompt, remainder, ok := serial.ExtractPromptRemainder(snap); ok {
-				if prompt != "" {
-					m.shellPrompt = prompt + " "
-				}
-				// The device row is the source of truth for the input bar: it keeps the
-				// local mirror correct across Tab, MCU history (Up/Down), cursor edits and
-				// prompt redraws after asynchronous logs.
-				rem := serial.CleanTerminalLine(remainder)
-				m.shellDeviceRow = rem
-				if m.mode == modeShellInteractive {
-					if rem == "" {
-						m.shellSyncHold = false
-					}
-					if !m.shellSyncHold && m.shellInput.Value != rem {
-						m.shellInput.SetText(rem)
-					}
-				}
-			}
-			if m.connState == ConnConnected && m.source != nil {
-				return m, listenToSource(m.source)
-			}
-			return m, nil
-		}
-		if prompt, remainder, ok := serial.ExtractPromptRemainder(rawStr); ok {
-			if prompt != "" {
-				m.shellPrompt = prompt + " "
-			}
-			if m.mode == modeShellInteractive && m.shellAwaitingTab {
-				m.shellAwaitingTab = false
-				cleanRemainder := serial.CleanTerminalLine(remainder)
-				if m.lastTXCommand != "" && strings.TrimSpace(cleanRemainder) == m.lastTXCommand {
-					m.lastTXCommand = ""
-					if m.connState == ConnConnected && m.source != nil {
-						return m, listenToSource(m.source)
-					}
-					return m, nil
-				}
-				isLog := false
-				if m.parser != nil && cleanRemainder != "" {
-					parsedRec, err := m.parser.Parse(cleanRemainder)
-					if err == nil && parsedRec.Fields["level"] != "" {
-						isLog = true
-					}
-				}
-				if !isLog {
-					if cleanRemainder != "" {
-						m.shellInput.SetText(cleanRemainder)
-					}
-					if m.connState == ConnConnected && m.source != nil {
-						return m, listenToSource(m.source)
-					}
-					return m, nil
-				}
-			}
-		}
-
-		line := serial.CleanTerminalLine(rawStr)
-		if m.lineStripRe != nil {
-			line = m.lineStripRe.ReplaceAllLiteralString(line, "")
-			line = strings.TrimRight(line, "\r\n")
-		}
-
-		if m.lastTXCommand != "" {
-			trimmedLine := strings.TrimSpace(line)
-			if trimmedLine == m.lastTXCommand {
-				m.lastTXCommand = ""
-				if m.connState == ConnConnected && m.source != nil {
-					return m, listenToSource(m.source)
-				}
-				return m, nil
-			}
-			m.lastTXCommand = ""
-		}
-
-		// Keystroke echoes never reach this point as separate rows: the serial line
-		// discipline keeps them on the pending (uncommitted) prompt row, so no
-		// length-based filtering is needed and short legitimate lines ("OK") survive.
-
-		if strings.TrimSpace(line) == "" {
-			if m.connState == ConnConnected && m.source != nil {
-				return m, listenToSource(m.source)
-			}
-			return m, nil
-		}
-
-		r, parsedTs := parseLineWithTimestampFallback(m.parser, line)
-		if !parsedTs.IsZero() && r.Timestamp.IsZero() {
-			r.Timestamp = parsedTs
-		}
-		m.ingestRecord(r)
+		m.processIncomingLine(string(msg))
 		if m.connState == ConnConnected && m.source != nil {
 			return m, listenToSource(m.source)
+		}
+		return m, nil
+
+	case lineBatchMsg:
+		for _, rawStr := range msg {
+			m.processIncomingLine(rawStr)
+		}
+		if m.connState == ConnConnected && m.source != nil {
+			return m, listenToSource(m.source)
+		}
+		return m, nil
+
+	case shellWriteErrMsg:
+		if msg.err != nil {
+			m.message = fmt.Sprintf("Shell TX failed: %v", msg.err)
 		}
 		return m, nil
 
@@ -961,5 +904,85 @@ func (m *Model) recordTXContinuation(cmdText string) {
 	r.Fields["level"] = "TX"
 	r.Fields["raw"] = raw
 	r.Fields["cmd"] = cmdText
+	m.ingestRecord(r)
+}
+
+// processIncomingLine handles a single raw line or prompt snapshot from the active source.
+func (m *Model) processIncomingLine(rawStr string) {
+	if snap, isSnap := serial.SplitPromptSnapshot(rawStr); isSnap {
+		// Non-committing idle-prompt snapshot: shell state for the input bar, never a log row.
+		if prompt, remainder, ok := serial.ExtractPromptRemainder(snap); ok {
+			if prompt != "" {
+				m.shellPrompt = prompt + " "
+			}
+			// The device row is the source of truth for the input bar: it keeps the
+			// local mirror correct across Tab, MCU history (Up/Down), cursor edits and
+			// prompt redraws after asynchronous logs.
+			rem := serial.CleanTerminalLine(remainder)
+			m.shellDeviceRow = rem
+			if m.mode == modeShellInteractive {
+				if rem == "" {
+					m.shellSyncHold = false
+				}
+				if !m.shellSyncHold && m.shellInput.Value != rem {
+					m.shellInput.SetText(rem)
+				}
+			}
+		}
+		return
+	}
+	if prompt, remainder, ok := serial.ExtractPromptRemainder(rawStr); ok {
+		if prompt != "" {
+			m.shellPrompt = prompt + " "
+		}
+		if m.mode == modeShellInteractive && m.shellAwaitingTab {
+			m.shellAwaitingTab = false
+			cleanRemainder := serial.CleanTerminalLine(remainder)
+			if m.lastTXCommand != "" && strings.TrimSpace(cleanRemainder) == m.lastTXCommand {
+				m.lastTXCommand = ""
+				return
+			}
+			isLog := false
+			if m.parser != nil && cleanRemainder != "" {
+				parsedRec, err := m.parser.Parse(cleanRemainder)
+				if err == nil && parsedRec.Fields["level"] != "" {
+					isLog = true
+				}
+			}
+			if !isLog {
+				if cleanRemainder != "" {
+					m.shellInput.SetText(cleanRemainder)
+				}
+				return
+			}
+		}
+	}
+
+	line := serial.CleanTerminalLine(rawStr)
+	if m.lineStripRe != nil {
+		line = m.lineStripRe.ReplaceAllLiteralString(line, "")
+		line = strings.TrimRight(line, "\r\n")
+	}
+
+	if m.lastTXCommand != "" {
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine == m.lastTXCommand {
+			m.lastTXCommand = ""
+			return
+		}
+		m.lastTXCommand = ""
+	}
+
+	// Keystroke echoes never reach this point as separate rows: the serial line
+	// discipline keeps them on the pending (uncommitted) prompt row, so no
+	// length-based filtering is needed and short legitimate lines ("OK") survive.
+	if strings.TrimSpace(line) == "" {
+		return
+	}
+
+	r, parsedTs := parseLineWithTimestampFallback(m.parser, line)
+	if !parsedTs.IsZero() && r.Timestamp.IsZero() {
+		r.Timestamp = parsedTs
+	}
 	m.ingestRecord(r)
 }
