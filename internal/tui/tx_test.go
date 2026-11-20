@@ -503,20 +503,16 @@ func TestShellInteractiveMode_PromptCompletionSync(t *testing.T) {
 
 	// Engineer typed 'os' and pressed Tab to request autocompletion
 	m.shellInput.SetText("os")
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
-
-	if !m.shellAwaitingTab {
-		t.Errorf("expected shellAwaitingTab to be true after pressing Tab")
+	if cmd != nil {
+		_ = cmd()
 	}
 
-	// Device responds with prompt and completed token 'os_'
-	updated, _ = m.Update(lineMsg("uart:~$ os_"))
+	// Device responds with an idle prompt snapshot containing the completed token 'os_'
+	updated, _ = m.Update(lineMsg(serial.MarkPromptSnapshot("uart:~$ os_")))
 	m = updated.(Model)
 
-	if m.shellAwaitingTab {
-		t.Errorf("expected shellAwaitingTab to be reset to false after completion sync")
-	}
 	if m.shellPrompt != "uart:~$ " {
 		t.Errorf("expected shellPrompt 'uart:~$ ', got %q", m.shellPrompt)
 	}

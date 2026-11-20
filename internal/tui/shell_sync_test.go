@@ -116,3 +116,19 @@ func TestShell_PasteNewlinesFlattenedAndWriteFailureReported(t *testing.T) {
 		t.Fatalf("write failure not surfaced")
 	}
 }
+
+func TestShell_CursorColSyncFromPromptSnapshot(t *testing.T) {
+	m, _ := shellModel()
+	// "uart:~$ " is 8 runes; "help" is 4 runes; col 10 => cursor at index 2 ("he|lp").
+	u, _ := m.Update(lineMsg(serial.MarkPromptSnapshotWithCol("uart:~$ help", 10)))
+	m = u.(Model)
+	if m.shellInput.Value != "help" || m.shellInput.Cursor != 2 {
+		t.Fatalf("got value=%q cursor=%d, want value=%q cursor=2", m.shellInput.Value, m.shellInput.Cursor, "help")
+	}
+	// Home moves cursor to col 8 => index 0 ("|help").
+	u, _ = m.Update(lineMsg(serial.MarkPromptSnapshotWithCol("uart:~$ help", 8)))
+	m = u.(Model)
+	if m.shellInput.Cursor != 0 {
+		t.Fatalf("got cursor=%d, want 0", m.shellInput.Cursor)
+	}
+}

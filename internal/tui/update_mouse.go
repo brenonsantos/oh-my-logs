@@ -587,10 +587,6 @@ func (m Model) handleMouseMotion(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.message = fmt.Sprintf("%d rows selected (press y or Ctrl+C to copy)", bot-top+1)
 		return m, nil
 	}
-	if start, end := m.selectionRange(); start >= 0 && end >= 0 {
-		m.message = m.selectionMessage(end-start+1, "press y or Ctrl+C to copy")
-	}
-	return m, nil
 }
 
 func (m Model) handleMouseRelease(msg tea.MouseMsg) (tea.Model, tea.Cmd) {

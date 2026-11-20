@@ -110,6 +110,34 @@ func TestRenderVT(t *testing.T) {
 	}
 }
 
+func TestLineDiscipline_PromptSnapshotTracksCursorCol(t *testing.T) {
+	ld := serial.NewLineDiscipline()
+	var events []serial.Event
+	emit := func(e serial.Event) {
+		if e.Kind == serial.EventPrompt {
+			events = append(events, e)
+		}
+	}
+
+	ld.Feed([]byte("uart:~$ help"), emit)
+	ld.Feed([]byte("\x1b[2D"), emit) // cursor moves left 2 (col 12 -> col 10) without changing text
+	if len(events) != 2 {
+		t.Fatalf("expected 2 prompt snapshots (initial + cursor move), got %d: %+v", len(events), events)
+	}
+	if events[0].Col != 12 || events[1].Col != 10 {
+		t.Fatalf("unexpected cols: %+v", events)
+	}
+
+	tagged := serial.MarkPromptSnapshotWithCol(events[1].Text, events[1].Col)
+	text, col, ok := serial.SplitPromptSnapshotWithCol(tagged)
+	if !ok || text != "uart:~$ help" || col != 10 {
+		t.Fatalf("SplitPromptSnapshotWithCol = (%q, %d, %v)", text, col, ok)
+	}
+	if plain, ok := serial.SplitPromptSnapshot(tagged); !ok || plain != "uart:~$ help" {
+		t.Fatalf("SplitPromptSnapshot = (%q, %v)", plain, ok)
+	}
+}
+
 func BenchmarkLineDiscipline(b *testing.B) {
 	data := []byte(strings.Repeat("[  262.937] <inf> lib-mqtt: Connected to broker\r\n", 200))
 	ld := serial.NewLineDiscipline()

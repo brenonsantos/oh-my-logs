@@ -1,6 +1,8 @@
 package serial
 
 import (
+	"io"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -48,9 +50,10 @@ type LineDiscipline struct {
 	utf    [utf8.UTFMax]byte
 	utfLen int
 
-	maxCells   int
-	lastPrompt string
-	out        func(Event)
+	maxCells      int
+	lastPrompt    string
+	lastPromptCol int
+	out           func(Event)
 }
 
 // EventKind classifies an Event emitted by LineDiscipline.
@@ -68,6 +71,7 @@ const (
 type Event struct {
 	Kind EventKind
 	Text string
+	Col  int // cursor column for EventPrompt snapshots
 }
 
 type vtState uint8
@@ -99,7 +103,11 @@ const (
 
 // NewLineDiscipline returns a ready-to-use LineDiscipline.
 func NewLineDiscipline() *LineDiscipline {
-	return &LineDiscipline{maxCells: DefaultMaxLineCells, cells: make([]cell, 0, 256)}
+	return &LineDiscipline{
+		maxCells:      DefaultMaxLineCells,
+		cells:         make([]cell, 0, 256),
+		lastPromptCol: -1,
+	}
 }
 
 // Feed processes p and calls out for every committed row and, at the end of p,
@@ -122,7 +130,7 @@ func (d *LineDiscipline) Flush(out func(Event)) {
 	if d.lastPrompt == "" || d.render() != d.lastPrompt {
 		d.commit()
 	}
-	d.cells, d.col, d.pendingSGR, d.lastPrompt = d.cells[:0], 0, "", ""
+	d.cells, d.col, d.pendingSGR, d.lastPrompt, d.lastPromptCol = d.cells[:0], 0, "", "", -1
 	d.out = nil
 }
 
@@ -137,6 +145,7 @@ func (d *LineDiscipline) Reset() {
 	d.pendingSGR = ""
 	d.utfLen = 0
 	d.lastPrompt = ""
+	d.lastPromptCol = -1
 }
 
 func (d *LineDiscipline) feedByte(b byte) {
@@ -407,23 +416,25 @@ func (d *LineDiscipline) commit() {
 	d.col = 0
 	d.pendingSGR = ""
 	d.lastPrompt = ""
+	d.lastPromptCol = -1
 	if !blank && d.out != nil {
 		d.out(Event{Kind: EventLog, Text: text})
 	}
 }
 
 // snapshotPrompt emits a non-committing EventPrompt when the pending row is an
-// idle shell prompt that differs from the last one reported.
+// idle shell prompt whose text or cursor column differs from the last one reported.
 func (d *LineDiscipline) snapshotPrompt() {
 	if d.state != vtGround || d.utfLen != 0 || len(d.cells) == 0 || len(d.cells) > promptSnapshotMaxCells || d.out == nil {
 		return
 	}
 	text := d.render()
-	if text == d.lastPrompt || !IsIdleShellPrompt(text) {
+	if (text == d.lastPrompt && d.col == d.lastPromptCol) || !IsIdleShellPrompt(text) {
 		return
 	}
 	d.lastPrompt = text
-	d.out(Event{Kind: EventPrompt, Text: text})
+	d.lastPromptCol = d.col
+	d.out(Event{Kind: EventPrompt, Text: text, Col: d.col})
 }
 
 // RenderVT applies VT100 line-editing semantics to a single raw row (which may
@@ -442,12 +453,83 @@ func RenderVT(s string) string {
 // PromptSnapshotPrefix marks a Source line as a non-committing prompt snapshot
 // (shell state) rather than a log record. It cannot occur in terminal output:
 // NUL bytes are discarded by LineDiscipline.
-const PromptSnapshotPrefix = "\x00oml:prompt\x00"
+const (
+	PromptSnapshotPrefix    = "\x00oml:prompt\x00"
+	promptSnapshotColPrefix = "\x00oml:prompt:"
+)
 
 // MarkPromptSnapshot tags text as a prompt snapshot for transport over a Source.
 func MarkPromptSnapshot(text string) string { return PromptSnapshotPrefix + text }
 
+// MarkPromptSnapshotWithCol tags text and cursor column as a prompt snapshot.
+func MarkPromptSnapshotWithCol(text string, col int) string {
+	if col < 0 {
+		return PromptSnapshotPrefix + text
+	}
+	return promptSnapshotColPrefix + strconv.Itoa(col) + "\x00" + text
+}
+
 // SplitPromptSnapshot reports whether line is a prompt snapshot and returns its text.
 func SplitPromptSnapshot(line string) (string, bool) {
-	return strings.CutPrefix(line, PromptSnapshotPrefix)
+	text, _, ok := SplitPromptSnapshotWithCol(line)
+	return text, ok
+}
+
+// SplitPromptSnapshotWithCol reports whether line is a prompt snapshot and returns
+// its text and cursor column (-1 if no cursor column was encoded).
+func SplitPromptSnapshotWithCol(line string) (text string, col int, ok bool) {
+	if rest, found := strings.CutPrefix(line, PromptSnapshotPrefix); found {
+		return rest, -1, true
+	}
+	if rest, found := strings.CutPrefix(line, promptSnapshotColPrefix); found {
+		if nul := strings.IndexByte(rest, '\x00'); nul >= 0 {
+			if c, err := strconv.Atoi(rest[:nul]); err == nil && c >= 0 {
+				return rest[nul+1:], c, true
+			}
+			return rest[nul+1:], -1, true
+		}
+	}
+	return "", -1, false
+}
+
+// streamReaderToLines feeds r through a LineDiscipline, sending committed
+// EventLog lines to out until EOF or stop is closed. Returns any non-EOF read error.
+func streamReaderToLines(r io.Reader, stop <-chan struct{}, out chan<- string) error {
+	buf := make([]byte, 4096)
+	ld := NewLineDiscipline()
+	stopped := false
+	emit := func(e Event) {
+		if stopped || e.Kind != EventLog {
+			return
+		}
+		select {
+		case <-stop:
+			stopped = true
+		case out <- e.Text:
+		}
+	}
+
+	for {
+		select {
+		case <-stop:
+			return nil
+		default:
+		}
+
+		n, err := r.Read(buf)
+		if n > 0 {
+			ld.Feed(buf[:n], emit)
+			if stopped {
+				return nil
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				ld.Flush(emit)
+				return nil
+			}
+			ld.Flush(emit)
+			return err
+		}
+	}
 }

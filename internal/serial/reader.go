@@ -1,11 +1,8 @@
 package serial
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -81,7 +78,7 @@ func (s *SerialSource) readLoop() {
 		}
 		text := e.Text
 		if e.Kind == EventPrompt {
-			text = MarkPromptSnapshot(text)
+			text = MarkPromptSnapshotWithCol(text, e.Col)
 		}
 		select {
 		case <-s.stop:
@@ -189,30 +186,15 @@ func (s *FileSource) readLoop(f *os.File) {
 	defer close(s.errors)
 	defer f.Close()
 
-	reader := bufio.NewReader(f)
-	for {
-		line, err := reader.ReadString('\n')
-		if len(line) > 0 {
-			cleanLine := strings.TrimRight(line, "\r\n")
-			select {
-			case <-s.stop:
-				return
-			case s.lines <- cleanLine:
-			}
-		}
-		if err != nil {
-			select {
-			case <-s.stop:
-				return
-			default:
-			}
-			if err != io.EOF && err != os.ErrClosed {
-				select {
-				case s.errors <- fmt.Errorf("file read: %w", err):
-				default:
-				}
-			}
+	if err := streamReaderToLines(f, s.stop, s.lines); err != nil && err != os.ErrClosed {
+		select {
+		case <-s.stop:
 			return
+		default:
+		}
+		select {
+		case s.errors <- fmt.Errorf("file read: %w", err):
+		default:
 		}
 	}
 }

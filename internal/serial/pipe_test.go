@@ -51,3 +51,18 @@ func TestPipeSource_WriteReturnsErrReadOnly(t *testing.T) {
 		t.Fatalf("expected ErrReadOnlySource, got nil")
 	}
 }
+
+func TestPipeSource_ResolvesVT100Sequences(t *testing.T) {
+	input := "uart:~$ \x1b[8D\x1b[J[  1.000] <inf> net: up\r\nprogress 50%\r\x1b[Kdone\r\nhelo\b\bllo!\n"
+	src := NewPipeSource(strings.NewReader(input))
+	defer src.Stop()
+
+	var lines []string
+	for l := range src.Lines() {
+		lines = append(lines, l)
+	}
+	want := []string{"[  1.000] <inf> net: up", "done", "hello!"}
+	if strings.Join(lines, "|") != strings.Join(want, "|") {
+		t.Fatalf("got %q, want %q", lines, want)
+	}
+}
