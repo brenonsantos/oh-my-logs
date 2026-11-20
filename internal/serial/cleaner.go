@@ -181,18 +181,14 @@ func IsIdleShellPrompt(line string) bool {
 	return true
 }
 
-// ResolveCarriageReturns handles in-band carriage returns (\r) in serial streams,
-// taking the text after the last carriage return to reflect what a terminal displays.
+// ResolveCarriageReturns applies VT100 semantics to in-band carriage returns,
+// backspaces and cursor/erase sequences: '\r' only moves the cursor to column 0,
+// so text is overwritten only by characters written afterwards.
 func ResolveCarriageReturns(s string) string {
 	if !strings.ContainsRune(s, '\r') {
 		return s
 	}
-	trimmed := strings.TrimRight(s, "\r")
-	if !strings.ContainsRune(trimmed, '\r') {
-		return trimmed
-	}
-	lastCR := strings.LastIndexByte(trimmed, '\r')
-	return trimmed[lastCR+1:]
+	return RenderVT(s)
 }
 
 // ExtractPromptRemainder inspects line to determine if it begins with an interactive shell prompt.

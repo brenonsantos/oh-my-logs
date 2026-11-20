@@ -105,7 +105,12 @@ func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.ShellPassthrough):
 		m.mode = modeShellInteractive
 		m.shellAwaitingTab = false
+		m.shellSyncHold = false
 		m.shellInput.Reset()
+		// The device may still hold text typed in a previous session; show it.
+		if m.shellDeviceRow != "" {
+			m.shellInput.SetText(m.shellDeviceRow)
+		}
 		return m, nil
 
 	case keyMatches(msg, m.keys.FilterPresets):
@@ -1127,7 +1132,7 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// 3. Tab: Forward ASCII 0x09 directly to MCU shell for native autocompletion!
 	if msg.Type == tea.KeyTab || msg.String() == "tab" {
 		m.shellAwaitingTab = true
-		_, _ = m.source.Write([]byte{'\t'})
+		m.shellWrite([]byte{'\t'})
 		return m, nil
 	}
 
@@ -1136,45 +1141,53 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// 4. Ctrl+C: Send ASCII 0x03 interrupt signal to MCU shell
 	if msg.Type == tea.KeyCtrlC || msg.String() == "ctrl+c" {
-		_, _ = m.source.Write([]byte{0x03})
+		m.shellWrite([]byte{0x03})
 		m.shellInput.Reset()
 		return m, nil
 	}
 
 	// 5. Ctrl+D: Send EOF (0x04)
 	if msg.Type == tea.KeyCtrlD || msg.String() == "ctrl+d" {
-		_, _ = m.source.Write([]byte{0x04})
+		m.shellWrite([]byte{0x04})
 		return m, nil
 	}
 
 	// 6. Up / Down: Send ANSI arrow sequences for MCU shell history navigation,
 	// and update local input history
 	if msg.Type == tea.KeyUp || msg.String() == "up" {
-		_, _ = m.source.Write([]byte("\x1b[A"))
+		m.shellWrite([]byte("\x1b[A"))
 		m.shellInput.HistoryPrev()
 		return m, nil
 	}
 	if msg.Type == tea.KeyDown || msg.String() == "down" {
-		_, _ = m.source.Write([]byte("\x1b[B"))
+		m.shellWrite([]byte("\x1b[B"))
 		m.shellInput.HistoryNext()
 		return m, nil
 	}
 
 	// 7. Left / Right: Send ANSI cursor movement to MCU shell
 	if msg.Type == tea.KeyLeft || msg.String() == "left" {
-		_, _ = m.source.Write([]byte("\x1b[D"))
+		m.shellWrite([]byte("\x1b[D"))
 		m.shellInput.HandleKey(msg)
 		return m, nil
 	}
 	if msg.Type == tea.KeyRight || msg.String() == "right" {
-		_, _ = m.source.Write([]byte("\x1b[C"))
+		m.shellWrite([]byte("\x1b[C"))
 		m.shellInput.HandleKey(msg)
 		return m, nil
 	}
 
 	// 8. Backspace: Forward backspace (0x7F) to MCU shell
 	if msg.Type == tea.KeyBackspace || msg.String() == "backspace" {
-		_, _ = m.source.Write([]byte{0x7F})
+		m.shellWrite([]byte{0x7F})
+		m.shellInput.HandleKey(msg)
+		return m, nil
+	}
+
+	// 8b. Line-editing keys supported by common embedded shells (Zephyr, FreeRTOS+CLI, NuttX):
+	// forward the control bytes / sequences and mirror locally for immediate feedback.
+	if seq, ok := shellEditSequence(msg); ok {
+		m.shellWrite([]byte(seq))
 		m.shellInput.HandleKey(msg)
 		return m, nil
 	}
@@ -1194,7 +1207,7 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if ending == "" {
 			ending = "\r"
 		}
-		_, _ = m.source.Write([]byte(ending))
+		m.shellWrite([]byte(ending))
 		if val != "" {
 			m.recordTXMessage(val)
 			m.lastTXCommand = strings.TrimSpace(val)
@@ -1203,19 +1216,67 @@ func (m Model) handleShellInteractiveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.shellInput.Reset()
+		m.shellDeviceRow = ""
+		m.shellSyncHold = true // ignore stale echo snapshots until the prompt is redrawn empty
 		return m, nil
 	}
 
 	// 10. Normal character typing: send characters directly over serial TX
 	runes := msg.Runes
 	if len(runes) > 0 {
-		rawBytes := []byte(string(runes))
-		_, _ = m.source.Write(rawBytes)
-		m.shellInput.Insert(string(runes))
+		if msg.Alt {
+			// Meta-modified runes are ESC-prefixed on the wire (e.g. Alt+b = ESC b).
+			m.shellWrite(append([]byte{0x1b}, []byte(string(runes))...))
+			return m, nil
+		}
+		text := string(runes)
+		if msg.Paste {
+			// A pasted newline would execute partial commands on the device; flatten it.
+			text = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(text)
+		}
+		rawBytes := []byte(text)
+		m.shellWrite(rawBytes)
+		m.shellInput.Insert(text)
 		return m, nil
 	}
 
 	return m, nil
+}
+
+// shellWrite transmits raw bytes to the device and reports failures in the status
+// message instead of silently showing text that was never sent.
+func (m *Model) shellWrite(p []byte) {
+	if m.source == nil {
+		return
+	}
+	if _, err := m.source.Write(p); err != nil {
+		m.message = fmt.Sprintf("Shell TX failed: %v", err)
+	}
+}
+
+// shellEditSequence maps editing keys to the bytes an ANSI terminal would send.
+func shellEditSequence(msg tea.KeyMsg) (string, bool) {
+	switch msg.Type {
+	case tea.KeyHome:
+		return "\x1b[H", true
+	case tea.KeyEnd:
+		return "\x1b[F", true
+	case tea.KeyDelete:
+		return "\x1b[3~", true
+	case tea.KeyCtrlA:
+		return "\x01", true
+	case tea.KeyCtrlE:
+		return "\x05", true
+	case tea.KeyCtrlK:
+		return "\x0b", true
+	case tea.KeyCtrlU:
+		return "\x15", true
+	case tea.KeyCtrlW:
+		return "\x17", true
+	case tea.KeyCtrlL:
+		return "\x0c", true
+	}
+	return "", false
 }
 
 func keyMatches(msg tea.KeyMsg, b interface{ Keys() []string }) bool {

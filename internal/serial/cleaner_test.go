@@ -281,7 +281,9 @@ func TestResolveCarriageReturns(t *testing.T) {
 		{"plain string", "plain string"},
 		{"trailing cr\r", "trailing cr"},
 		{"old\rnew line", "new line"},
-		{"first\rsecond\rthird", "third"},
+		// VT semantics: \r only moves the cursor, so the longer earlier text survives.
+		{"first\rsecond\rthird", "thirdd"},
+		{"progress 50%\r\x1b[Kdone", "done"},
 		{"os_msg\ruart:~$ os_msg", "uart:~$ os_msg"},
 	}
 

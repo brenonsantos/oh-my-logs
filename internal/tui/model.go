@@ -227,6 +227,8 @@ type Model struct {
 	shellInput       TextInput
 	shellAwaitingTab bool   // true when user pressed Tab and is awaiting remote shell completion token
 	lastTXCommand    string // last transmitted command to suppress duplicate MCU device echo
+	shellDeviceRow   string // text the device shell currently shows after its prompt (from idle-prompt snapshots)
+	shellSyncHold    bool   // after Enter, ignore stale echo snapshots until the device redraws an empty prompt
 
 	// Bench marker annotation prompt
 	markerInput      TextInput

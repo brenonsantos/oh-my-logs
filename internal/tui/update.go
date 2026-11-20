@@ -199,6 +199,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ── New line from source ─────────────────────────────────────────────────
 	case lineMsg:
 		rawStr := string(msg)
+		if snap, isSnap := serial.SplitPromptSnapshot(rawStr); isSnap {
+			// Non-committing idle-prompt snapshot: shell state for the input bar, never a log row.
+			if prompt, remainder, ok := serial.ExtractPromptRemainder(snap); ok {
+				if prompt != "" {
+					m.shellPrompt = prompt + " "
+				}
+				// The device row is the source of truth for the input bar: it keeps the
+				// local mirror correct across Tab, MCU history (Up/Down), cursor edits and
+				// prompt redraws after asynchronous logs.
+				rem := serial.CleanTerminalLine(remainder)
+				m.shellDeviceRow = rem
+				if m.mode == modeShellInteractive {
+					if rem == "" {
+						m.shellSyncHold = false
+					}
+					if !m.shellSyncHold && m.shellInput.Value != rem {
+						m.shellInput.SetText(rem)
+					}
+				}
+			}
+			if m.connState == ConnConnected && m.source != nil {
+				return m, listenToSource(m.source)
+			}
+			return m, nil
+		}
 		if prompt, remainder, ok := serial.ExtractPromptRemainder(rawStr); ok {
 			if prompt != "" {
 				m.shellPrompt = prompt + " "
@@ -250,23 +275,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastTXCommand = ""
 		}
 
-		// In interactive shell mode, filter out individual keystroke character echoes (e.g. "o", "s", "_")
-		// so typing never pollutes the log table. Keystrokes are displayed in the interactive input bar.
-		if m.mode == modeShellInteractive && len(strings.TrimSpace(line)) <= 3 {
-			isLog := false
-			if m.parser != nil {
-				parsedRec, err := m.parser.Parse(line)
-				if err == nil && parsedRec.Fields["level"] != "" {
-					isLog = true
-				}
-			}
-			if !isLog {
-				if m.connState == ConnConnected && m.source != nil {
-					return m, listenToSource(m.source)
-				}
-				return m, nil
-			}
-		}
+		// Keystroke echoes never reach this point as separate rows: the serial line
+		// discipline keeps them on the pending (uncommitted) prompt row, so no
+		// length-based filtering is needed and short legitimate lines ("OK") survive.
 
 		if strings.TrimSpace(line) == "" {
 			if m.connState == ConnConnected && m.source != nil {
