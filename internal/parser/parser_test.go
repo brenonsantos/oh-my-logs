@@ -790,6 +790,57 @@ parser:
 	}
 }
 
+func TestRegexParser_StripsANSIColorSGR(t *testing.T) {
+	p, err := parser.NewRegexParser(`^\[\s*(?P<uptime>[^\]]+?)\s*\]\s+<(?P<level>[a-zA-Z]+)>\s+(?P<module>[a-zA-Z0-9_.-]+):\s*(?P<message>.*)$`)
+	if err != nil {
+		t.Fatalf("NewRegexParser: %v", err)
+	}
+
+	cases := []struct {
+		name    string
+		input   string
+		level   string
+		module  string
+		message string
+	}{
+		{
+			name:    "multi-param bold yellow wrn",
+			input:   "\x1b[1;33m[00:00:39.906,558] <wrn> pm: RSSI low (-81 dBm), channel=3 seq=17\x1b[0m",
+			level:   "wrn",
+			module:  "pm",
+			message: "RSSI low (-81 dBm), channel=3 seq=17",
+		},
+		{
+			name:    "multi-param bold red err",
+			input:   "\x1b[1;31m[00:00:53.873,683] <err> kernel: I/O timeout on bus=2 retries=3 err=-116\x1b[0m",
+			level:   "err",
+			module:  "kernel",
+			message: "I/O timeout on bus=2 retries=3 err=-116",
+		},
+		{
+			name:    "single-param gray dbg with trailing reset",
+			input:   "\x1b[90m[00:00:35.600,000] <dbg> net: RX frame len=43 crc=0xe710 seq=11\x1b[0m",
+			level:   "dbg",
+			module:  "net",
+			message: "RX frame len=43 crc=0xe710 seq=11",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec, err := p.Parse(tc.input)
+			if err != nil {
+				t.Fatalf("Parse(%q) unexpected error: %v", tc.input, err)
+			}
+			if rec.Fields["level"] != tc.level || rec.Fields["module"] != tc.module || rec.Fields["message"] != tc.message {
+				t.Errorf("got level=%q module=%q message=%q; want level=%q module=%q message=%q",
+					rec.Fields["level"], rec.Fields["module"], rec.Fields["message"],
+					tc.level, tc.module, tc.message)
+			}
+		})
+	}
+}
+
 
 
 

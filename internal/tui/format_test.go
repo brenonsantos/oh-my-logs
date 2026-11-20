@@ -196,6 +196,9 @@ func TestSanitizeCellValue(t *testing.T) {
 		{"binary garbage", "i++: 1. Pattern: \x07\x18\xb3\x07", "i++: 1. Pattern: ····"},
 		// Strings with only printable content should be returned unchanged (fast path)
 		{"unicode printable", "café résumé", "café résumé"},
+		// ANSI SGR color sequences should be stripped cleanly instead of becoming "·[0m"
+		{"ansi sgr reset", "RX frame seq=11\x1b[0m", "RX frame seq=11"},
+		{"ansi multi-param sgr", "\x1b[1;33m[00:00:39.906,558] <wrn> pm: low\x1b[0m", "[00:00:39.906,558] <wrn> pm: low"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -4,15 +4,21 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
-// sanitizeCellValue replaces control characters (newlines, carriage returns,
-// tabs, NUL, and any other byte < 0x20 or == 0x7F) with a middle dot (·) so
-// that binary garbage in log messages cannot break the single-row table layout.
+// sanitizeCellValue strips ANSI escape sequences and replaces remaining control
+// characters (newlines, carriage returns, tabs, NUL, and any other byte < 0x20
+// or == 0x7F) with a middle dot (·) so that escape codes or binary garbage in
+// log messages cannot break the single-row table layout.
 // This is a rendering-only transform; the original data in the buffer is kept intact.
 func sanitizeCellValue(s string) string {
 	if s == "" {
 		return s
+	}
+	if strings.IndexByte(s, '\x1b') >= 0 {
+		s = ansi.Strip(s)
 	}
 	var needsSanitize bool
 	for _, r := range s {

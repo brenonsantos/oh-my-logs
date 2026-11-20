@@ -3,6 +3,9 @@ package parser
 import (
 	"fmt"
 	"regexp"
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/brenoniehues/oh-my-logs/internal/record"
 )
@@ -48,8 +51,15 @@ func NewRegexParser(patterns ...string) (*RegexParser, error) {
 func (p *RegexParser) Parse(line string) (record.Record, error) {
 	r := record.NewRecord(line)
 
+	// Strip ANSI escape sequences (e.g. \x1b[1;31m, \x1b[0m) before regex matching
+	// so colored RTOS logs parse cleanly and fields never retain trailing SGR resets.
+	parseLine := line
+	if strings.IndexByte(parseLine, '\x1b') >= 0 {
+		parseLine = ansi.Strip(parseLine)
+	}
+
 	for idx, re := range p.regexes {
-		match := re.FindStringSubmatch(line)
+		match := re.FindStringSubmatch(parseLine)
 		if match != nil {
 			names := p.names[idx]
 			for i, name := range names {
@@ -62,7 +72,7 @@ func (p *RegexParser) Parse(line string) (record.Record, error) {
 		}
 	}
 
-	r.Fields["_raw"] = line
-	r.Fields["message"] = line
+	r.Fields["_raw"] = parseLine
+	r.Fields["message"] = parseLine
 	return r, fmt.Errorf("parser: line did not match pattern: %q", line)
 }
