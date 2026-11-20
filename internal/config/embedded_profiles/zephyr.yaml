@@ -24,7 +24,7 @@ ingest:
   #      e.g. ESC[9D (cursor-left) + ESC[J (erase-to-end).
   # Both can appear together or separately, and in either order.
   # This regex strips all of them before the line reaches the parser.
-  strip_prefix: '^(?:\w+:~\$\s*)?(?:\x1b\[\d*[A-Za-z]\s*)*'
+  strip_prefix: '^(?:\w+:~\$\s*)?(?:\x1b\[[\d;]*[A-Za-z]\s*)*'
 
 
 parser:
